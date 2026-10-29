@@ -12,3 +12,6 @@ CHAVE-API-CLAUDE.txt
 
 # Arquivos gerados
 *.log
+
+# Documentação com dados da conta (fica só no computador)
+Documentacao-*.pdf
