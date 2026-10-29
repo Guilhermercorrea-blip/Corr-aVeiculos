@@ -254,6 +254,30 @@ function salvarPessoa(dados) {
   return inserir('pessoas', p);
 }
 
+// Edição do cadastro (mudou de endereço, trocou de telefone...). Campo apagado no formulário fica vazio.
+function obterPessoa(id) {
+  const p = db.prepare('SELECT * FROM pessoas WHERE id = ?').get(id);
+  if (!p) throw erro('Pessoa não encontrada', 404);
+  const carros = db.prepare(`
+    SELECT v.id, v.marca_modelo, v.placa, 'vendeu para a loja' AS papel, v.entrada_em AS data FROM veiculos v WHERE v.fornecedor_id = @id
+    UNION ALL
+    SELECT v.id, v.marca_modelo, v.placa, 'comprou da loja' AS papel, vd.vendido_em AS data FROM vendas vd JOIN veiculos v ON v.id = vd.veiculo_id WHERE vd.comprador_id = @id
+    ORDER BY data DESC`).all({ id });
+  return { ...p, carros };
+}
+
+function atualizarPessoa(id, dados) {
+  obterPessoa(id);
+  const p = limpar(CAMPOS_PESSOA, dados);
+  if ('nome' in p && !p.nome) throw erro('Informe o nome da pessoa');
+  if (p.cpf) {
+    const outra = db.prepare('SELECT nome FROM pessoas WHERE cpf = ? AND id <> ?').get(p.cpf, id);
+    if (outra) throw erro(`Esse CPF já está no cadastro de ${outra.nome}`);
+  }
+  atualizar('pessoas', id, p);
+  return { id };
+}
+
 function validarVeiculo(v) {
   if (!v.marca_modelo) throw erro('Informe a marca/modelo do carro');
   if (v.tipo_entrada && !TIPOS_ENTRADA.includes(v.tipo_entrada)) throw erro('Tipo de entrada inválido');
@@ -556,5 +580,5 @@ module.exports = {
   criarAnexo, definirTipoAnexo, obterAnexo,
   criarCompra, listarVeiculos, obterVeiculo, atualizarVeiculo,
   adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, criarEstoqueRapido,
-  resumo, listarPessoas, obterConfig, salvarConfig, descreverPagamento,
+  resumo, listarPessoas, obterPessoa, atualizarPessoa, obterConfig, salvarConfig, descreverPagamento,
 };

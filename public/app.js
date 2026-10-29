@@ -698,7 +698,7 @@ function dadosPessoa(p) {
   if (!p) return '<span class="suave">—</span>';
   const end = [p.endereco && `${p.endereco}${p.numero ? ', ' + p.numero : ''}`, p.bairro, p.cidade && `${p.cidade}/${p.uf || ''}`]
     .filter(Boolean).join(' · ');
-  return `<strong>${esc(p.nome)}</strong><br><span class="suave pequeno">CPF ${esc(formatarCPF(p.cpf))}${p.telefone ? ' · ' + esc(p.telefone) : ''}${end ? '<br>' + esc(end) : ''}</span>`;
+  return `<strong>${esc(p.nome)}</strong> <a class="pequeno" href="#/pessoa/${p.id}">Editar cadastro</a><br><span class="suave pequeno">CPF ${esc(formatarCPF(p.cpf))}${p.telefone ? ' · ' + esc(p.telefone) : ' · <strong>sem telefone</strong>'}${end ? '<br>' + esc(end) : ''}</span>`;
 }
 
 async function telaCarro(id) {
@@ -1042,12 +1042,45 @@ async function telaPessoas() {
     const pessoas = await api('GET', `/pessoas?busca=${encodeURIComponent(termo)}`);
     tabela.innerHTML = pessoas.length ? `<table>
       <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Cidade</th></tr></thead>
-      <tbody>${pessoas.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(formatarCPF(p.cpf))}</td><td>${esc(p.telefone || '—')}</td><td>${esc(p.cidade ? `${p.cidade}/${p.uf || ''}` : '—')}</td></tr>`).join('')}</tbody>
-    </table>` : '<div class="vazio">Ninguém cadastrado ainda. As pessoas entram aqui sozinhas quando você registra uma compra ou venda.</div>';
+      <tbody>${pessoas.map(p => `<tr class="clicavel" onclick="ir('#/pessoa/${p.id}')"><td>${esc(p.nome)}</td><td>${esc(formatarCPF(p.cpf))}</td><td>${esc(p.telefone || '—')}</td><td>${esc(p.cidade ? `${p.cidade}/${p.uf || ''}` : '—')}</td></tr>`).join('')}</tbody>
+    </table><p class="suave pequeno">Clique numa pessoa para ver ou editar o cadastro.</p>` : '<div class="vazio">Ninguém cadastrado ainda. As pessoas entram aqui sozinhas quando você registra uma compra ou venda.</div>';
   };
   let t;
   document.getElementById('busca').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => carregar(e.target.value), 250); });
   carregar('');
+}
+
+// Cadastro de uma pessoa: corrigir ou atualizar endereço, telefone etc. (vale para os próximos contratos impressos)
+async function telaPessoa(id) {
+  const p = await api('GET', `/pessoas/${id}`);
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>${esc(p.nome)}</h1><div class="suave">CPF ${esc(formatarCPF(p.cpf))}</div></div></div>
+  <form id="form" novalidate>
+    ${blocoPessoa('pessoa', 'Cadastro', p)}
+    <div class="acoes-form">
+      <a class="botao-link secundario" href="#/pessoas">Voltar</a>
+      <button type="submit">Salvar alterações</button>
+    </div>
+  </form>
+  <div class="cartao">
+    <h2>Carros</h2>
+    ${p.carros.length ? `<div class="tabela-rolagem"><table>
+      <thead><tr><th>Data</th><th>Carro</th><th>O que fez</th></tr></thead>
+      <tbody>${p.carros.map(c => `<tr class="clicavel" onclick="ir('#/carro/${c.id}')"><td>${dataBR(c.data).slice(0, 10)}</td>
+        <td>${esc(c.marca_modelo)} <span class="placa">${esc(formatarPlaca(c.placa))}</span></td><td>${c.papel}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<div class="vazio">Nenhum carro ligado a esta pessoa.</div>'}
+  </div>`;
+  const form = document.getElementById('form');
+  ligarPessoa(form, 'pessoa');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    enviar(form, async dados => {
+      // Campo apagado vira vazio de verdade (lerForm devolve '' e o servidor grava como vazio)
+      await api('PUT', `/pessoas/${id}`, dados.pessoa);
+      aviso('Cadastro atualizado. Os próximos contratos já saem com os dados novos.');
+      telaPessoa(id);
+    });
+  });
 }
 
 // Vários carros de uma vez, sem vendedor nem contrato, só para controlar estoque e gastos
@@ -1230,6 +1263,7 @@ async function navegar() {
     else if (pagina === 'estoque') await telaLista('estoque');
     else if (pagina === 'vendidos') await telaLista('vendido');
     else if (pagina === 'pessoas') await telaPessoas();
+    else if (pagina === 'pessoa') await telaPessoa(Number(id));
     else if (pagina === 'configuracoes') await telaConfiguracoes();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();
