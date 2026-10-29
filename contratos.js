@@ -272,13 +272,12 @@ function contratoVenda(d, c) {
   const troca = d.trocaVeiculo;
   const dias = Number(c.garantia_dias) || 90;
   const kmGarantia = Number(c.garantia_km) || 3000;
-  const FORMAS = { avista: 'À vista', entrada_financiamento: 'Entrada + financiamento', financiamento: 'Financiamento' };
   // Vendas antigas (antes da escolha de forma) só têm "entrada" em texto livre
   const detalhado = Boolean(vd.forma_pagamento);
   const prefixo = vd.forma_pagamento === 'avista' ? 'À vista' : 'Entrada';
   const pagamento = [
     ['Valor total', valor(vd.valor_venda)],
-    detalhado && ['Forma de pagamento', `<b>${FORMAS[vd.forma_pagamento]}</b>`],
+    detalhado && ['Forma de pagamento', `<b>${esc(vd.descricao_pagamento || db.descreverPagamento(vd))}</b>`],
     detalhado && vd.valor_pix && [`${prefixo} - PIX`, valor(vd.valor_pix)],
     detalhado && vd.valor_deposito && [`${prefixo} - Depósito bancário`, valor(vd.valor_deposito)],
     detalhado && vd.valor_dinheiro && [`${prefixo} - Dinheiro`, valor(vd.valor_dinheiro)],
@@ -334,6 +333,9 @@ function contratoConsignacao(d, c) {
   const p = d.fornecedor;
   const quitado = v.tipo_entrada === 'troca' || v.tipo_entrada === 'compra_sem_transferir';
   const origem = d.origemTroca;
+  const compraSemTransferir = v.tipo_entrada === 'compra_sem_transferir';
+  const valorComercial = compraSemTransferir ? v.valor_consignacao : v.valor_compra;
+  const rotuloValor = compraSemTransferir ? 'Valor para venda' : 'Valor líquido ao CONSIGNANTE';
   const comissao = quitado ? 'Não se aplica (ver adendo)'
     : v.comissao != null ? reais(v.comissao) : '<span class="linha" style="min-width:40px"></span>% ou R$ <span class="linha" style="min-width:90px"></span>';
 
@@ -350,7 +352,7 @@ function contratoConsignacao(d, c) {
     ['Proprietário no CRV/ATPV-e', celula(p?.nome, 100)],
   ]))}
   ${secao(3, 'Condições comerciais')}
-  ${quadroPares([['Valor líquido ao CONSIGNANTE', v.valor_compra != null ? reais(v.valor_compra) : 'R$ ' + celula(null, 120)], ['Comissão', comissao]])}
+  ${quadroPares([[rotuloValor, valorComercial != null ? reais(valorComercial) : 'R$ ' + celula(null, 120)], ['Comissão', comissao]])}
   ${clausula('3.1', 'Repasse', 'O valor devido ao CONSIGNANTE será repassado após a efetiva venda e confirmação da liquidação financeira integral do negócio.')}
   ${clausula('3.2', 'Comissão', 'A CONSIGNATÁRIA poderá reter diretamente a comissão pactuada dos valores recebidos na negociação.')}
   ${clausula('3.3', 'Valor excedente', 'Se o veículo for vendido acima do valor líquido ajustado, a diferença positiva pertencerá à CONSIGNATÁRIA como remuneração adicional, salvo ajuste escrito em contrário.')}

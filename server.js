@@ -54,7 +54,8 @@ function rota(metodo, padrao, fn) {
 
 function lerCookie(req, nome) {
   const par = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(nome + '='));
-  return par ? decodeURIComponent(par.slice(nome.length + 1)) : null;
+  try { return par ? decodeURIComponent(par.slice(nome.length + 1)) : null; }
+  catch { return null; }
 }
 
 // Atrás do proxy HTTPS da nuvem, o endereço real do visitante vem no cabeçalho
@@ -133,16 +134,20 @@ rota('GET', '/api/leitura/disponivel', () => ({ disponivel: Boolean(leitor.lerCh
 
 // Recebe a foto/PDF em base64, guarda o arquivo e devolve o que foi lido nele
 rota('POST', '/api/documentos/ler', (p, q, corpo) => lerDocumentoEnviado(corpo));
+rota('POST', '/api/fotos', (p, q, corpo) => guardarFotoVeiculo(corpo));
+rota('POST', '/api/hodometro/ler', (p, q, corpo) => lerHodometroEnviado(corpo));
 
 // Envio pelo celular: o computador (logado) abre um "envio" com um código secreto, mostrado em QR Code.
 // O celular manda as fotos para esse código sem precisar de login; o computador busca o que chegou.
 const envios = new Map();
 const VALIDADE_ENVIO = 3 * 3600e3;
 
-rota('POST', '/api/envios', () => {
+rota('POST', '/api/envios', (p, q, corpo) => {
+  const contexto = corpo.contexto || 'entrada';
+  if (!['entrada', 'venda'].includes(contexto)) throw db.erro('Tipo de envio inválido');
   for (const [codigo, e] of envios) if (Date.now() - e.criado > VALIDADE_ENVIO) envios.delete(codigo);
   const codigo = crypto.randomBytes(12).toString('base64url');
-  envios.set(codigo, { criado: Date.now(), itens: [] });
+  envios.set(codigo, { criado: Date.now(), contexto, itens: [] });
   return { codigo };
 });
 
@@ -158,17 +163,50 @@ rota('GET', '/api/envios/:codigo', p => pegarEnvio(p.codigo));
 
 rota('POST', '/api/envios/:codigo/foto', async (p, q, corpo) => {
   const envio = pegarEnvio(p.codigo);
+  const finalidade = corpo.finalidade || 'documento';
+  if (!['documento', 'foto_veiculo', 'hodometro'].includes(finalidade)) throw db.erro('Tipo de arquivo inválido');
+  if (corpo.destino === 'troca' && envio.contexto !== 'venda') throw db.erro('Este envio não é para um carro da troca');
   const item = { id: envio.itens.length + 1, nome: corpo.nome || `foto ${envio.itens.length + 1}`, status: 'lendo', resultado: null };
   envio.itens.push(item);
   try {
-    item.resultado = await lerDocumentoEnviado(corpo);
+    item.resultado = finalidade === 'foto_veiculo' ? guardarFotoVeiculo(corpo)
+      : finalidade === 'hodometro' ? await lerHodometroEnviado(corpo) : await lerDocumentoEnviado(corpo);
   } catch (e) {
     item.resultado = { erro: e.message };
   }
   item.status = 'pronto';
   const r = item.resultado;
-  return { ok: !r.erro, tipo: r.tipo || null, nome: r.pessoa?.nome || r.veiculo?.placa || null, erro: r.erro || null };
+  return { ok: !r.erro, tipo: r.tipo || null, nome: r.pessoa?.nome || r.veiculo?.placa || null, km: r.km ?? null, avisos: r.avisos || [], erro: r.erro || null };
 });
+
+// Fotos do carro são guardadas como imagens, sem leitura automática de documentos.
+function guardarFotoVeiculo(corpo, tipo = 'foto_veiculo') {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(corpo.tipo_mime)) {
+    throw db.erro('Para fotos do carro, envie uma imagem JPG, PNG ou WebP');
+  }
+  const destino = corpo.destino || 'principal';
+  if (!['principal', 'troca'].includes(destino)) throw db.erro('Escolha o carro das fotos');
+  const conteudo = Buffer.from(String(corpo.base64 || ''), 'base64');
+  if (!conteudo.length) throw db.erro('Arquivo vazio');
+  const assinatura = corpo.tipo_mime === 'image/jpeg' ? conteudo[0] === 0xff && conteudo[1] === 0xd8 && conteudo[2] === 0xff
+    : corpo.tipo_mime === 'image/png' ? conteudo.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    : conteudo.toString('ascii', 0, 4) === 'RIFF' && conteudo.toString('ascii', 8, 12) === 'WEBP';
+  if (!assinatura) throw db.erro('A imagem não pôde ser reconhecida. Envie novamente como JPG, PNG ou WebP');
+  const anexo_id = db.criarAnexo({ conteudo, tipoMime: corpo.tipo_mime, nomeOriginal: corpo.nome });
+  db.definirTipoAnexo(anexo_id, tipo);
+  return { anexo_id, tipo, destino, avisos: [] };
+}
+
+async function lerHodometroEnviado(corpo) {
+  const salvo = guardarFotoVeiculo(corpo, 'hodometro');
+  try {
+    const lido = await leitor.lerHodometro({ conteudo: Buffer.from(corpo.base64, 'base64'), tipoMime: corpo.tipo_mime });
+    return { ...salvo, ...lido };
+  } catch (e) {
+    if (!e.status) console.error(e);
+    return { ...salvo, km: null, erro: e.status ? e.message : 'Não foi possível ler o km. Preencha manualmente ou tente outra foto.' };
+  }
+}
 
 async function lerDocumentoEnviado(corpo) {
   const conteudo = Buffer.from(String(corpo.base64 || ''), 'base64');
@@ -202,7 +240,11 @@ function lerCorpo(req) {
       }
     });
     req.on('end', () => {
-      try { resolve(dados ? JSON.parse(dados) : {}); }
+      try {
+        const corpo = dados ? JSON.parse(dados) : {};
+        if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) throw new Error('Objeto esperado');
+        resolve(corpo);
+      }
       catch { reject(Object.assign(new Error('JSON inválido'), { status: 400 })); }
     });
     req.on('error', reject);
@@ -236,9 +278,12 @@ async function api(req, res, url, ctx) {
 }
 
 function estatico(res, url) {
-  const relativo = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+  let relativo;
+  try { relativo = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, ''); }
+  catch { res.writeHead(400); return res.end('Endereço inválido'); }
+  if (relativo.includes('\0')) { res.writeHead(400); return res.end('Endereço inválido'); }
   const arquivo = path.normalize(path.join(PUBLICO, relativo));
-  if (!arquivo.startsWith(PUBLICO)) { res.writeHead(403); return res.end(); }
+  if (arquivo !== PUBLICO && !arquivo.startsWith(PUBLICO + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(arquivo, (err, conteudo) => {
     if (err) { res.writeHead(404); return res.end('Não encontrado'); }
     res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arquivo)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -266,7 +311,9 @@ function paginaAviso(res, status, mensagem) {
 }
 
 http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); }
+  catch { return responder(res, 400, { erro: 'Endereço inválido' }); }
   const token = lerCookie(req, 'sessao');
   const usuario = auth.usuarioDaSessao(token);
   const ctx = { req, res, token, usuario };

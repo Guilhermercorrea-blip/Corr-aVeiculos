@@ -20,7 +20,13 @@
     ul { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
     li { background: #fff; border: 1px solid #d9dde3; border-radius: 10px; padding: 12px; }
     li.ok { border-color: #1d7a46; background: #e3f3ea; }
+    li.atencao { border-color: #b7791f; background: #fff8e6; }
     li.erro { border-color: #b42318; background: #fbe9e7; }
+    [hidden] { display: none !important; }
+    section { background: #fff; border: 1px solid #d9dde3; border-radius: 12px; padding: 14px; margin: 16px 0; }
+    h2 { font-size: 1.1rem; margin: 0 0 8px; }
+    .destino-fotos { display: grid; gap: 6px; margin-bottom: 12px; }
+    select { width: 100%; padding: 12px; border: 1px solid #d9dde3; border-radius: 8px; font: inherit; }
     .erro-geral { background: #fbe9e7; border: 1px solid #b42318; border-radius: 10px; padding: 14px; }
   </style>
 </head>
@@ -28,10 +34,27 @@
   <header><img src="img/logo.jpg" alt="Corrêa Veículos"></header>
   <main>
     <div id="conteudo">
-      <h1>Enviar fotos para o computador</h1>
-      <p class="suave">Tire foto da CNH ou do CRLV. Ela vai direto para o formulário aberto no computador, que preenche sozinho.</p>
-      <label class="botao"><input type="file" id="camera" accept="image/*" capture="environment" hidden>Tirar foto</label>
-      <label class="botao sec"><input type="file" id="galeria" accept="image/*,application/pdf" multiple hidden>Escolher da galeria ou PDF</label>
+      <h1>Enviar documentos e fotos do carro</h1>
+      <p class="suave" id="conectando">Conectando ao computador...</p>
+      <section><h2>Documentos</h2>
+      <p class="suave">Envie a CNH ou o CRLV para preencher o formulário no computador.</p>
+      <label class="botao"><input type="file" id="camera" accept="image/*" capture="environment" disabled hidden>Tirar foto</label>
+      <label class="botao sec"><input type="file" id="galeria" accept="image/*,application/pdf" multiple disabled hidden>Escolher da galeria ou PDF</label>
+      </section>
+      <section>
+        <h2>Ler km do painel (opcional)</h2>
+        <p class="suave">Fotografe o hodômetro total (ODO), com todos os números legíveis. O km será sugerido no computador para você conferir.</p>
+        <label class="destino-fotos" id="bloco-destino-km" hidden><span>Ler o km de qual carro?</span><select id="destino-km"><option value="principal">Carro vendido — km na entrega</option><option value="troca">Carro da troca — km de entrada</option></select></label>
+        <label class="botao"><input type="file" id="camera-km" accept="image/*" capture="environment" disabled hidden>Tirar foto do km</label>
+        <label class="botao sec"><input type="file" id="galeria-km" accept="image/*" disabled hidden>Escolher foto do km</label>
+      </section>
+      <section>
+        <h2>Fotos do carro (opcional)</h2>
+        <p class="suave">Envie fotos da frente, traseira, laterais ou interior. Elas ficam guardadas no cadastro do carro.</p>
+        <label class="destino-fotos" id="bloco-destino-fotos" hidden><span>Fotos de qual carro?</span><select id="destino-fotos"><option value="principal">Carro vendido</option><option value="troca">Carro da troca</option></select></label>
+        <label class="botao"><input type="file" id="camera-carro" accept="image/*" capture="environment" disabled hidden>Tirar foto do carro</label>
+        <label class="botao sec"><input type="file" id="galeria-carro" accept="image/*" multiple disabled hidden>Escolher fotos do carro</label>
+      </section>
       <ul id="lista"></ul>
       <p class="suave">Pode tirar quantas fotos precisar. Depois é só conferir e salvar no computador.</p>
     </div>
@@ -41,7 +64,7 @@
     const codigo = new URLSearchParams(location.search).get('c') || '';
     const lista = document.getElementById('lista');
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    const NOME = { cnh: 'CNH', crlv: 'CRLV', rg: 'RG', outro: 'Documento' };
+    const NOME = { cnh: 'CNH', crlv: 'CRLV', rg: 'RG', outro: 'Documento', foto_veiculo: 'Foto do carro', hodometro: 'Foto do hodômetro' };
 
     function paraBase64(blob) {
       return new Promise((resolve, reject) => {
@@ -67,24 +90,36 @@
       return { tipo_mime: 'image/jpeg', base64: await paraBase64(jpeg) };
     }
 
-    async function enviar(entrada) {
+    async function enviar(entrada, finalidade = 'documento') {
+      const fotoCarro = finalidade === 'foto_veiculo';
+      const hodometro = finalidade === 'hodometro';
+      const destino = document.getElementById(hodometro ? 'destino-km' : 'destino-fotos').value;
       const arquivos = [...entrada.files];
       entrada.value = '';
       for (const arquivo of arquivos) {
         const item = document.createElement('li');
-        item.textContent = 'Enviando e lendo...';
+        item.textContent = fotoCarro ? 'Enviando foto do carro...' : hodometro ? 'Lendo o km do painel...' : 'Enviando e lendo documento...';
         lista.prepend(item);
         try {
-          const corpo = { nome: arquivo.name || 'foto', ...(await preparar(arquivo)) };
+          if ((fotoCarro || hodometro) && arquivo.type === 'application/pdf') throw new Error('Escolha uma imagem para a foto do carro ou do painel');
+          const corpo = { nome: arquivo.name || 'foto', ...(await preparar(arquivo)), finalidade, ...(fotoCarro || hodometro ? { destino } : {}) };
           const resp = await fetch(`/api/envios/${encodeURIComponent(codigo)}/foto`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
           });
           const r = await resp.json().catch(() => ({}));
           if (!resp.ok) throw new Error(r.erro || 'Erro ' + resp.status);
+          if (r.tipo === 'hodometro') {
+            const kmLido = r.ok && Number.isSafeInteger(r.km) && r.km >= 0;
+            item.className = 'atencao';
+            item.innerHTML = kmLido
+              ? `<strong>Km lido: ${r.km.toLocaleString('pt-BR')} km</strong><br>Confira o valor no formulário do computador antes de salvar.`
+              : `<strong>Foto enviada; km não identificado com segurança.</strong><br>${(r.avisos || []).map(esc).join(' ')} ${esc(r.erro || '')}<br>Tente uma foto mais nítida ou preencha o km no computador.`;
+            continue;
+          }
           item.className = r.ok ? 'ok' : 'erro';
           item.innerHTML = r.ok
             ? `<strong>${NOME[r.tipo] || 'Foto'} enviada</strong>${r.nome ? ' · ' + esc(r.nome) : ''}<br>Já está no computador.`
-            : `<strong>Foto enviada, mas não lida</strong><br>${esc(r.erro)}<br>Ela ficou anexada; preencha no computador.`;
+            : `<strong>Não foi possível concluir o envio</strong><br>${esc(r.erro)}<br>Confira a mensagem e tente novamente ou preencha no computador.`;
         } catch (e) {
           item.className = 'erro';
           item.innerHTML = `<strong>Não enviou</strong><br>${esc(e.message)}`;
@@ -96,14 +131,19 @@
       try {
         const resp = await fetch(`/api/envios/${encodeURIComponent(codigo)}`);
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).erro || 'Código inválido');
+        const envio = await resp.json();
+        document.getElementById('bloco-destino-fotos').hidden = envio.contexto !== 'venda';
+        document.getElementById('bloco-destino-km').hidden = envio.contexto !== 'venda';
       } catch (e) {
         document.getElementById('conteudo').innerHTML =
           `<div class="erro-geral"><strong>Não deu para conectar.</strong><br>${esc(e.message)}<br><br>No computador, clique de novo em "Usar o celular (QR Code)" e leia o QR Code novo.</div>`;
         return;
       }
-      for (const id of ['camera', 'galeria']) {
+      document.getElementById('conectando').hidden = true;
+      for (const id of ['camera', 'galeria', 'camera-carro', 'galeria-carro', 'camera-km', 'galeria-km']) {
         const entrada = document.getElementById(id);
-        entrada.addEventListener('change', () => enviar(entrada));
+        entrada.addEventListener('change', () => enviar(entrada, id.endsWith('-km') ? 'hodometro' : id.endsWith('-carro') ? 'foto_veiculo' : 'documento'));
+        entrada.disabled = false;
       }
     }
     iniciar();

@@ -20,6 +20,7 @@ const CATEGORIAS = {
 };
 const BANCOS = ['Santander', 'BV Financeira', 'C6 Bank', 'Omni', 'Itaucred'];
 const FORMA_PAGAMENTO = { avista: 'À vista', entrada_financiamento: 'Entrada + financiamento', financiamento: 'Financiamento' };
+const MEIOS_PAGAMENTO = { pix: { nome: 'PIX', campo: 'valor_pix' }, deposito: { nome: 'Depósito bancário / TED', campo: 'valor_deposito' }, dinheiro: { nome: 'Dinheiro', campo: 'valor_dinheiro' }, financiamento: { nome: 'Financiamento', campo: 'valor_financiado' } };
 const COMBUSTIVEIS =['Flex', 'Gasolina', 'Etanol', 'Diesel', 'GNV', 'Elétrico', 'Híbrido'];
 
 // ---------- utilidades ----------
@@ -50,13 +51,26 @@ function reais(centavos) {
 
 // "45.000,00", "45000", "45.000" ou "45000,5" -> centavos
 function paraCentavos(texto) {
-  let s = String(texto ?? '').replace(/[R$\s]/g, '');
+  let s = String(texto ?? '').replace(/R\$|\s/g, '');
   if (!s) return null;
-  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
-  const n = Number(s);
-  if (!Number.isFinite(n)) throw new Error(`Valor em dinheiro inválido: "${texto}"`);
-  return Math.round(n * 100);
+  const invalido = () => new Error(`Valor em dinheiro inválido: "${texto}". Use, por exemplo, 40000 ou 40.000,00.`);
+  if (s.includes(',')) {
+    if (!/^(?:\d+|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(s)) throw invalido();
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(?:\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  else if (!/^\d+(?:\.\d{1,2})?$/.test(s)) throw invalido();
+  const [inteiro, decimal = ''] = s.split('.');
+  const centavos = Number(inteiro) * 100 + Number(decimal.padEnd(2, '0'));
+  if (!Number.isSafeInteger(centavos)) throw invalido();
+  return centavos;
+}
+
+function paraQuilometragem(texto) {
+  let s = String(texto ?? '').replace(/\s/g, '');
+  if (!s) return null;
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  if (!/^\d+$/.test(s) || !Number.isSafeInteger(Number(s))) throw new Error('Quilometragem inválida. Use, por exemplo, 85000 ou 85.000.');
+  return Number(s);
 }
 
 const paraTexto = c => (c == null ? '' : (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -174,7 +188,7 @@ function lerForm(form) {
     if ((el.type === 'radio' || el.type === 'checkbox') && !el.checked) continue;
     let v = el.type === 'checkbox' ? true : el.value.trim();
     if (el.hasAttribute('data-dinheiro')) v = paraCentavos(v);
-    if (el.hasAttribute('data-milhar')) v = v.replace(/\D/g, '');
+    if (el.hasAttribute('data-milhar')) v = paraQuilometragem(v);
     const partes = el.name.split('.');
     let alvo = obj;
     while (partes.length > 1) {
@@ -232,7 +246,7 @@ function ligarPessoa(form, prefixo) {
 
 // ---------- anexar CNH / CRLV ----------
 
-const NOME_DOC = { cnh: 'CNH', crlv: 'CRLV', rg: 'RG', outro: 'Documento' };
+const NOME_DOC = { cnh: 'CNH', crlv: 'CRLV', rg: 'RG', outro: 'Documento', foto_veiculo: 'Foto do carro', hodometro: 'Foto do hodômetro' };
 
 function blocoAnexos(texto) {
   return `
@@ -244,6 +258,24 @@ function blocoAnexos(texto) {
         Anexar ${texto} (foto ou PDF)</label>
       <button type="button" class="botao-anexo secundario" id="usar-celular">Usar o celular (QR Code)</button>
     </div>
+    <details class="fotos-opcionais">
+      <summary>Ler km do painel (opcional)</summary>
+      <p class="suave pequeno">Fotografe o hodômetro total (ODO), com todos os números legíveis. Confira o km antes de salvar.</p>
+      <label class="campo" id="destino-leitura-km" hidden><span>Ler o km de qual carro?</span><select id="destino-km"><option value="principal">Carro vendido — km na entrega</option><option value="troca">Carro da troca — km de entrada</option></select></label>
+      <div class="acoes">
+        <label class="botao-anexo secundario"><input type="file" id="camera-km" accept="image/*" capture="environment" hidden>Tirar foto do km</label>
+        <label class="botao-anexo secundario"><input type="file" id="arquivo-km" accept="image/*" hidden>Escolher foto do km</label>
+      </div>
+    </details>
+    <details class="fotos-opcionais">
+      <summary>Fotos do carro (opcional)</summary>
+      <div class="acoes" style="margin-top:8px">
+        <label class="botao-anexo secundario"><input type="file" id="camera-carro" accept="image/*" capture="environment" hidden>Tirar foto do carro</label>
+        <label class="botao-anexo secundario"><input type="file" id="fotos-carro" accept="image/*" multiple hidden>Escolher fotos do carro</label>
+      </div>
+      <label class="campo" id="destino-fotos-carro" hidden><span>Fotos de qual carro?</span><select id="destino-fotos"><option value="principal">Carro vendido</option><option value="troca">Carro da troca</option></select></label>
+      <p class="suave pequeno">Você também pode enviar estas fotos pelo mesmo QR Code dos documentos.</p>
+    </details>
     <div id="painel-celular" class="painel-celular" hidden></div>
     <div class="suave pequeno" id="anexo-dica">Pode mandar mais de um de uma vez. O sistema preenche e marca em amarelo o que você deve conferir.</div>
     <ul class="lista-anexos" id="lista-anexos"></ul>
@@ -294,7 +326,11 @@ function preencher(form, prefixo, dados) {
 function ligarAnexos(form, contexto) {
   form._anexos = [];
   form._anexosTroca = [];
+  form._uploadsPendentes = 0;
+  form._celularPendente = false;
   const lista = document.getElementById('lista-anexos');
+  document.getElementById('destino-fotos-carro').hidden = contexto !== 'venda';
+  document.getElementById('destino-leitura-km').hidden = contexto !== 'venda';
   form.addEventListener('input', e => e.target.classList?.remove('lido'));
 
   api('GET', '/leitura/disponivel').then(r => {
@@ -307,10 +343,57 @@ function ligarAnexos(form, contexto) {
   // Coloca o que foi lido no formulário (vale para foto daqui ou enviada pelo celular)
   const aplicar = (r, nome, item) => {
     const ver = `<a href="/anexos/${r.anexo_id}" target="_blank">ver arquivo</a>`;
+    if (r.tipo === 'hodometro') {
+      const ehTroca = contexto === 'venda' && r.destino === 'troca';
+      if (ehTroca) {
+        const troca = document.getElementById('tem-troca');
+        if (!troca.checked) { troca.checked = true; troca.dispatchEvent(new Event('change')); }
+      }
+      if (r.anexo_id) (ehTroca ? form._anexosTroca : form._anexos).push(r.anexo_id);
+      const nomeCampo = contexto === 'venda' ? (ehTroca ? 'troca.km_entrada' : 'venda.km_saida') : 'veiculo.km_entrada';
+      const campoKm = form.elements[nomeCampo];
+      const avisos = [...(r.avisos || []), ...(r.erro ? [r.erro] : [])];
+      if (!campoKm || !Number.isSafeInteger(r.km) || r.km < 0) {
+        item.className = 'atencao';
+        item.innerHTML = `<strong>Não foi possível preencher o km com segurança.</strong> ${avisos.map(esc).join(' ')} ${r.anexo_id ? '· ' + ver : ''}`;
+        return;
+      }
+      const textoKm = r.km.toLocaleString('pt-BR');
+      const rotulo = contexto === 'venda' && !ehTroca ? 'Km na entrega' : ehTroca ? 'Km de entrada da troca' : 'Km de entrada';
+      const atual = campoKm.value.trim();
+      const diferente = atual !== '' && Number(atual.replace(/\D/g, '')) !== r.km;
+      const usar = () => {
+        campoKm.value = textoKm;
+        campoKm.dispatchEvent(new Event('input', { bubbles: true }));
+        campoKm.classList.add('lido');
+        item.querySelector('button')?.remove();
+      };
+      item.className = 'atencao';
+      item.innerHTML = `<strong>${rotulo}: ${textoKm} km lidos.</strong> Confira a foto antes de salvar. ${avisos.map(esc).join(' ')} · ${ver}` +
+        (diferente ? `<br>O campo já tem ${esc(atual)} km. <button type="button" class="mini">Usar ${textoKm} km</button>` : '');
+      if (diferente) item.querySelector('button').addEventListener('click', usar);
+      else usar();
+      return;
+    }
     if (r.erro) {
-      form._anexos.push(r.anexo_id);
+      if (r.anexo_id) form._anexos.push(r.anexo_id);
       item.className = 'erro';
-      item.innerHTML = `<strong>${esc(nome)}</strong> anexado, mas não lido: ${esc(r.erro)} · ${ver}`;
+      item.innerHTML = r.anexo_id
+        ? `<strong>${esc(nome)}</strong> anexado, mas não lido: ${esc(r.erro)} · ${ver}`
+        : `<strong>${esc(nome)}</strong> não enviado: ${esc(r.erro)}`;
+      return;
+    }
+    if (r.tipo === 'foto_veiculo') {
+      const ehTroca = contexto === 'venda' && r.destino === 'troca';
+      if (ehTroca) {
+        const troca = document.getElementById('tem-troca');
+        if (!troca.checked) { troca.checked = true; troca.dispatchEvent(new Event('change')); }
+        form._anexosTroca.push(r.anexo_id);
+      } else {
+        form._anexos.push(r.anexo_id);
+      }
+      item.className = 'ok';
+      item.innerHTML = `<strong>Foto ${ehTroca ? 'do carro da troca' : 'do carro'}</strong>: ${esc(nome)} · ${ver}<br><span class="suave pequeno">Salve o formulário para vincular a foto ao carro.</span>`;
       return;
     }
     let n = 0;
@@ -343,25 +426,39 @@ function ligarAnexos(form, contexto) {
   };
 
   // "Tirar foto" (câmera) e "Anexar" (arquivo ou galeria) passam pelo mesmo caminho
-  const processar = async entrada => {
+  const processar = async (entrada, finalidade = 'documento') => {
+    const fotoCarro = finalidade === 'foto_veiculo';
+    const hodometro = finalidade === 'hodometro';
+    const destinoFotos = contexto === 'venda' ? document.getElementById(hodometro ? 'destino-km' : 'destino-fotos').value : 'principal';
     const arquivos = [...entrada.files];
     entrada.value = '';
     for (const arquivo of arquivos) {
       const item = document.createElement('li');
-      item.innerHTML = `<span class="girando"></span> Lendo <strong>${esc(arquivo.name)}</strong>...`;
+      item.innerHTML = `<span class="girando"></span> ${fotoCarro ? 'Enviando foto' : hodometro ? 'Lendo km' : 'Lendo'} <strong>${esc(arquivo.name)}</strong>...`;
       lista.append(item);
+      form._uploadsPendentes++;
       try {
         const preparado = await prepararArquivo(arquivo);
-        aplicar(await api('POST', '/documentos/ler', { nome: arquivo.name, ...preparado }), arquivo.name, item);
+        aplicar(await api('POST', fotoCarro ? '/fotos' : hodometro ? '/hodometro/ler' : '/documentos/ler', { nome: arquivo.name, ...preparado, ...(fotoCarro || hodometro ? { destino: destinoFotos } : {}) }), arquivo.name, item);
       } catch (e) {
         item.className = 'erro';
         item.innerHTML = `<strong>${esc(arquivo.name)}</strong>: ${esc(e.message)}`;
-      }
+      } finally { form._uploadsPendentes--; }
     }
   };
   for (const id of ['camera', 'arquivos']) {
     const entrada = document.getElementById(id);
     entrada.addEventListener('change', () => processar(entrada));
+  }
+
+  for (const id of ['camera-carro', 'fotos-carro']) {
+    const entrada = document.getElementById(id);
+    entrada.addEventListener('change', () => processar(entrada, 'foto_veiculo'));
+  }
+
+  for (const id of ['camera-km', 'arquivo-km']) {
+    const entrada = document.getElementById(id);
+    entrada.addEventListener('change', () => processar(entrada, 'hodometro'));
   }
 
   // "Usar o celular": mostra um QR Code; as fotos tiradas no celular chegam aqui sozinhas
@@ -371,14 +468,14 @@ function ligarAnexos(form, contexto) {
     if (!painel.hidden) return;
     botao.disabled = true;
     try {
-      const [envio, rede] = await Promise.all([api('POST', '/envios'), api('GET', '/rede')]);
+      const [envio, rede] = await Promise.all([api('POST', '/envios', { contexto }), api('GET', '/rede')]);
       const endereco = `${rede.ips[0] || rede.nome}/celular.html?c=${envio.codigo}`;
       painel.hidden = false;
       painel.innerHTML = `
         <div id="qr-celular" class="qrcode"></div>
         <div>
           <strong>Aponte a câmera do celular para o QR Code</strong>
-          <p class="pequeno">O celular precisa estar no Wi-Fi da loja. Tire as fotos lá; elas aparecem aqui e preenchem o formulário.</p>
+          <p class="pequeno">Abra o QR Code no celular para enviar os documentos e, se quiser, as fotos do carro. Depois confira e salve o formulário aqui.</p>
           <p class="suave pequeno">Código: <strong>${esc(envio.codigo)}</strong> · ${esc(endereco)}</p>
           <p class="pequeno" id="status-celular"><span class="girando"></span> Esperando fotos do celular...</p>
         </div>`;
@@ -399,6 +496,7 @@ function ligarAnexos(form, contexto) {
       if (location.hash !== tela || !document.body.contains(form)) return;
       try {
         const envio = await api('GET', `/envios/${codigo}`);
+        form._celularPendente = envio.itens.some(item => item.status === 'lendo');
         for (const r of envio.itens) {
           if (!recebidos.has(r.id)) {
             const item = document.createElement('li');
@@ -423,6 +521,9 @@ function ligarAnexos(form, contexto) {
 }
 
 async function enviar(form, fn) {
+  if (form._salvando || !form.reportValidity()) return;
+  if (form._uploadsPendentes > 0 || form._celularPendente) { aviso('Aguarde o envio e a leitura dos arquivos antes de salvar.', true); return; }
+  form._salvando = true;
   const botao = form.querySelector('button[type=submit]');
   botao.disabled = true;
   try {
@@ -431,6 +532,7 @@ async function enviar(form, fn) {
     aviso(e.message, true);
   } finally {
     botao.disabled = false;
+    form._salvando = false;
   }
 }
 
@@ -527,7 +629,7 @@ async function telaEntrada(id) {
   <div class="cabecalho"><div><h1>${id ? 'Editar carro' : 'Entrada de carro'}</h1>
     <div class="suave">${id ? esc(v.marca_modelo) : 'Compra ou consignação'}</div></div></div>
   <form id="form" novalidate>
-    ${id ? '' : blocoAnexos('CNH e CRLV')}
+    ${blocoAnexos('CNH e CRLV')}
     ${ehTroca ? `<p class="suave">Este carro entrou como troca. O valor dele vem da venda.</p>` : `
     <fieldset>
       <legend>Como o carro está entrando?</legend>
@@ -545,6 +647,7 @@ async function telaEntrada(id) {
         ${campo('Data e hora da entrada', 'veiculo.entrada_em', { valor: v.entrada_em, tipo: 'datetime-local', largura: 'c4' })}
         ${ehTroca ? `<div class="campo c4"><span>Valor da troca</span><strong style="padding:9px 0">${reais(v.valor_compra)}</strong></div>` :
           campo('<span id="rotulo-valor">Valor pago</span>', 'veiculo.valor_compra', { valor: paraTexto(v.valor_compra), obrig: true, dinheiro: true, largura: 'c4' })}
+        <div id="bloco-valor-consignacao" class="campo c4" style="padding:0" hidden>${campo('Valor do contrato de consignação', 'veiculo.valor_consignacao', { valor: paraTexto(v.valor_consignacao), dinheiro: true, obrig: true, largura: 'c12' })}<small class="suave">Preço para colocar o carro à venda.</small></div>
         <div id="bloco-comissao" class="campo c4" style="padding:0">${campo('Comissão da loja (R$)', 'veiculo.comissao', { valor: paraTexto(v.comissao), dinheiro: true, largura: 'c12' })}</div>
         ${campo('Forma de pagamento', 'veiculo.forma_pagamento', { valor: v.forma_pagamento, largura: 'c12', extra: 'placeholder="Ex.: PIX, quitação de financiamento no banco X..."' })}
         <label class="campo"><span>Observações</span><textarea name="veiculo.obs" rows="2">${esc(v.obs)}</textarea></label>
@@ -558,11 +661,16 @@ async function telaEntrada(id) {
 
   const form = document.getElementById('form');
   ligarPessoa(form, 'pessoa');
-  if (!id) ligarAnexos(form, 'entrada');
+  ligarAnexos(form, 'entrada');
   const ajustarTipo = () => {
     const tipo = form.querySelector('input[name="veiculo.tipo_entrada"]:checked')?.value;
     const rotulo = document.getElementById('rotulo-valor');
-    if (rotulo) rotulo.textContent = tipo === 'consignacao' ? 'Valor líquido ao dono' : 'Valor pago';
+    if (rotulo) rotulo.textContent = tipo === 'consignacao' ? 'Valor líquido ao dono' : tipo === 'compra_sem_transferir' ? 'Valor do contrato de compra' : 'Valor pago';
+    const doisContratos = tipo === 'compra_sem_transferir';
+    document.getElementById('bloco-valor-consignacao').hidden = !doisContratos;
+    const valorConsignacao = form.elements['veiculo.valor_consignacao'];
+    valorConsignacao.disabled = !doisContratos;
+    valorConsignacao.required = doisContratos;
     document.getElementById('bloco-comissao').style.display = tipo === 'consignacao' ? '' : 'none';
     form.elements['veiculo.comissao'].disabled = tipo !== 'consignacao';
   };
@@ -571,9 +679,10 @@ async function telaEntrada(id) {
 
   form.addEventListener('submit', e => {
     e.preventDefault();
+    if (!form.elements['veiculo.valor_consignacao'].disabled && !form.elements['veiculo.valor_consignacao'].reportValidity()) return;
     enviar(form, async dados => {
       if (id) {
-        await api('PUT', `/veiculos/${id}`, dados);
+        await api('PUT', `/veiculos/${id}`, { ...dados, anexos: form._anexos });
         aviso('Alterações salvas');
         ir(`#/carro/${id}`);
       } else {
@@ -677,6 +786,7 @@ async function telaCarro(id) {
 
   <div class="cartao">
     <h2>Contratos</h2>
+    ${v.tipo_entrada === 'compra_sem_transferir' ? `<p>Valor do contrato de compra: <strong>${reais(v.valor_compra)}</strong><br>Valor do contrato de consignação (preço para venda): <strong>${reais(v.valor_consignacao)}</strong></p>` : ''}
     <div class="acoes">
       ${v.tipo_entrada === 'compra_sem_transferir' ? `
       <a class="botao-link" href="/contrato/${id}/compra" target="_blank">Imprimir contrato de compra</a>
@@ -692,10 +802,17 @@ async function telaCarro(id) {
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
   </div>
 
-  ${d.anexos.length ? `
+  ${d.anexos.some(a => a.tipo === 'foto_veiculo') ? `
+  <div class="cartao">
+    <h2>Fotos do carro</h2>
+    <div class="galeria-carro">${d.anexos.filter(a => a.tipo === 'foto_veiculo').map(a => `
+      <a href="/anexos/${a.id}" target="_blank" rel="noopener"><img src="/anexos/${a.id}" alt="${esc(a.nome_original || 'Foto do carro')}" loading="lazy"><span>${esc(a.nome_original || 'Foto do carro')}</span></a>`).join('')}</div>
+  </div>` : ''}
+
+  ${d.anexos.some(a => a.tipo !== 'foto_veiculo') ? `
   <div class="cartao">
     <h2>Documentos anexados</h2>
-    <ul class="lista-anexos">${d.anexos.map(a => `
+    <ul class="lista-anexos">${d.anexos.filter(a => a.tipo !== 'foto_veiculo').map(a => `
       <li><a href="/anexos/${a.id}" target="_blank">${NOME_DOC[a.tipo] || 'Arquivo'}${a.nome_original ? ' · ' + esc(a.nome_original) : ''}</a>
       <span class="suave pequeno">${dataBR(a.criado_em.replace(' ', 'T'))}</span></li>`).join('')}
     </ul>
@@ -714,7 +831,7 @@ async function telaCarro(id) {
     <div class="dados" style="margin-top:12px">
       <div><span>Data</span>${dataBR(d.venda.vendido_em)}</div>
       <div><span>Km na saída</span>${d.venda.km_saida != null ? d.venda.km_saida.toLocaleString('pt-BR') : '—'}</div>
-      ${d.venda.forma_pagamento ? `<div><span>Forma de pagamento</span>${FORMA_PAGAMENTO[d.venda.forma_pagamento]}</div>` : ''}
+      ${d.venda.descricao_pagamento && d.venda.descricao_pagamento !== 'Não informado' ? `<div><span>Forma de pagamento</span>${esc(d.venda.descricao_pagamento || FORMA_PAGAMENTO[d.venda.forma_pagamento] || 'Não informado')}</div>` : ''}
       ${d.venda.valor_pix ? `<div><span>PIX</span>${reais(d.venda.valor_pix)}</div>` : ''}
       ${d.venda.valor_deposito ? `<div><span>Depósito bancário</span>${reais(d.venda.valor_deposito)}</div>` : ''}
       ${d.venda.valor_dinheiro ? `<div><span>Dinheiro</span>${reais(d.venda.valor_dinheiro)}</div>` : ''}
@@ -791,40 +908,32 @@ async function telaVenda(id) {
       </div>
     </fieldset>
     <fieldset>
-      <legend>Forma de pagamento</legend>
-      <div class="opcoes opcoes-linha">
-        <label class="opcao"><input type="radio" name="venda.forma_pagamento" value="avista">
-          <span><strong>À vista</strong><small>PIX, depósito ou dinheiro (pode combinar)</small></span></label>
-        <label class="opcao"><input type="radio" name="venda.forma_pagamento" value="entrada_financiamento">
-          <span><strong>Entrada + financiamento</strong><small>Uma parte paga agora e o resto pelo banco</small></span></label>
-        <label class="opcao"><input type="radio" name="venda.forma_pagamento" value="financiamento">
-          <span><strong>Financiamento</strong><small>Valor financiado pelo banco</small></span></label>
+      <legend>Como o comprador vai pagar?</legend>
+      <p class="suave pequeno">Marque uma ou mais opções. Os campos aparecem conforme a seleção.</p>
+      <div class="opcoes opcoes-linha opcoes-pagamento">
+        ${Object.entries(MEIOS_PAGAMENTO).map(([meio, dados]) => `<label class="opcao"><input type="checkbox" data-meio="${meio}"><span><strong>${dados.nome}</strong><small>${meio === 'financiamento' ? 'Valor liberado pelo banco' : 'Valor recebido pela loja'}</small></span></label>`).join('')}
       </div>
-      <fieldset id="pg-entrada" class="sub" disabled hidden>
-        <legend id="titulo-entrada">Pagamento à vista</legend>
-        <p class="suave pequeno">Preencha só o que for usar. Pode combinar, por exemplo uma parte no PIX e outra em dinheiro.</p>
-        <div class="grade">
-          ${campo('PIX', 'venda.valor_pix', { dinheiro: true, largura: 'c4' })}
-          ${campo('Depósito bancário / TED', 'venda.valor_deposito', { dinheiro: true, largura: 'c4' })}
-          ${campo('Dinheiro', 'venda.valor_dinheiro', { dinheiro: true, largura: 'c4' })}
-        </div>
-      </fieldset>
+      <p id="resumo-pagamento" class="resumo-pagamento" aria-live="polite">Selecione as formas de pagamento.</p>
+      ${Object.entries(MEIOS_PAGAMENTO).filter(([meio]) => meio !== 'financiamento').map(([meio, dados]) => `<fieldset id="pg-${meio}" class="sub" disabled hidden>
+        <legend>${dados.nome}</legend><div class="grade">${campo('Valor em ' + dados.nome, 'venda.' + dados.campo, { dinheiro: true, obrig: true, largura: 'c6' })}</div>
+      </fieldset>`).join('')}
       <fieldset id="pg-financiamento" class="sub" disabled hidden>
         <legend>Financiamento</legend>
         <div class="grade">
           ${selecao('Banco', 'venda.banco', Object.fromEntries([['', 'Escolha o banco'], ...BANCOS.map(b => [b, b]), ['Outro', 'Outro (digitar)']]), '', 'c4')}
-          <label class="campo c4" id="campo-banco-outro" hidden><span>Nome do banco</span><input name="banco_outro"></label>
-          ${campo('Valor financiado', 'venda.valor_financiado', { dinheiro: true, largura: 'c4' })}
-          ${campo('Parcelas', 'venda.parcelas', { tipo: 'number', largura: 'c4', extra: 'min="1" placeholder="Ex.: 48"' })}
+          <label class="campo c4" id="campo-banco-outro" hidden><span>Nome do banco *</span><input name="banco_outro" disabled></label>
+          ${campo('Valor financiado', 'venda.valor_financiado', { dinheiro: true, obrig: true, largura: 'c4' })}
+          ${campo('Quantidade de parcelas', 'venda.parcelas', { tipo: 'number', obrig: true, largura: 'c4', extra: 'min="1" step="1" placeholder="Ex.: 48"' })}
         </div>
       </fieldset>
-      <details class="saldo">
-        <summary>Tem saldo para receber depois? (opcional)</summary>
-        <div class="grade" style="margin-top:8px">
-          ${campo('Saldo a receber', 'venda.valor_saldo', { dinheiro: true, largura: 'c4' })}
-          ${campo('Vencimento do saldo', 'venda.saldo_vencimento', { tipo: 'date', largura: 'c4' })}
+      <label class="marcador" style="margin-top:14px"><input type="checkbox" id="tem-saldo"> Tem saldo para receber depois</label>
+      <fieldset id="pg-saldo" class="sub" disabled hidden>
+        <legend>Saldo a receber</legend>
+        <div class="grade">
+          ${campo('Saldo a receber', 'venda.valor_saldo', { dinheiro: true, obrig: true, largura: 'c4' })}
+          ${campo('Vencimento do saldo', 'venda.saldo_vencimento', { tipo: 'date', obrig: true, largura: 'c4' })}
         </div>
-      </details>
+      </fieldset>
       <label class="marcador" style="margin-top:14px"><input type="checkbox" id="tem-troca"> Tem carro na troca</label>
     </fieldset>
     <fieldset id="bloco-troca" disabled hidden>
@@ -855,28 +964,32 @@ async function telaVenda(id) {
     conferir();
   });
 
-  // Cada forma de pagamento abre os campos dela
-  const pgEntrada = document.getElementById('pg-entrada');
-  const pgFinanciamento = document.getElementById('pg-financiamento');
+  const meiosSelecionados = () => [...form.querySelectorAll('[data-meio]:checked')].map(el => el.dataset.meio);
   const mostrar = (bloco, sim) => { bloco.hidden = !sim; bloco.disabled = !sim; };
+  form.elements['venda.banco'].required = true;
+  const ajustarBanco = () => {
+    const outro = form.querySelector('[data-meio="financiamento"]').checked && form.elements['venda.banco'].value === 'Outro';
+    document.getElementById('campo-banco-outro').hidden = !outro;
+    form.elements.banco_outro.disabled = !outro;
+    form.elements.banco_outro.required = outro;
+  };
   form.addEventListener('change', e => {
-    if (e.target.name === 'venda.forma_pagamento') {
-      const forma = e.target.value;
-      mostrar(pgEntrada, forma !== 'financiamento');
-      mostrar(pgFinanciamento, forma !== 'avista');
-      document.getElementById('titulo-entrada').textContent = forma === 'avista' ? 'Pagamento à vista' : 'Entrada';
+    if (e.target.matches('[data-meio]')) {
+      for (const meio of Object.keys(MEIOS_PAGAMENTO)) mostrar(document.getElementById('pg-' + meio), form.querySelector(`[data-meio="${meio}"]`).checked);
+      ajustarBanco();
       conferir();
     }
-    if (e.target.name === 'venda.banco') {
-      const outro = e.target.value === 'Outro';
-      document.getElementById('campo-banco-outro').hidden = !outro;
-      if (outro) form.elements.banco_outro.focus();
-    }
+    if (e.target.id === 'tem-saldo') { mostrar(document.getElementById('pg-saldo'), e.target.checked); conferir(); }
+    if (e.target.name === 'venda.banco') { ajustarBanco(); if (!form.elements.banco_outro.disabled) form.elements.banco_outro.focus(); }
   });
 
   // Mostra se as formas de pagamento fecham com o valor da venda, e o lucro previsto
   const conferir = () => {
     const el = document.getElementById('conferencia');
+    const formas = meiosSelecionados().map(m => MEIOS_PAGAMENTO[m].nome);
+    if (document.getElementById('tem-troca').checked) formas.push('Carro na troca');
+    if (document.getElementById('tem-saldo').checked) formas.push('Saldo a receber');
+    document.getElementById('resumo-pagamento').textContent = formas.length ? formas.join(' + ') : 'Selecione as formas de pagamento.';
     let dados;
     try { dados = lerForm(form).venda || {}; } catch { el.textContent = 'Confira os valores digitados.'; return; }
     const total = dados.valor_venda || 0;
@@ -894,12 +1007,15 @@ async function telaVenda(id) {
   form.addEventListener('submit', e => {
     e.preventDefault();
     enviar(form, async dados => {
-      if (!dados.venda?.km_saida) {
+      if (dados.venda?.km_saida === '' || dados.venda?.km_saida == null) {
         form.elements['venda.km_saida'].classList.add('invalido');
         form.elements['venda.km_saida'].focus();
         throw new Error('Preencha o km na entrega: sem ele o contrato e a garantia por km não saem.');
       }
-      if (!dados.venda.forma_pagamento) throw new Error('Escolha a forma de pagamento: à vista, entrada + financiamento ou financiamento.');
+      const meios = meiosSelecionados();
+      if (!meios.length && !document.getElementById('tem-troca').checked && !document.getElementById('tem-saldo').checked) throw new Error('Marque como vai receber: PIX, depósito, dinheiro, financiamento, carro na troca ou saldo a receber.');
+      dados.venda.meios_pagamento = meios;
+      dados.venda.forma_pagamento = meios.includes('financiamento') ? (meios.some(m => m !== 'financiamento') ? 'entrada_financiamento' : 'financiamento') : 'avista';
       if (dados.venda.banco === 'Outro') {
         if (!dados.banco_outro) throw new Error('Digite o nome do banco do financiamento.');
         dados.venda.banco = dados.banco_outro;
@@ -1130,8 +1246,11 @@ async function navegar() {
 document.addEventListener('focusout', e => {
   const el = e.target;
   if (el.matches?.('input[data-milhar]')) {
-    const dig = el.value.replace(/\D/g, '');
-    el.value = dig ? Number(dig).toLocaleString('pt-BR') : '';
+    el.classList.remove('invalido');
+    try {
+      const km = paraQuilometragem(el.value);
+      el.value = km == null ? '' : km.toLocaleString('pt-BR');
+    } catch { el.classList.add('invalido'); }
     return;
   }
   if (!el.matches?.('input[data-dinheiro]')) return;

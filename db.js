@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS veiculos (
   fornecedor_id INTEGER REFERENCES pessoas(id),
   entrada_em TEXT NOT NULL,
   valor_compra INTEGER NOT NULL DEFAULT 0,
+  valor_consignacao INTEGER,
   comissao INTEGER,
   forma_pagamento TEXT,
   obs TEXT,
@@ -120,6 +121,8 @@ LEFT JOIN pessoas c ON c.id = vd.comprador_id;
 `);
 
 // Colunas novas em bancos criados antes delas existirem
+const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
+if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos ADD COLUMN valor_consignacao INTEGER');
 const colunasVenda = db.prepare('PRAGMA table_info(vendas)').all().map(c => c.name);
 for (const [coluna, tipo] of [['forma_pagamento', 'TEXT'], ['valor_pix', 'INTEGER'], ['valor_deposito', 'INTEGER'], ['valor_dinheiro', 'INTEGER']]) {
   if (!colunasVenda.includes(coluna)) db.exec(`ALTER TABLE vendas ADD COLUMN ${coluna} ${tipo}`);
@@ -130,14 +133,16 @@ const CATEGORIAS_GASTO = ['oficina', 'pecas', 'combustivel', 'documentacao', 'es
 
 const CAMPOS_PESSOA = ['nome', 'cpf', 'rg', 'nascimento', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf'];
 const CAMPOS_VEICULO = ['marca_modelo', 'ano_fab', 'ano_mod', 'cor', 'combustivel', 'placa', 'renavam', 'chassi', 'km_entrada',
-  'tipo_entrada', 'entrada_em', 'valor_compra', 'comissao', 'forma_pagamento', 'obs'];
+  'tipo_entrada', 'entrada_em', 'valor_compra', 'valor_consignacao', 'comissao', 'forma_pagamento', 'obs'];
 const CAMPOS_GASTO = ['data', 'categoria', 'descricao', 'valor'];
 const CAMPOS_VENDA = ['vendido_em', 'km_saida', 'valor_venda', 'forma_pagamento', 'valor_pix', 'valor_deposito', 'valor_dinheiro',
   'valor_financiado', 'banco', 'parcelas', 'valor_troca', 'valor_saldo', 'saldo_vencimento', 'obs'];
-const INTEIROS = new Set(['ano_fab', 'ano_mod', 'km_entrada', 'valor_compra', 'comissao', 'valor', 'km_saida', 'valor_venda',
+const INTEIROS = new Set(['ano_fab', 'ano_mod', 'km_entrada', 'valor_compra', 'valor_consignacao', 'comissao', 'valor', 'km_saida', 'valor_venda',
   'valor_entrada', 'valor_pix', 'valor_deposito', 'valor_dinheiro', 'valor_financiado', 'parcelas', 'valor_troca', 'valor_saldo']);
 // Formas de pagamento da venda: à vista (PIX, depósito e/ou dinheiro), entrada + financiamento, ou só financiamento
 const FORMAS_PAGAMENTO = ['avista', 'entrada_financiamento', 'financiamento'];
+const MEIOS_PAGAMENTO = { pix: ['PIX', 'valor_pix'], deposito: ['Depósito bancário', 'valor_deposito'], dinheiro: ['Dinheiro', 'valor_dinheiro'], financiamento: ['Financiamento', 'valor_financiado'] };
+const DATAS = new Set(['nascimento', 'entrada_em', 'vendido_em', 'data', 'saldo_vencimento']);
 const SO_DIGITOS = new Set(['cpf', 'renavam', 'cep']);
 const MAIUSCULAS = new Set(['placa', 'chassi', 'uf']);
 
@@ -147,33 +152,52 @@ function erro(mensagem, status = 400) {
   return e;
 }
 
-// Data e hora local no formato do campo datetime-local: 2026-10-29T14:30
+// Datas da loja seguem São Paulo, mesmo quando o servidor está em UTC.
+const formatoDataLoja = new Intl.DateTimeFormat('en-CA', { timeZone: process.env.FUSO_LOJA || 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function agora() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+  const p = Object.fromEntries(formatoDataLoja.formatToParts(new Date()).map(parte => [parte.type, parte.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 // Pega só os campos permitidos e normaliza (vazio vira null, números viram inteiros, placa em maiúsculas...)
 function limpar(campos, dados = {}) {
+  if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw erro('Dados do formulário inválidos');
   const saida = {};
   for (const c of campos) {
     if (!(c in dados)) continue;
     let v = dados[c];
+    if (typeof v === 'string') v = v.trim();
     if (v === '' || v === undefined) v = null;
     if (v !== null && INTEIROS.has(c)) {
+      if (!['number', 'string'].includes(typeof v)) throw erro(`Valor inválido no campo "${c}"`);
       v = Number(v);
-      if (!Number.isFinite(v)) throw erro(`Valor inválido no campo "${c}"`);
-      v = Math.round(v);
+      if (!Number.isSafeInteger(v) || v < 0) throw erro(`O campo "${c}" deve ser um número inteiro maior ou igual a zero`);
     } else if (v !== null) {
       v = String(v).trim();
       if (SO_DIGITOS.has(c)) v = v.replace(/\D/g, '');
       if (MAIUSCULAS.has(c)) v = v.toUpperCase().replace(c === 'placa' ? /[^A-Z0-9]/g : /\s/g, '');
       if (v === '') v = null;
     }
+    if (v !== null && DATAS.has(c) && !dataValida(v)) throw erro(`Data inválida no campo "${c}"`);
     saida[c] = v;
   }
   return saida;
+}
+
+function dataValida(valor) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(valor);
+  if (!m) return false;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() + 1 === Number(m[2]) && d.getUTCDate() === Number(m[3]) &&
+    (m[4] === undefined || Number(m[4]) <= 23 && Number(m[5]) <= 59 && Number(m[6] || 0) <= 59);
+}
+
+function descreverPagamento(venda) {
+  const partes = Object.values(MEIOS_PAGAMENTO).filter(([, campo]) => venda[campo] > 0).map(([nome]) => nome);
+  if (!venda.valor_pix && !venda.valor_deposito && !venda.valor_dinheiro && venda.valor_entrada > 0) partes.unshift(venda.forma_entrada || 'Entrada');
+  if (venda.valor_troca > 0) partes.push('Carro na troca');
+  if (venda.valor_saldo > 0) partes.push('Saldo a receber');
+  return partes.join(' + ') || 'Não informado';
 }
 
 function inserir(tabela, obj) {
@@ -242,11 +266,20 @@ const EXTENSOES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp
 function criarAnexo({ conteudo, tipoMime, nomeOriginal }) {
   const ext = EXTENSOES[tipoMime];
   if (!ext) throw erro('Envie uma foto (JPG, PNG) ou um PDF');
-  const id = inserir('anexos', { tipo_mime: tipoMime, nome_original: nomeOriginal || null, arquivo: 'pendente' });
-  const arquivo = `${id}.${ext}`;
-  fs.writeFileSync(path.join(PASTA_ANEXOS, arquivo), conteudo);
-  atualizar('anexos', id, { arquivo });
-  return id;
+  let caminho;
+  try {
+    return transacao(() => {
+      const id = inserir('anexos', { tipo_mime: tipoMime, nome_original: nomeOriginal || null, arquivo: 'pendente' });
+      const arquivo = `${id}.${ext}`;
+      caminho = path.join(PASTA_ANEXOS, arquivo);
+      fs.writeFileSync(caminho, conteudo);
+      atualizar('anexos', id, { arquivo });
+      return id;
+    });
+  } catch (e) {
+    if (caminho) fs.rmSync(caminho, { force: true });
+    throw e;
+  }
 }
 
 function definirTipoAnexo(id, tipo) {
@@ -261,7 +294,7 @@ function obterAnexo(id) {
 
 // Liga ao carro os anexos lidos antes de salvar (só os que ainda não têm carro)
 function vincularAnexos(ids, veiculoId) {
-  const lista = (Array.isArray(ids) ? ids : []).map(Number).filter(Number.isInteger);
+  const lista = (Array.isArray(ids) ? ids : []).map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
   const sql = db.prepare('UPDATE anexos SET veiculo_id = ? WHERE id = ? AND veiculo_id IS NULL');
   for (const id of lista) sql.run(veiculoId, id);
 }
@@ -291,7 +324,8 @@ function obterVeiculo(id) {
   const v = db.prepare('SELECT * FROM v_veiculos WHERE id = ?').get(id);
   if (!v) throw erro('Carro não encontrado', 404);
   const pessoa = pid => (pid ? db.prepare('SELECT * FROM pessoas WHERE id = ?').get(pid) : null);
-  const venda = db.prepare('SELECT * FROM vendas WHERE veiculo_id = ?').get(id) || null;
+  const linhaVenda = db.prepare('SELECT * FROM vendas WHERE veiculo_id = ?').get(id);
+  const venda = linhaVenda ? { ...linhaVenda, descricao_pagamento: descreverPagamento(linhaVenda) } : null;
   const origemTroca = db.prepare(`
     SELECT vd.vendido_em, ve.id, ve.marca_modelo, ve.placa
     FROM vendas vd JOIN veiculos ve ON ve.id = vd.veiculo_id
@@ -308,13 +342,17 @@ function obterVeiculo(id) {
   };
 }
 
-function atualizarVeiculo(id, { veiculo, pessoa } = {}) {
-  obterVeiculo(id);
+function atualizarVeiculo(id, { veiculo, pessoa, anexos } = {}) {
+  const atual = obterVeiculo(id).veiculo;
   const v = limpar(CAMPOS_VEICULO, veiculo);
-  if ('marca_modelo' in v) validarVeiculo(v);
+  validarVeiculo({ ...atual, ...v });
+  if (atual.tipo_entrada === 'troca' && (('valor_compra' in v && v.valor_compra !== atual.valor_compra) || ('tipo_entrada' in v && v.tipo_entrada !== 'troca'))) throw erro('O tipo e o valor do carro da troca vêm da venda de origem');
+  if (v.tipo_entrada === 'troca' && atual.tipo_entrada !== 'troca') throw erro('Um carro só entra como troca ao registrar a venda de outro veículo');
+  if ('valor_compra' in v && v.valor_compra == null) throw erro('Informe o valor do carro');
   transacao(() => {
     if (pessoa?.nome) v.fornecedor_id = salvarPessoa(pessoa);
     atualizar('veiculos', id, v);
+    vincularAnexos(anexos, id);
   });
   return { id };
 }
@@ -343,10 +381,20 @@ function registrarVenda(id, { pessoa, venda, troca, anexos, anexosTroca } = {}) 
   vd.vendido_em = vd.vendido_em || agora();
   if (!troca) vd.valor_troca = null;
 
+  if (venda?.meios_pagamento !== undefined) {
+    const meios = venda.meios_pagamento;
+    if (!Array.isArray(meios) || meios.some(m => typeof m !== 'string' || !Object.hasOwn(MEIOS_PAGAMENTO, m)) || new Set(meios).size !== meios.length) throw erro('Escolha formas de pagamento válidas');
+    for (const [meio, [nome, campo]] of Object.entries(MEIOS_PAGAMENTO)) {
+      if (!meios.includes(meio)) vd[campo] = null;
+      else if (!(vd[campo] > 0)) throw erro(`Informe o valor de ${nome}`);
+    }
+    vd.forma_pagamento = meios.includes('financiamento') ? (meios.some(m => m !== 'financiamento') ? 'entrada_financiamento' : 'financiamento') : 'avista';
+  }
   if (!FORMAS_PAGAMENTO.includes(vd.forma_pagamento)) throw erro('Escolha a forma de pagamento');
   const financia = vd.forma_pagamento !== 'avista';
   if (financia) {
-    if (!vd.banco) throw erro('Escolha o banco do financiamento');
+    if (!vd.banco || vd.banco.toLowerCase() === 'outro') throw erro('Informe o banco do financiamento');
+    if (!(vd.parcelas > 0)) throw erro('Informe a quantidade de parcelas do financiamento');
     if (!vd.valor_financiado || vd.valor_financiado <= 0) throw erro('Informe o valor financiado');
   } else {
     vd.valor_financiado = vd.banco = vd.parcelas = null;
@@ -357,7 +405,10 @@ function registrarVenda(id, { pessoa, venda, troca, anexos, anexosTroca } = {}) 
   vd.valor_entrada = partes.length ? partes.reduce((s, [, v]) => s + v, 0) : null;
   vd.forma_entrada = partes.length ? partes.map(([n]) => n).join(' + ') : null;
   if (vd.forma_pagamento === 'entrada_financiamento' && !vd.valor_entrada) throw erro('Informe o valor da entrada (PIX, depósito ou dinheiro)');
+  if (vd.valor_saldo > 0 && !vd.saldo_vencimento) throw erro('Informe o vencimento do saldo a receber');
+  if (!vd.valor_saldo) vd.valor_saldo = vd.saldo_vencimento = null;
   const pago = (vd.valor_entrada || 0) + (vd.valor_financiado || 0) + (vd.valor_troca || 0) + (vd.valor_saldo || 0);
+  if (!Number.isSafeInteger(pago)) throw erro('O total dos pagamentos ultrapassa o limite permitido');
   if (pago !== vd.valor_venda) {
     const dif = (Math.abs(vd.valor_venda - pago) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     throw erro(pago < vd.valor_venda ? `O pagamento não fecha: faltam ${dif} para o valor da venda` : `O pagamento passa ${dif} do valor da venda`);
@@ -398,6 +449,7 @@ function atualizarKmVenda(id, dados) {
 function desfazerVenda(id) {
   const venda = db.prepare('SELECT * FROM vendas WHERE veiculo_id = ?').get(id);
   if (!venda) throw erro('Este carro não tem venda registrada');
+  const arquivosTroca = venda.troca_veiculo_id ? db.prepare('SELECT arquivo FROM anexos WHERE veiculo_id = ?').all(venda.troca_veiculo_id) : [];
   transacao(() => {
     if (venda.troca_veiculo_id) {
       const t = db.prepare('SELECT status FROM veiculos WHERE id = ?').get(venda.troca_veiculo_id);
@@ -407,6 +459,7 @@ function desfazerVenda(id) {
     if (venda.troca_veiculo_id) db.prepare('DELETE FROM veiculos WHERE id = ?').run(venda.troca_veiculo_id);
     atualizar('veiculos', id, { status: 'estoque' });
   });
+  for (const anexo of arquivosTroca) fs.rmSync(path.join(PASTA_ANEXOS, anexo.arquivo), { force: true });
   return { id };
 }
 
@@ -423,6 +476,7 @@ function excluirVeiculo(id) {
 
 // Cadastro rápido do estoque que já existe: só o carro e o valor, sem vendedor nem contrato
 function criarEstoqueRapido(lista = []) {
+  if (!Array.isArray(lista)) throw erro('Envie uma lista de carros');
   const carros = lista.map(item => limpar(CAMPOS_VEICULO, item)).filter(v => v.marca_modelo || v.placa);
   if (!carros.length) throw erro('Preencha pelo menos um carro');
   carros.forEach((v, i) => {
@@ -476,11 +530,19 @@ function obterConfig() {
 }
 
 function salvarConfig(dados = {}) {
-  const sql = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor');
-  for (const chave of Object.keys(CONFIG_PADRAO)) {
-    if (chave in dados) sql.run(chave, String(dados[chave] ?? '').trim());
+  for (const chave of ['garantia_dias', 'garantia_km']) {
+    if (chave in dados) {
+      const n = Number(dados[chave]);
+      if (!['string', 'number'].includes(typeof dados[chave]) || !Number.isSafeInteger(n) || n <= 0) throw erro(`Informe um número inteiro maior que zero em ${chave === 'garantia_dias' ? 'dias de garantia' : 'km de garantia'}`);
+    }
   }
-  return obterConfig();
+  return transacao(() => {
+    const sql = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor');
+    for (const chave of Object.keys(CONFIG_PADRAO)) {
+      if (chave in dados) sql.run(chave, String(dados[chave] ?? '').trim());
+    }
+    return obterConfig();
+  });
 }
 
 function listarPessoas({ busca, cpf } = {}) {
@@ -494,5 +556,5 @@ module.exports = {
   criarAnexo, definirTipoAnexo, obterAnexo,
   criarCompra, listarVeiculos, obterVeiculo, atualizarVeiculo,
   adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, criarEstoqueRapido,
-  resumo, listarPessoas, obterConfig, salvarConfig,
+  resumo, listarPessoas, obterConfig, salvarConfig, descreverPagamento,
 };
