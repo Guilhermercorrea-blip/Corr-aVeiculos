@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f3a5f">
+  <title>Entrar - Corrêa Veículos</title>
+  <link rel="icon" href="img/icone.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="img/icone-192.png">
+  <link rel="stylesheet" href="estilo.css">
+  <style>
+    .caixa-login { max-width: 380px; margin: 24px auto; }
+    .caixa-login h1 { text-align: center; margin-bottom: 4px; }
+    .caixa-login .campo { margin-bottom: 12px; }
+    .caixa-login button { width: 100%; padding: 12px; font-size: 1.05rem; }
+    .erro-login { color: var(--vermelho); min-height: 1.4em; margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="banner"><img src="img/banner.jpg" alt="Corrêa Veículos"></div>
+  <main>
+    <form class="cartao caixa-login" id="form" novalidate>
+      <h1 id="titulo">Entrar</h1>
+      <p class="suave" id="explicacao" style="text-align:center">Use seu usuário e senha.</p>
+      <label class="campo" id="campo-nome" hidden><span>Seu nome</span><input name="nome" autocomplete="name"></label>
+      <label class="campo"><span>Usuário</span><input name="usuario" autocomplete="username" autocapitalize="none" required></label>
+      <label class="campo"><span>Senha</span><input name="senha" type="password" autocomplete="current-password" required></label>
+      <label class="campo" id="campo-confirma" hidden><span>Repita a senha</span><input name="confirma" type="password" autocomplete="new-password"></label>
+      <div class="erro-login" id="erro"></div>
+      <button type="submit" id="botao">Entrar</button>
+    </form>
+  </main>
+  <script>
+    'use strict';
+    const form = document.getElementById('form');
+    const erro = document.getElementById('erro');
+    let primeiroAcesso = false;
+
+    async function chamar(url, corpo) {
+      const r = await fetch(url, {
+        method: corpo ? 'POST' : 'GET',
+        headers: corpo ? { 'Content-Type': 'application/json' } : {},
+        body: corpo ? JSON.stringify(corpo) : undefined,
+      });
+      const dados = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(dados.erro || 'Erro ' + r.status);
+      return dados;
+    }
+
+    // Sem nenhum usuário ainda: neste computador aparece a criação do primeiro usuário
+    chamar('/api/primeiro-usuario').then(r => {
+      if (r.disponivel) {
+        primeiroAcesso = true;
+        document.getElementById('titulo').textContent = 'Criar primeiro usuário';
+        document.getElementById('explicacao').textContent = 'Primeiro acesso: crie o usuário e a senha que vão proteger o sistema.';
+        document.getElementById('campo-nome').hidden = false;
+        document.getElementById('campo-confirma').hidden = false;
+        form.elements.senha.autocomplete = 'new-password';
+        document.getElementById('botao').textContent = 'Criar e entrar';
+      } else if (!r.temUsuarios) {
+        erro.textContent = 'O sistema ainda não tem usuário. Abra o sistema no computador onde ele está instalado para criar o primeiro.';
+      }
+    }).catch(() => {});
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      erro.textContent = '';
+      const dados = Object.fromEntries(new FormData(form));
+      if (primeiroAcesso && dados.senha !== dados.confirma) {
+        erro.textContent = 'As duas senhas não são iguais.';
+        return;
+      }
+      const botao = document.getElementById('botao');
+      botao.disabled = true;
+      try {
+        await chamar(primeiroAcesso ? '/api/primeiro-usuario' : '/api/login', dados);
+        location.href = '/';
+      } catch (err) {
+        erro.textContent = err.message;
+      } finally {
+        botao.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

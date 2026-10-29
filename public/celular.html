@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f3a5f">
+  <title>Enviar fotos - Corrêa Veículos</title>
+  <link rel="icon" href="img/icone.png">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; color: #1c1f24; }
+    header { background: #fff; text-align: center; padding: 10px; border-bottom: 1px solid #d9dde3; }
+    header img { height: 56px; }
+    main { padding: 16px; max-width: 520px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin: 4px 0; }
+    .suave { color: #5f6670; font-size: .95rem; }
+    .botao { display: block; width: 100%; text-align: center; font: 700 1.2rem system-ui, sans-serif; padding: 22px; border-radius: 12px;
+      background: #1f3a5f; color: #fff; margin: 14px 0 10px; cursor: pointer; }
+    .botao.sec { background: #fff; color: #1f3a5f; border: 2px solid #1f3a5f; font-size: 1rem; padding: 14px; }
+    ul { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+    li { background: #fff; border: 1px solid #d9dde3; border-radius: 10px; padding: 12px; }
+    li.ok { border-color: #1d7a46; background: #e3f3ea; }
+    li.erro { border-color: #b42318; background: #fbe9e7; }
+    .erro-geral { background: #fbe9e7; border: 1px solid #b42318; border-radius: 10px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header><img src="img/logo.jpg" alt="Corrêa Veículos"></header>
+  <main>
+    <div id="conteudo">
+      <h1>Enviar fotos para o computador</h1>
+      <p class="suave">Tire foto da CNH ou do CRLV. Ela vai direto para o formulário aberto no computador, que preenche sozinho.</p>
+      <label class="botao"><input type="file" id="camera" accept="image/*" capture="environment" hidden>Tirar foto</label>
+      <label class="botao sec"><input type="file" id="galeria" accept="image/*,application/pdf" multiple hidden>Escolher da galeria ou PDF</label>
+      <ul id="lista"></ul>
+      <p class="suave">Pode tirar quantas fotos precisar. Depois é só conferir e salvar no computador.</p>
+    </div>
+  </main>
+  <script>
+    'use strict';
+    const codigo = new URLSearchParams(location.search).get('c') || '';
+    const lista = document.getElementById('lista');
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const NOME = { cnh: 'CNH', crlv: 'CRLV', rg: 'RG', outro: 'Documento' };
+
+    function paraBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1]);
+        r.onerror = () => reject(new Error('Não deu para abrir a foto'));
+        r.readAsDataURL(blob);
+      });
+    }
+
+    // Reduz a foto para no máximo 2000 px antes de enviar (envio mais rápido no Wi-Fi)
+    async function preparar(arquivo) {
+      if (arquivo.type === 'application/pdf') return { tipo_mime: 'application/pdf', base64: await paraBase64(arquivo) };
+      let imagem;
+      try { imagem = await createImageBitmap(arquivo); }
+      catch { throw new Error('Formato de imagem não aceito. Use JPG, PNG ou PDF.'); }
+      const escala = Math.min(1, 2000 / Math.max(imagem.width, imagem.height));
+      const tela = document.createElement('canvas');
+      tela.width = Math.round(imagem.width * escala);
+      tela.height = Math.round(imagem.height * escala);
+      tela.getContext('2d').drawImage(imagem, 0, 0, tela.width, tela.height);
+      const jpeg = await new Promise(r => tela.toBlob(r, 'image/jpeg', 0.88));
+      return { tipo_mime: 'image/jpeg', base64: await paraBase64(jpeg) };
+    }
+
+    async function enviar(entrada) {
+      const arquivos = [...entrada.files];
+      entrada.value = '';
+      for (const arquivo of arquivos) {
+        const item = document.createElement('li');
+        item.textContent = 'Enviando e lendo...';
+        lista.prepend(item);
+        try {
+          const corpo = { nome: arquivo.name || 'foto', ...(await preparar(arquivo)) };
+          const resp = await fetch(`/api/envios/${encodeURIComponent(codigo)}/foto`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+          });
+          const r = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(r.erro || 'Erro ' + resp.status);
+          item.className = r.ok ? 'ok' : 'erro';
+          item.innerHTML = r.ok
+            ? `<strong>${NOME[r.tipo] || 'Foto'} enviada</strong>${r.nome ? ' · ' + esc(r.nome) : ''}<br>Já está no computador.`
+            : `<strong>Foto enviada, mas não lida</strong><br>${esc(r.erro)}<br>Ela ficou anexada; preencha no computador.`;
+        } catch (e) {
+          item.className = 'erro';
+          item.innerHTML = `<strong>Não enviou</strong><br>${esc(e.message)}`;
+        }
+      }
+    }
+
+    async function iniciar() {
+      try {
+        const resp = await fetch(`/api/envios/${encodeURIComponent(codigo)}`);
+        if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).erro || 'Código inválido');
+      } catch (e) {
+        document.getElementById('conteudo').innerHTML =
+          `<div class="erro-geral"><strong>Não deu para conectar.</strong><br>${esc(e.message)}<br><br>No computador, clique de novo em "Usar o celular (QR Code)" e leia o QR Code novo.</div>`;
+        return;
+      }
+      for (const id of ['camera', 'galeria']) {
+        const entrada = document.getElementById(id);
+        entrada.addEventListener('change', () => enviar(entrada));
+      }
+    }
+    iniciar();
+  </script>
+</body>
+</html>

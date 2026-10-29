@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f3a5f">
+  <title>Corrêa Veículos</title>
+  <link rel="icon" href="img/icone.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="img/icone-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Corrêa">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <a href="#/" class="banner"><img src="img/banner.jpg" alt="Corrêa Veículos - Compra, vende, troca, financia, refinancia, consigna"></a>
+  <header class="topo">
+    <nav>
+      <a href="#/" data-menu="painel">Painel</a>
+      <a href="#/estoque" data-menu="estoque">Estoque</a>
+      <a href="#/vendidos" data-menu="vendidos">Vendidos</a>
+      <a href="#/pessoas" data-menu="pessoas">Pessoas</a>
+      <a href="#/configuracoes" data-menu="configuracoes">Configurações</a>
+      <a href="#/nova-entrada" class="botao" data-menu="nova-entrada">+ Entrada de carro</a>
+    </nav>
+    <div class="usuario-logado"><span id="nome-usuario"></span><button type="button" id="sair">Sair</button></div>
+  </header>
+  <main id="app"></main>
+  <div id="aviso" class="aviso-flutuante" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

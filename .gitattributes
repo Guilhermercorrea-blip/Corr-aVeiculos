@@ -1,0 +1,7 @@
+# Script do servidor Linux precisa de quebra de linha LF; o .bat do Windows, de CRLF
+* text=auto eol=lf
+*.bat text eol=crlf
+*.pdf binary
+*.jpg binary
+*.png binary
+*.ico binary

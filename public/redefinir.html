@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f3a5f">
+  <title>Nova senha - Corrêa Veículos</title>
+  <link rel="icon" href="img/icone.png">
+  <link rel="stylesheet" href="estilo.css">
+  <style>
+    .caixa-login { max-width: 380px; margin: 24px auto; }
+    .caixa-login h1 { text-align: center; margin-bottom: 4px; }
+    .caixa-login .campo { margin-bottom: 12px; }
+    .caixa-login button { width: 100%; padding: 12px; font-size: 1.05rem; }
+    .mensagem { min-height: 1.4em; margin: 6px 0; }
+    .mensagem.erro { color: var(--vermelho); }
+  </style>
+</head>
+<body>
+  <div class="banner"><img src="img/banner.jpg" alt="Corrêa Veículos"></div>
+  <main>
+    <form class="cartao caixa-login" id="form" novalidate>
+      <h1>Criar senha nova</h1>
+      <p class="suave" id="quem" style="text-align:center">Conferindo o link...</p>
+      <div id="campos" hidden>
+        <label class="campo"><span>Senha nova (mínimo 6)</span><input name="nova" type="password" autocomplete="new-password" required></label>
+        <label class="campo"><span>Repita a senha nova</span><input name="confirma" type="password" autocomplete="new-password" required></label>
+        <button type="submit" id="botao">Salvar senha nova</button>
+      </div>
+      <div class="mensagem" id="mensagem"></div>
+    </form>
+  </main>
+  <script>
+    'use strict';
+    const token = new URLSearchParams(location.search).get('t') || '';
+    const form = document.getElementById('form');
+    const mensagem = document.getElementById('mensagem');
+    const erro = texto => { mensagem.className = 'mensagem erro'; mensagem.textContent = texto; };
+
+    fetch('/api/redefinir-senha/' + encodeURIComponent(token)).then(async r => {
+      const dados = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(dados.erro || 'Link inválido');
+      document.getElementById('quem').innerHTML = 'Usuário: <strong></strong>';
+      document.querySelector('#quem strong').textContent = dados.usuario;
+      document.getElementById('campos').hidden = false;
+      form.elements.nova.focus();
+    }).catch(e => {
+      document.getElementById('quem').textContent = '';
+      erro(e.message);
+    });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const { nova, confirma } = Object.fromEntries(new FormData(form));
+      if (nova !== confirma) return erro('As duas senhas não são iguais.');
+      const botao = document.getElementById('botao');
+      botao.disabled = true;
+      try {
+        const r = await fetch('/api/redefinir-senha', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, nova }),
+        });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(dados.erro || 'Não deu certo');
+        document.getElementById('campos').hidden = true;
+        mensagem.className = 'mensagem';
+        mensagem.innerHTML = '<strong>Senha trocada!</strong> <a href="/login.html">Clique aqui para entrar</a>.';
+      } catch (err) {
+        erro(err.message);
+      } finally {
+        botao.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

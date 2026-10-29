@@ -1,0 +1,14 @@
+# Bibliotecas baixadas (o npm reinstala)
+node_modules/
+
+# Dados reais da loja: banco, anexos (CNH/CRLV de clientes) e backups
+data/
+nuvem/dados-para-enviar/
+
+# Segredos: chave da API do Claude e chaves SSH
+CHAVE-API-CLAUDE.txt
+*.key
+*.pem
+
+# Arquivos gerados
+*.log

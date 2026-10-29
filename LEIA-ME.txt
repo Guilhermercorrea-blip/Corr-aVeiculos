@@ -1,0 +1,44 @@
+CORRÊA VEÍCULOS - SISTEMA DA LOJA (etapa 1)
+
+COMO ABRIR
+  Dê dois cliques em "Abrir sistema.bat".
+  Vai abrir uma janela preta (deixe aberta) e o navegador em http://localhost:3000
+  Para fechar o sistema, feche a janela preta.
+
+NO CELULAR (mesma rede Wi-Fi da loja)
+  Com o sistema aberto no computador, acesse no celular:
+  http://IP-DO-COMPUTADOR:3000   (o IP aparece no comando "ipconfig")
+
+ONDE FICAM OS DADOS
+  Pasta "data", arquivo loja.db. Faça cópia dessa pasta para ter backup.
+
+O QUE JÁ FAZ
+  - Entrada de carro: compra, compra sem transferir ou consignação
+  - Gastos por carro (oficina, peças, combustível, documentação...)
+  - Venda com entrada, financiamento, saldo e troca
+    (o carro da troca entra sozinho no estoque)
+  - Custo total e lucro de cada carro
+  - Painel: estoque, dinheiro parado, vendas e lucro do mês, carros parados há mais de 60 dias
+  - Cadastro de pessoas: pelo CPF reaproveita o cadastro; pelo CEP completa o endereço
+
+LEITURA AUTOMÁTICA DE CNH E CRLV (etapa 2)
+  Na entrada de carro e na venda, clique em "Anexar..." e escolha a foto ou o PDF.
+  - CNH preenche o vendedor (na entrada) ou o comprador (na venda).
+  - CRLV preenche o carro e o dono. Na venda, o CRLV é tratado como carro da troca.
+  - Os campos preenchidos ficam em amarelo: confira antes de salvar.
+  - Os arquivos ficam guardados na pasta data\anexos e aparecem na página do carro.
+  Para funcionar, cole a chave da API do Claude no arquivo CHAVE-API-CLAUDE.txt
+  (o passo a passo está dentro do arquivo). Cada documento lido custa poucos centavos.
+
+CONTRATOS (etapa 3)
+  Na página de cada carro, em "Contratos", clique em "Imprimir...".
+  Abre o contrato pronto (padrão ABNT, A4) e já aparece a janela de impressão.
+  - Compra: contrato de compra.
+  - Consignação: seu modelo de consignação + Termo de Devolução.
+  - Compra sem transferir e carro de troca: consignação com o adendo de quitação.
+  - Venda: contrato de venda com garantia (e cláusula de troca, se tiver).
+  Em "Configurações", preencha o nome e o CPF de quem assina pela loja.
+
+PRÓXIMAS ETAPAS
+  4 - Relatórios
+  5 - Celular como aplicativo, backup automático, acesso de funcionários
