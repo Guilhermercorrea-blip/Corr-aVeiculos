@@ -48,7 +48,7 @@ O site público disponibiliza somente título, descrição, preço de anúncio, 
 
 A aplicação roda no servidor Oracle em `/opt/correa-veiculos`, com dados em `/var/lib/correa/data` e serviço `correa-veiculos`. O Caddy entrega HTTPS e encaminha para a aplicação na porta 3000.
 
-O domínio escolhido é **correaveiculosbb.com.br** (endereço principal com `www`), e ainda precisa ser registrado. O site continua no endereço temporário até essa etapa ser concluída. Veja o [passo a passo de DNS e ativação](nuvem/DOMINIO.md). O script de configuração está preparado e não deve ser executado antes do registro e do apontamento. Depois disso:
+O site está ativo em **https://www.correaveiculosbb.com.br**, com HTTPS e redirecionamento do endereço sem `www`. O domínio foi registrado pelo proprietário e o painel exibe expiração em **30/10/2028**. O DNS simplificado do Registro.br aponta para o servidor Oracle; `ENDERECO_PUBLICO` foi atualizado para os QR Codes. O endereço temporário continua disponível. Veja o [registro da configuração e instruções de manutenção](nuvem/DOMINIO.md). Para uma futura mudança de domínio, as etapas são:
 
 1. Configurar o DNS do domínio para o servidor e conferir os registros de `www`.
 2. Configurar o domínio no Caddy, validar a configuração e ativar HTTPS.

@@ -7,15 +7,18 @@ DOMINIO="${1:-correaveiculosbb.com.br}"
 IP_PUBLICO='137.131.242.110'
 [[ "$DOMINIO" =~ ^[a-z0-9][a-z0-9-]*\.com\.br$ ]] || { echo 'Domínio inválido.' >&2; exit 1; }
 WWW="www.$DOMINIO"
-for ferramenta in caddy systemctl getent curl; do command -v "$ferramenta" >/dev/null || { echo "Falta: $ferramenta" >&2; exit 1; }; done
+for ferramenta in caddy systemctl dig curl; do command -v "$ferramenta" >/dev/null || { echo "Falta: $ferramenta" >&2; exit 1; }; done
 [[ -f /etc/caddy/Caddyfile ]] || { echo 'Caddyfile não encontrado.' >&2; exit 1; }
 systemctl is-active --quiet correa-veiculos || { echo 'O serviço atual precisa estar ativo.' >&2; exit 1; }
 if grep -Fq "$DOMINIO" /etc/caddy/Caddyfile; then
   echo 'O domínio já aparece no Caddyfile. Revise a configuração existente antes de alterar.' >&2
   exit 1
 fi
+# O resolvedor local pode guardar uma resposta negativa anterior ao registro.
+# Confere diretamente o servidor autoritativo usado por este domínio no Registro.br.
+DNS_AUTORITATIVO="${DNS_AUTORITATIVO:-a.auto.dns.br}"
 for nome in "$DOMINIO" "$WWW"; do
-  ips="$(getent ahostsv4 "$nome" | awk '{print $1}' | sort -u)" || { echo "DNS ainda não responde: $nome" >&2; exit 1; }
+  ips="$(dig "@$DNS_AUTORITATIVO" "$nome" A +short +time=3 +tries=1 | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print}' | sort -u)" || { echo "DNS ainda não responde: $nome" >&2; exit 1; }
   [[ "$ips" == "$IP_PUBLICO" ]] || { echo "O DNS de $nome ainda não aponta somente para $IP_PUBLICO. Nenhuma alteração aplicada." >&2; exit 1; }
 done
 
@@ -66,7 +69,8 @@ systemctl restart correa-veiculos
 echo "Aguardando HTTPS em $WWW…"
 pronto=0
 for tentativa in {1..12}; do
-  if curl -fsS --connect-timeout 3 --max-time 5 "https://$WWW/api/publico/catalogo" >/dev/null; then pronto=1; break; fi
+  # --resolve escolhe o IP conferido, mantendo a validação do certificado e do nome.
+  if curl -fsS --connect-timeout 3 --max-time 5 --resolve "$WWW:443:$IP_PUBLICO" "https://$WWW/api/publico/catalogo" >/dev/null && curl -fsS --connect-timeout 3 --max-time 5 --resolve "$DOMINIO:443:$IP_PUBLICO" "https://$DOMINIO/" >/dev/null; then pronto=1; break; fi
   sleep 2
 done
 [[ "$pronto" -eq 1 ]] || { echo 'Não foi possível confirmar HTTPS. Confira DNS e registros AAAA.' >&2; exit 1; }
