@@ -2,7 +2,7 @@
   "name": "Corrêa Veículos",
   "short_name": "Corrêa",
   "description": "Estoque, gastos, compra, venda e contratos da Corrêa Veículos",
-  "start_url": "/",
+  "start_url": "/sistema",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1f3a5f",

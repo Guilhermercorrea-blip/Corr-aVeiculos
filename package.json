@@ -5,7 +5,8 @@
   "description": "Controle de estoque, gastos, compra, venda e lucro da Corrêa Veículos",
   "main": "server.js",
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning server.js"
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/anuncios.test.cjs"
   },
   "engines": {
     "node": ">=22.13"

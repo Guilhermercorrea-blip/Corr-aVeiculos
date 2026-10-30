@@ -75,7 +75,7 @@
       botao.disabled = true;
       try {
         await chamar(primeiroAcesso ? '/api/primeiro-usuario' : '/api/login', dados);
-        location.href = '/';
+        location.href = '/acesso.html';
       } catch (err) {
         erro.textContent = err.message;
       } finally {

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#143f6b">
+  <meta name="description" content="Conheça os carros anunciados pela Corrêa Veículos em Barra Bonita e fale com a nossa equipe.">
+  <title>Corrêa Veículos | Encontre seu próximo carro</title>
+  <link rel="icon" href="/img/icone.png">
+  <link rel="stylesheet" href="/loja.css">
+</head>
+<body>
+  <a class="pular" href="#conteudo">Ir para o conteúdo</a>
+  <div class="faixa"><div class="limite"><span id="cidade-topo">Corrêa Veículos</span><span>Compra · Venda · Troca</span></div></div>
+  <header class="cabeca limite">
+    <a class="marca" href="/" aria-label="Corrêa Veículos, início"><img src="/img/logo.jpg" alt="Corrêa Veículos" width="220" height="85"></a>
+    <nav aria-label="Navegação principal"><a href="/#estoque">Nossos carros</a><a href="/#a-loja">A loja</a><a href="/#contato">Contato</a></nav>
+    <a class="acesso" href="/acesso.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m9-4 4 4-4 4m-5-4h9"/></svg>Acesso</a>
+  </header>
+  <main id="conteudo">
+    <div class="limite" id="mensagem" role="status" hidden></div>
+    <div id="inicio">
+      <section class="hero limite" aria-labelledby="titulo-hero">
+        <div class="hero-texto"><p class="etiqueta">CORRÊA VEÍCULOS <span>—</span> BARRA BONITA</p><h1 id="titulo-hero">Seu próximo carro<br>está aqui<span>.</span></h1><p class="intro">Encontre um carro que combina com a sua rotina. Confira nosso estoque e converse com a gente.</p><div class="botoes"><a class="botao" href="#estoque">Explorar os carros <span aria-hidden="true">↗</span></a><a class="texto-link" id="hero-contato" href="#contato">Falar com a loja</a></div></div>
+        <div class="hero-vitrine" id="hero-vitrine"><div class="hero-logo"><img src="/img/logo.jpg" alt=""><span>Um novo caminho começa com uma boa escolha.</span></div><div class="selo-local">BARra BONITA / SP</div></div>
+      </section>
+      <section class="estoque limite" id="estoque" aria-labelledby="titulo-estoque">
+        <div class="titulo-secao"><div><p class="etiqueta">ENCONTRE O SEU</p><h2 id="titulo-estoque">Nossos carros</h2></div><p id="contagem" aria-live="polite">Carregando o estoque…</p></div>
+        <form class="filtros" id="filtros" role="search"><label class="busca">Qual carro você procura?<input type="search" id="busca" placeholder="Digite marca ou modelo" autocomplete="off"></label><label>Até quanto?<select id="preco"><option value="">Todos os preços</option><option value="4000000">Até R$ 40 mil</option><option value="6000000">Até R$ 60 mil</option><option value="8000000">Até R$ 80 mil</option><option value="10000000">Até R$ 100 mil</option><option value="15000000">Até R$ 150 mil</option></select></label><label>Ordenar por<select id="ordem"><option value="destaques">Destaques primeiro</option><option value="menor">Menor preço</option><option value="maior">Maior preço</option><option value="ano">Mais novos</option></select></label></form>
+        <div class="grade-carros" id="carros" aria-live="polite"></div>
+      </section>
+      <section class="sobre" id="a-loja"><div class="limite sobre-grid"><div><p class="etiqueta">PERTINHO DE VOCÊ</p><h2>Uma boa conversa.<br>O seu próximo carro.</h2></div><div><p id="sobre-texto">Conheça os veículos da Corrêa Veículos e fale com a nossa equipe para saber mais.</p><a class="texto-link" href="#contato">Venha conhecer a loja <span aria-hidden="true">↗</span></a></div></div></section>
+    </div>
+    <section class="limite detalhe" id="detalhe" hidden></section>
+    <section class="limite contato" id="contato"><div><p class="etiqueta">VAMOS CONVERSAR?</p><h2>Estamos em<br><span id="cidade-contato">Barra Bonita.</span></h2><p id="endereco"></p><p id="horario" hidden></p></div><div class="contato-direita"><a class="botao" id="whatsapp" hidden>Conversar pelo WhatsApp <span aria-hidden="true">↗</span></a><a id="telefone" hidden></a><a id="instagram" target="_blank" rel="noopener noreferrer" hidden>Nosso Instagram ↗</a><a id="mapa" target="_blank" rel="noopener noreferrer" hidden>Como chegar ↗</a></div></section>
+  </main>
+  <footer><div class="limite"><span>© <span id="ano"></span> <span id="nome-rodape">Corrêa Veículos</span></span><a href="/acesso.html">Área da equipe ↗</a></div></footer>
+  <script src="/loja.js" defer></script>
+</body>
+</html>

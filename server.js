@@ -1,6 +1,6 @@
 'use strict';
 // Servidor da Corrêa Veículos: entrega as telas (pasta public) e a API em /api.
-// Tudo exige login, menos a tela de login e a página do celular (que entra pelo código do QR Code).
+// A vitrine é pública. Sistema, anúncios, contratos e documentos exigem login.
 const http = require('node:http');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -10,6 +10,7 @@ const db = require('./db');
 const auth = require('./auth');
 const leitor = require('./leitor');
 const contratos = require('./contratos');
+const anuncios = require('./anuncios');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -26,8 +27,10 @@ const TIPOS = {
 };
 
 // Endereços que abrem sem login
-const PAGINAS_LIVRES = new Set(['/login.html', '/celular.html', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
+const PAGINAS_LIVRES = new Set(['/', '/loja.html', '/loja.css', '/loja.js', '/login.html', '/celular.html', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
 const API_LIVRE = [
+  ['GET', /^\/api\/publico\/catalogo$/],
+  ['GET', /^\/api\/publico\/carros\/\d+$/],
   ['POST', /^\/api\/login$/],
   ['GET', /^\/api\/redefinir-senha\/[\w-]+$/],
   ['POST', /^\/api\/redefinir-senha$/],
@@ -40,7 +43,7 @@ const API_LIVRE = [
 
 function acessoLivre(metodo, caminho) {
   if (caminho.startsWith('/api/')) return API_LIVRE.some(([m, re]) => m === metodo && re.test(caminho));
-  return PAGINAS_LIVRES.has(caminho) || caminho.startsWith('/img/');
+  return PAGINAS_LIVRES.has(caminho) || caminho.startsWith('/img/') || /^\/carro\/\d+$/.test(caminho) || /^\/midia\/anuncios\/\d+\/\d+$/.test(caminho);
 }
 
 const rotas = [];
@@ -101,6 +104,15 @@ rota('DELETE', '/api/usuarios/:id', (p, q, c, ctx) => auth.removerUsuario(p.id, 
 rota('PUT', '/api/minha-senha', (p, q, corpo, ctx) => auth.trocarSenha(ctx.usuario.id, ctx.token, corpo));
 
 // ---------- dados da loja ----------
+
+// A API pública tem sua própria lista de campos; nunca reutilizar a API financeira aqui.
+rota('GET', '/api/publico/catalogo', () => anuncios.catalogo());
+rota('GET', '/api/publico/carros/:id', p => anuncios.anuncioPublico(p.id));
+rota('GET', '/api/site/anuncios', () => anuncios.listarAnuncios());
+rota('PUT', '/api/site/anuncios/:id', (p, q, corpo) => anuncios.salvarAnuncio(p.id, corpo));
+rota('DELETE', '/api/site/anuncios/:id', p => anuncios.retirarAnuncio(p.id));
+rota('GET', '/api/site/config', () => anuncios.configPublica());
+rota('PUT', '/api/site/config', (p, q, corpo) => anuncios.configurarSite(corpo));
 
 rota('GET', '/api/resumo', () => db.resumo());
 rota('GET', '/api/veiculos', (p, q) => db.listarVeiculos(q.get('status')));
@@ -281,7 +293,10 @@ async function api(req, res, url, ctx) {
 
 function estatico(res, url) {
   let relativo;
-  try { relativo = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, ''); }
+  try {
+    relativo = url.pathname === '/' || /^\/carro\/\d+$/.test(url.pathname) ? 'loja.html'
+      : url.pathname === '/sistema' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+  }
   catch { res.writeHead(400); return res.end('Endereço inválido'); }
   if (relativo.includes('\0')) { res.writeHead(400); return res.end('Endereço inválido'); }
   const arquivo = path.normalize(path.join(PUBLICO, relativo));
@@ -293,12 +308,13 @@ function estatico(res, url) {
   });
 }
 
-function enviarAnexo(res, id) {
+function enviarAnexo(res, id, veiculoPublico = null) {
   let anexo;
-  try { anexo = db.obterAnexo(id); } catch { res.writeHead(404); return res.end('Anexo não encontrado'); }
+  try { anexo = veiculoPublico === null ? db.obterAnexo(id) : anuncios.fotoPublica(veiculoPublico, id); }
+  catch { res.writeHead(404, { 'Cache-Control': 'no-store' }); return res.end('Anexo não encontrado'); }
   fs.readFile(anexo.caminho, (err, conteudo) => {
     if (err) { res.writeHead(404); return res.end('Arquivo não encontrado'); }
-    res.writeHead(200, { 'Content-Type': anexo.tipo_mime, 'Content-Disposition': `inline; filename="${anexo.arquivo}"`, 'Cache-Control': 'private, no-store' });
+    res.writeHead(200, { 'Content-Type': anexo.tipo_mime, 'Content-Disposition': `inline; filename="${anexo.arquivo}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(conteudo);
   });
 }
@@ -316,15 +332,31 @@ http.createServer((req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); }
   catch { return responder(res, 400, { erro: 'Endereço inválido' }); }
+  // A pasta de imagens é pública; caminhos codificados não podem alcançar telas privadas.
+  try {
+    const caminho = decodeURIComponent(url.pathname);
+    if (/[\\\0]/.test(caminho) || caminho.split('/').some(p => p === '.' || p === '..') || /%[0-9a-f]{2}/i.test(caminho)) throw new Error('Caminho inválido');
+  } catch { return responder(res, 400, { erro: 'Endereço inválido' }); }
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (['/sistema', '/index.html', '/acesso.html', '/anuncios.html', '/login.html'].includes(url.pathname)) res.setHeader('X-Robots-Tag', 'noindex');
   const token = lerCookie(req, 'sessao');
   const usuario = auth.usuarioDaSessao(token);
   const ctx = { req, res, token, usuario };
 
   if (!usuario && !acessoLivre(req.method, url.pathname)) {
+    res.setHeader('Cache-Control', 'private, no-store');
     if (url.pathname.startsWith('/api/')) return responder(res, 401, { erro: 'Faça login para continuar' });
     res.writeHead(302, { Location: '/login.html' });
     return res.end();
   }
+
+  // Favoritos antigos de /index.html continuam levando ao sistema.
+  if (url.pathname === '/index.html' || url.pathname === '/sistema/') {
+    res.writeHead(302, { Location: '/sistema' }); return res.end();
+  }
+  const fotoPublica = req.method === 'GET' && url.pathname.match(/^\/midia\/anuncios\/(\d+)\/(\d+)$/);
+  if (fotoPublica) return enviarAnexo(res, Number(fotoPublica[2]), Number(fotoPublica[1]));
 
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));

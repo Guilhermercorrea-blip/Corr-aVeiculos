@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Gerenciar anúncios | Corrêa Veículos</title><link rel="icon" href="/img/icone.png"><link rel="stylesheet" href="/estilo.css"><link rel="stylesheet" href="/anuncios.css"></head>
+<body><a class="banner" href="/acesso.html"><img src="/img/banner.jpg" alt="Corrêa Veículos"></a><header class="topo"><nav><a class="ativo" href="/anuncios.html">Anúncios</a><a href="/sistema">Sistema da loja</a><a href="/" target="_blank" rel="noopener">Ver site ↗</a><a href="/acesso.html">Escolher área</a></nav></header><main>
+  <div class="cabecalho"><div><h1>Gerenciar anúncios</h1><p class="suave">Você escolhe o que aparece no site da loja.</p></div><button type="button" id="abrir-config" class="secundario">Dados do site</button></div>
+  <p id="status" role="status" aria-live="polite" hidden></p>
+  <section id="config-site" class="cartao" hidden><h2>Informações públicas da loja</h2><form id="form-config"><fieldset id="campos-config"><div class="campos">
+    <label class="campo c6"><span>Nome da loja</span><input name="nome" required maxlength="240"></label><label class="campo c6"><span>Chamada principal</span><input name="chamada" maxlength="240"></label>
+    <label class="campo c12"><span>Sobre a loja</span><textarea name="sobre" rows="3" maxlength="3000"></textarea></label>
+    <label class="campo c8"><span>Endereço</span><input name="endereco" maxlength="240"></label><label class="campo c4"><span>Cidade/UF</span><input name="cidade" maxlength="240"></label>
+    <label class="campo c4"><span>Telefone</span><input name="telefone" type="tel" maxlength="30"></label><label class="campo c4"><span>WhatsApp com DDD</span><input name="whatsapp" type="tel" maxlength="30"></label><label class="campo c4"><span>Horário de atendimento (opcional)</span><input name="horario" maxlength="240"></label>
+    <label class="campo c12"><span>Instagram (opcional)</span><input name="instagram" type="url" placeholder="https://www.instagram.com/sualoja" maxlength="240"></label>
+    </div><div class="acoes-form"><button type="submit">Salvar dados do site</button><button type="button" id="fechar-config" class="secundario">Fechar</button></div></fieldset></form></section>
+  <div class="anuncios-layout"><aside class="cartao anuncios-lista"><label class="campo"><span>Buscar carro</span><input type="search" id="busca-anuncio" placeholder="Marca ou modelo"></label><div id="lista">Carregando…</div><p class="suave pequeno">Para adicionar um carro ou enviar fotos, use o estoque no sistema.</p><a class="botao-link secundario" href="/sistema#/estoque">Abrir estoque →</a></aside><section id="editor" class="cartao"><div class="vazio">Selecione um carro ao lado para preparar o anúncio.</div></section></div>
+</main><script src="/anuncios.js" defer></script></body></html>
