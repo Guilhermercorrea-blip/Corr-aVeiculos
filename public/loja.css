@@ -4,3 +4,15 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 
 .hero-logo{padding-bottom:80px}@media(max-width:600px){.hero-logo{padding:32px 25px 70px}}
+
+/* Banner da loja inteiro, com os menus e o acesso logo abaixo. */
+.banner-topo { display: block; background: #fff; }
+.banner-topo img { display: block; width: 100%; max-width: 1180px; height: auto; margin: 0 auto; }
+.cabeca { justify-content: space-between; }
+.cabeca .acesso { margin-left: auto; }
+@media (max-width: 600px) {
+  .cabeca { flex-wrap: nowrap; gap: 12px; padding-block: 10px; }
+  .cabeca nav { order: 0; width: auto; border: 0; padding: 0; margin: 0; gap: 12px; font-size: 12px; }
+  .cabeca nav a { padding-block: 8px; }
+  .cabeca .acesso { min-height: 44px; }
+}
