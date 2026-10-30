@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS pessoas (
   bairro TEXT,
   cidade TEXT,
   uf TEXT,
+  arquivado_em TEXT,
   criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -121,6 +122,8 @@ LEFT JOIN pessoas c ON c.id = vd.comprador_id;
 `);
 
 // Colunas novas em bancos criados antes delas existirem
+const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.name);
+if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');
 const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
 if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos ADD COLUMN valor_consignacao INTEGER');
 const colunasVenda = db.prepare('PRAGMA table_info(vendas)').all().map(c => c.name);
@@ -240,42 +243,18 @@ function comCalculos(v) {
 }
 
 // Cadastra a pessoa ou, se o CPF já existe, atualiza o cadastro dela. Devolve o id.
-function salvarPessoa(dados) {
+function salvarPessoa(dados, { reativar = true } = {}) {
   const p = limpar(CAMPOS_PESSOA, dados);
   if (!p.nome) throw erro('Informe o nome da pessoa');
   if (p.cpf) {
     const existente = db.prepare('SELECT id FROM pessoas WHERE cpf = ?').get(p.cpf);
     if (existente) {
       const preenchidos = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== null));
-      atualizar('pessoas', existente.id, preenchidos);
+      atualizar('pessoas', existente.id, { ...preenchidos, ...(reativar ? { arquivado_em: null } : {}) });
       return existente.id;
     }
   }
   return inserir('pessoas', p);
-}
-
-// Edição do cadastro (mudou de endereço, trocou de telefone...). Campo apagado no formulário fica vazio.
-function obterPessoa(id) {
-  const p = db.prepare('SELECT * FROM pessoas WHERE id = ?').get(id);
-  if (!p) throw erro('Pessoa não encontrada', 404);
-  const carros = db.prepare(`
-    SELECT v.id, v.marca_modelo, v.placa, 'vendeu para a loja' AS papel, v.entrada_em AS data FROM veiculos v WHERE v.fornecedor_id = @id
-    UNION ALL
-    SELECT v.id, v.marca_modelo, v.placa, 'comprou da loja' AS papel, vd.vendido_em AS data FROM vendas vd JOIN veiculos v ON v.id = vd.veiculo_id WHERE vd.comprador_id = @id
-    ORDER BY data DESC`).all({ id });
-  return { ...p, carros };
-}
-
-function atualizarPessoa(id, dados) {
-  obterPessoa(id);
-  const p = limpar(CAMPOS_PESSOA, dados);
-  if ('nome' in p && !p.nome) throw erro('Informe o nome da pessoa');
-  if (p.cpf) {
-    const outra = db.prepare('SELECT nome FROM pessoas WHERE cpf = ? AND id <> ?').get(p.cpf, id);
-    if (outra) throw erro(`Esse CPF já está no cadastro de ${outra.nome}`);
-  }
-  atualizar('pessoas', id, p);
-  return { id };
 }
 
 function validarVeiculo(v) {
@@ -374,7 +353,7 @@ function atualizarVeiculo(id, { veiculo, pessoa, anexos } = {}) {
   if (v.tipo_entrada === 'troca' && atual.tipo_entrada !== 'troca') throw erro('Um carro só entra como troca ao registrar a venda de outro veículo');
   if ('valor_compra' in v && v.valor_compra == null) throw erro('Informe o valor do carro');
   transacao(() => {
-    if (pessoa?.nome) v.fornecedor_id = salvarPessoa(pessoa);
+    if (pessoa?.nome) v.fornecedor_id = salvarPessoa(pessoa, { reativar: false });
     atualizar('veiculos', id, v);
     vincularAnexos(anexos, id);
   });
@@ -569,10 +548,77 @@ function salvarConfig(dados = {}) {
   });
 }
 
-function listarPessoas({ busca, cpf } = {}) {
+function listarPessoas({ busca, cpf, arquivadas = false } = {}) {
   if (cpf) return db.prepare('SELECT * FROM pessoas WHERE cpf = ?').get(cpf.replace(/\D/g, '')) || null;
-  const termo = `%${(busca || '').trim()}%`;
-  return db.prepare('SELECT * FROM pessoas WHERE nome LIKE ? OR cpf LIKE ? ORDER BY nome LIMIT 200').all(termo, termo);
+  const texto = (busca || '').trim();
+  const termo = '%' + texto + '%';
+  const digitos = texto.replace(/\D/g, '');
+  const documento = /^[\d.\-/\s]+$/.test(texto) && digitos ? '%' + digitos + '%' : termo;
+  return db.prepare('SELECT p.*, ' +
+    '(SELECT count(*) FROM veiculos v WHERE v.fornecedor_id = p.id) + ' +
+    '(SELECT count(*) FROM vendas vd WHERE vd.comprador_id = p.id) AS total_vinculos ' +
+    'FROM pessoas p WHERE (CASE WHEN ? THEN p.arquivado_em IS NOT NULL ELSE p.arquivado_em IS NULL END) ' +
+    'AND (p.nome LIKE ? OR p.cpf LIKE ?) ORDER BY p.nome, p.id LIMIT 200').all(arquivadas ? 1 : 0, termo, documento);
+}
+
+function obterPessoa(id) {
+  const pessoa = db.prepare('SELECT * FROM pessoas WHERE id = ?').get(id);
+  if (!pessoa) throw erro('Pessoa não encontrada', 404);
+  const vinculos = db.prepare("SELECT v.id, v.marca_modelo, v.placa, v.status, 'Fornecedor / dono anterior' AS papel " +
+    'FROM veiculos v WHERE v.fornecedor_id = ? UNION ALL ' +
+    "SELECT v.id, v.marca_modelo, v.placa, v.status, 'Comprador' AS papel " +
+    'FROM vendas vd JOIN veiculos v ON v.id = vd.veiculo_id WHERE vd.comprador_id = ? ORDER BY id DESC').all(id, id);
+  return { pessoa, vinculos };
+}
+
+function cpfPessoaConfere(cpf) {
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1+$/.test(cpf)) return false;
+  for (const tamanho of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < tamanho; i++) soma += Number(cpf[i]) * (tamanho + 1 - i);
+    if (((soma * 10) % 11) % 10 !== Number(cpf[tamanho])) return false;
+  }
+  return true;
+}
+
+function atualizarPessoa(id, dados = {}) {
+  const atual = obterPessoa(id).pessoa;
+  for (const campo of ['cpf', 'cep']) {
+    if (dados?.[campo] != null && /[^\d.\-/\s]/.test(String(dados[campo]))) throw erro(campo === 'cpf' ? 'Confira o CPF ou CNPJ informado' : 'Confira o CEP informado');
+  }
+  const p = limpar(CAMPOS_PESSOA, dados);
+  if ('nome' in p && !p.nome) throw erro('Informe o nome da pessoa');
+  if ('cpf' in p && p.cpf !== atual.cpf && p.cpf) {
+    if (/[^\d.\-/\s]/.test(String(dados.cpf)) || ![11, 14].includes(p.cpf.length)) throw erro('Confira o CPF ou CNPJ informado');
+    if (p.cpf.length === 11 && !cpfPessoaConfere(p.cpf)) throw erro('O CPF informado não confere. Confira os números');
+  }
+  if ('cpf' in p && p.cpf) {
+    const outro = db.prepare('SELECT id FROM pessoas WHERE cpf = ? AND id <> ?').get(p.cpf, id);
+    if (outro) throw erro('Este CPF ou CNPJ já está em outro cadastro, inclusive na lista de arquivados', 409);
+  }
+  if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) throw erro('Confira o e-mail informado');
+  if (p.cep && p.cep.length !== 8) throw erro('O CEP deve ter 8 números');
+  if (p.uf && !/^[A-Z]{2}$/.test(p.uf)) throw erro('Informe a UF com duas letras');
+  atualizar('pessoas', id, p);
+  return { id: Number(id) };
+}
+
+function excluirPessoa(id) {
+  return transacao(() => {
+    const atual = obterPessoa(id);
+    if (atual.vinculos.length) {
+      db.prepare('UPDATE pessoas SET arquivado_em = ? WHERE id = ?').run(atual.pessoa.arquivado_em || agora(), id);
+      return { id: Number(id), acao: 'arquivado' };
+    }
+    db.prepare('DELETE FROM pessoas WHERE id = ?').run(id);
+    return { id: Number(id), acao: 'excluido' };
+  });
+}
+
+function restaurarPessoa(id) {
+  obterPessoa(id);
+  db.prepare('UPDATE pessoas SET arquivado_em = NULL WHERE id = ?').run(id);
+  return { id: Number(id) };
 }
 
 module.exports = {
@@ -580,5 +626,5 @@ module.exports = {
   criarAnexo, definirTipoAnexo, obterAnexo,
   criarCompra, listarVeiculos, obterVeiculo, atualizarVeiculo,
   adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, criarEstoqueRapido,
-  resumo, listarPessoas, obterPessoa, atualizarPessoa, obterConfig, salvarConfig, descreverPagamento,
+  resumo, listarPessoas, obterPessoa, atualizarPessoa, excluirPessoa, restaurarPessoa, obterConfig, salvarConfig, descreverPagamento,
 };

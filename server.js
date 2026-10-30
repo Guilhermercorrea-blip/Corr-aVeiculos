@@ -126,9 +126,11 @@ rota('DELETE', '/api/gastos/:id', p => db.removerGasto(p.id));
 rota('POST', '/api/veiculos/:id/venda', (p, q, corpo) => db.registrarVenda(p.id, corpo));
 rota('PUT', '/api/veiculos/:id/venda', (p, q, corpo) => db.atualizarKmVenda(p.id, corpo));
 rota('DELETE', '/api/veiculos/:id/venda', p => db.desfazerVenda(p.id));
-rota('GET', '/api/pessoas', (p, q) => db.listarPessoas({ busca: q.get('busca'), cpf: q.get('cpf') }));
+rota('GET', '/api/pessoas', (p, q) => db.listarPessoas({ busca: q.get('busca'), cpf: q.get('cpf'), arquivadas: q.get('arquivadas') === '1' }));
 rota('GET', '/api/pessoas/:id', p => db.obterPessoa(p.id));
 rota('PUT', '/api/pessoas/:id', (p, q, corpo) => db.atualizarPessoa(p.id, corpo));
+rota('DELETE', '/api/pessoas/:id', p => db.excluirPessoa(p.id));
+rota('POST', '/api/pessoas/:id/restaurar', p => db.restaurarPessoa(p.id));
 rota('GET', '/api/categorias', () => db.CATEGORIAS_GASTO);
 
 // Endereços para abrir o sistema de outro computador ou do celular na mesma rede Wi-Fi

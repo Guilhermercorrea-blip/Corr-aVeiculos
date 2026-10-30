@@ -210,3 +210,13 @@ button:disabled { opacity: .6; cursor: wait; }
 /* Formas de recebimento combináveis. */
 .opcoes-pagamento { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 .resumo-pagamento { color: var(--azul); font-weight: 600; margin: 12px 0 0; }
+
+/* Consulta e manutenção dos cadastros de pessoas. */
+.filtros-pessoas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+.filtros-pessoas .busca { width: 260px; max-width: 100%; }
+.filtros-pessoas select { width: auto; }
+.link-pessoa { font-weight: 600; }
+.acoes-pessoa { display: flex; flex-wrap: wrap; gap: 6px; }
+.acoes-pessoa .botao-link, .acoes-pessoa button { padding: 6px 10px; font-size: .85rem; white-space: nowrap; }
+.vinculos-pessoa { list-style: none; padding: 0; display: grid; gap: 10px; }
+.vinculos-pessoa li { display: grid; gap: 3px; }

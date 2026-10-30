@@ -201,7 +201,7 @@ function lerForm(form) {
 }
 
 // CPF: valida, e se a pessoa já existe, preenche o resto. CEP: busca rua/bairro/cidade.
-function ligarPessoa(form, prefixo) {
+function ligarPessoa(form, prefixo, { buscarCadastro = true, atualizarEndereco = false } = {}) {
   const pegar = n => form.elements[`${prefixo}.${n}`];
   const cpf = pegar('cpf');
   cpf.addEventListener('blur', async () => {
@@ -210,12 +210,13 @@ function ligarPessoa(form, prefixo) {
     cpf.classList.remove('invalido');
     dica.textContent = '';
     if (!dig) return;
-    if (!cpfValido(dig)) {
+    if (dig.length !== 14 && !cpfValido(dig)) {
       cpf.classList.add('invalido');
       dica.textContent = 'CPF parece errado, confira os números';
       return;
     }
     cpf.value = formatarCPF(dig);
+    if (!buscarCadastro) return;
     try {
       const p = await api('GET', `/pessoas?cpf=${dig}`);
       if (!p) return;
@@ -224,19 +225,22 @@ function ligarPessoa(form, prefixo) {
         if (el && k !== 'cpf' && v != null && !el.value) el.value = v;
       }
       dica.style.color = 'var(--verde)';
-      dica.textContent = 'Cliente já cadastrado, dados preenchidos';
+      dica.textContent = p.arquivado_em ? 'Cadastro arquivado encontrado. Será reativado ao salvar esta operação.' : 'Cliente já cadastrado, dados preenchidos';
     } catch { /* sem cadastro, segue */ }
   });
 
   const cep = pegar('cep');
+  let ultimoCep = cep.value.replace(/\D/g, '');
   cep.addEventListener('blur', async () => {
     const dig = cep.value.replace(/\D/g, '');
     if (dig.length !== 8) return;
     try {
       const r = await fetch(`https://viacep.com.br/ws/${dig}/json/`).then(x => x.json());
-      if (r.erro) return;
-      if (!pegar('endereco').value) pegar('endereco').value = r.logradouro || '';
-      if (!pegar('bairro').value) pegar('bairro').value = r.bairro || '';
+      if (r.erro || cep.value.replace(/\D/g, '') !== dig) return;
+      const mudou = atualizarEndereco && dig !== ultimoCep;
+      if (mudou || !pegar('endereco').value) pegar('endereco').value = r.logradouro || '';
+      if (mudou || !pegar('bairro').value) pegar('bairro').value = r.bairro || '';
+      ultimoCep = dig;
       pegar('cidade').value = r.localidade || pegar('cidade').value;
       pegar('uf').value = r.uf || pegar('uf').value;
       pegar('numero').focus();
@@ -698,7 +702,7 @@ function dadosPessoa(p) {
   if (!p) return '<span class="suave">—</span>';
   const end = [p.endereco && `${p.endereco}${p.numero ? ', ' + p.numero : ''}`, p.bairro, p.cidade && `${p.cidade}/${p.uf || ''}`]
     .filter(Boolean).join(' · ');
-  return `<strong>${esc(p.nome)}</strong> <a class="pequeno" href="#/pessoa/${p.id}">Editar cadastro</a><br><span class="suave pequeno">CPF ${esc(formatarCPF(p.cpf))}${p.telefone ? ' · ' + esc(p.telefone) : ' · <strong>sem telefone</strong>'}${end ? '<br>' + esc(end) : ''}</span>`;
+  return `<strong>${esc(p.nome)}</strong> <a class="pequeno" href="#/pessoas/${p.id}">Editar cadastro</a><br><span class="suave pequeno">CPF ${esc(formatarCPF(p.cpf))}${p.telefone ? ' · ' + esc(p.telefone) : ''}${end ? '<br>' + esc(end) : ''}</span>`;
 }
 
 async function telaCarro(id) {
@@ -1032,54 +1036,98 @@ async function telaVenda(id) {
   });
 }
 
-async function telaPessoas() {
-  app.innerHTML = `
-  <div class="cabecalho"><div><h1>Pessoas</h1><div class="suave">Quem vendeu e quem comprou da loja</div></div>
-    <input class="busca" type="search" placeholder="Buscar nome ou CPF" id="busca"></div>
-  <div class="cartao"><div class="tabela-rolagem" id="tabela"></div></div>`;
-  const tabela = document.getElementById('tabela');
-  const carregar = async termo => {
-    const pessoas = await api('GET', `/pessoas?busca=${encodeURIComponent(termo)}`);
-    tabela.innerHTML = pessoas.length ? `<table>
-      <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Cidade</th></tr></thead>
-      <tbody>${pessoas.map(p => `<tr class="clicavel" onclick="ir('#/pessoa/${p.id}')"><td>${esc(p.nome)}</td><td>${esc(formatarCPF(p.cpf))}</td><td>${esc(p.telefone || '—')}</td><td>${esc(p.cidade ? `${p.cidade}/${p.uf || ''}` : '—')}</td></tr>`).join('')}</tbody>
-    </table><p class="suave pequeno">Clique numa pessoa para ver ou editar o cadastro.</p>` : '<div class="vazio">Ninguém cadastrado ainda. As pessoas entram aqui sozinhas quando você registra uma compra ou venda.</div>';
-  };
-  let t;
-  document.getElementById('busca').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => carregar(e.target.value), 250); });
-  carregar('');
+async function confirmarExclusaoPessoa(pessoa, totalVinculos) {
+  const mensagem = totalVinculos
+    ? `Excluir ${pessoa.nome} da lista principal de Pessoas?\n\nComo há compras ou vendas vinculadas, o cadastro será arquivado. O histórico dos veículos será mantido e você poderá restaurar o cadastro na lista de Arquivados.`
+    : `Excluir definitivamente o cadastro de ${pessoa.nome}?\n\nEsta pessoa não possui compra ou venda vinculada.`;
+  if (!confirm(mensagem)) return false;
+  const resultado = await api('DELETE', `/pessoas/${pessoa.id}`);
+  aviso(resultado.acao === 'arquivado' ? 'Cadastro arquivado. O histórico dos veículos foi mantido.' : 'Cadastro excluído');
+  return true;
 }
 
-// Cadastro de uma pessoa: corrigir ou atualizar endereço, telefone etc. (vale para os próximos contratos impressos)
-async function telaPessoa(id) {
-  const p = await api('GET', `/pessoas/${id}`);
+async function telaPessoas() {
   app.innerHTML = `
-  <div class="cabecalho"><div><h1>${esc(p.nome)}</h1><div class="suave">CPF ${esc(formatarCPF(p.cpf))}</div></div></div>
-  <form id="form" novalidate>
-    ${blocoPessoa('pessoa', 'Cadastro', p)}
-    <div class="acoes-form">
-      <a class="botao-link secundario" href="#/pessoas">Voltar</a>
-      <button type="submit">Salvar alterações</button>
-    </div>
+  <div class="cabecalho"><div><h1>Pessoas</h1><div class="suave">Clique no nome para consultar ou editar o cadastro.</div></div>
+    <div class="filtros-pessoas"><input class="busca" type="search" placeholder="Buscar nome ou CPF" aria-label="Buscar nome ou CPF" id="busca">
+    <select id="situacao-pessoas" aria-label="Situação dos cadastros"><option value="ativas">Ativos</option><option value="arquivadas">Arquivados</option></select></div></div>
+  <div class="cartao"><div class="tabela-rolagem" id="tabela"></div></div>`;
+  const tabela = document.getElementById('tabela');
+  const busca = document.getElementById('busca');
+  const situacao = document.getElementById('situacao-pessoas');
+  let pessoas = [];
+  let pedido = 0;
+  const carregar = async () => {
+    const atual = ++pedido;
+    try {
+      const arquivadas = situacao.value === 'arquivadas';
+      const resposta = await api('GET', `/pessoas?busca=${encodeURIComponent(busca.value)}&arquivadas=${arquivadas ? '1' : '0'}`);
+      if (atual !== pedido || !document.body.contains(tabela)) return;
+      pessoas = resposta;
+      tabela.innerHTML = pessoas.length ? `<table>
+        <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Cidade</th><th>Ações</th></tr></thead>
+        <tbody>${pessoas.map(p => `<tr>
+          <td><a class="link-pessoa" href="#/pessoas/${p.id}">${esc(p.nome)}</a></td>
+          <td>${esc(formatarCPF(p.cpf))}</td><td>${esc(p.telefone || '—')}</td><td>${esc(p.cidade ? `${p.cidade}/${p.uf || ''}` : '—')}</td>
+          <td><div class="acoes-pessoa"><a class="botao-link secundario" href="#/pessoas/${p.id}">Editar</a>
+          ${p.arquivado_em ? `<button type="button" data-acao-pessoa="restaurar" data-id="${p.id}">Restaurar</button>` : ''}
+          ${!p.arquivado_em || !p.total_vinculos ? `<button type="button" class="perigo" data-acao-pessoa="excluir" data-id="${p.id}">Excluir</button>` : ''}</div></td>
+        </tr>`).join('')}</tbody>
+      </table>` : `<div class="vazio">${arquivadas ? 'Nenhuma pessoa arquivada encontrada.' : 'Nenhuma pessoa encontrada.'}</div>`;
+    } catch (erro) {
+      if (atual === pedido && document.body.contains(tabela)) { tabela.innerHTML = '<div class="vazio">Não foi possível carregar os cadastros.</div>'; aviso(erro.message, true); }
+    }
+  };
+  tabela.addEventListener('click', async e => {
+    const botao = e.target.closest('[data-acao-pessoa]');
+    if (!botao) return;
+    const pessoa = pessoas.find(p => p.id === Number(botao.dataset.id));
+    if (!pessoa) return;
+    botao.disabled = true;
+    try {
+      if (botao.dataset.acaoPessoa === 'excluir') { if (await confirmarExclusaoPessoa(pessoa, pessoa.total_vinculos)) await carregar(); }
+      else { await api('POST', `/pessoas/${pessoa.id}/restaurar`); aviso('Cadastro restaurado'); await carregar(); }
+    } catch (erro) { aviso(erro.message, true); }
+    finally { botao.disabled = false; }
+  });
+  let t;
+  busca.addEventListener('input', () => { clearTimeout(t); t = setTimeout(carregar, 250); });
+  situacao.addEventListener('change', () => { clearTimeout(t); carregar(); });
+  await carregar();
+}
+
+async function telaPessoa(id) {
+  const { pessoa, vinculos } = await api('GET', `/pessoas/${id}`);
+  const podeExcluir = !pessoa.arquivado_em || !vinculos.length;
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>Editar pessoa</h1><div class="suave">${esc(pessoa.nome)} ${pessoa.arquivado_em ? '· Arquivado' : ''}</div></div>
+    <div class="acoes"><a class="botao-link secundario" href="#/pessoas">Voltar para Pessoas</a>
+    ${pessoa.arquivado_em ? '<button type="button" id="restaurar-pessoa">Restaurar cadastro</button>' : ''}
+    ${podeExcluir ? '<button type="button" class="perigo" id="excluir-pessoa">Excluir cadastro</button>' : ''}</div></div>
+  ${pessoa.arquivado_em ? '<p class="conferencia">Este cadastro está arquivado. Use Restaurar cadastro para devolvê-lo à lista principal.</p>' : ''}
+  <form id="form-pessoa" novalidate>
+    ${blocoPessoa('pessoa', 'Dados do cliente', pessoa)}
+    <p class="suave pequeno">As correções serão usadas nas próximas consultas e impressões dos veículos vinculados.</p>
+    <div class="acoes-form"><a class="botao-link secundario" href="#/pessoas">Cancelar</a><button type="submit">Salvar alterações</button></div>
   </form>
-  <div class="cartao">
-    <h2>Carros</h2>
-    ${p.carros.length ? `<div class="tabela-rolagem"><table>
-      <thead><tr><th>Data</th><th>Carro</th><th>O que fez</th></tr></thead>
-      <tbody>${p.carros.map(c => `<tr class="clicavel" onclick="ir('#/carro/${c.id}')"><td>${dataBR(c.data).slice(0, 10)}</td>
-        <td>${esc(c.marca_modelo)} <span class="placa">${esc(formatarPlaca(c.placa))}</span></td><td>${c.papel}</td></tr>`).join('')}</tbody>
-    </table></div>` : '<div class="vazio">Nenhum carro ligado a esta pessoa.</div>'}
+  <div class="cartao"><h2>Veículos vinculados</h2>
+    ${vinculos.length ? `<ul class="vinculos-pessoa">${vinculos.map(v => `<li><a href="#/carro/${v.id}">${esc(v.marca_modelo)}${v.placa ? ' · ' + esc(formatarPlaca(v.placa)) : ''}</a><span class="suave pequeno">${esc(v.papel)} · ${v.status === 'vendido' ? 'Vendido' : v.status === 'devolvido' ? 'Devolvido' : 'Em estoque'}</span></li>`).join('')}</ul>` : '<p class="suave">Nenhuma compra ou venda vinculada a este cadastro.</p>'}
   </div>`;
-  const form = document.getElementById('form');
-  ligarPessoa(form, 'pessoa');
+  const form = document.getElementById('form-pessoa');
+  ligarPessoa(form, 'pessoa', { buscarCadastro: false, atualizarEndereco: true });
   form.addEventListener('submit', e => {
     e.preventDefault();
-    enviar(form, async dados => {
-      // Campo apagado vira vazio de verdade (lerForm devolve '' e o servidor grava como vazio)
-      await api('PUT', `/pessoas/${id}`, dados.pessoa);
-      aviso('Cadastro atualizado. Os próximos contratos já saem com os dados novos.');
-      telaPessoa(id);
-    });
+    enviar(form, async dados => { await api('PUT', `/pessoas/${id}`, dados.pessoa); await telaPessoa(id); aviso('Dados do cliente atualizados'); });
+  });
+  document.getElementById('excluir-pessoa')?.addEventListener('click', async e => {
+    const botao = e.currentTarget; botao.disabled = true;
+    try { if (await confirmarExclusaoPessoa(pessoa, vinculos.length)) ir('#/pessoas'); }
+    catch (erro) { aviso(erro.message, true); } finally { botao.disabled = false; }
+  });
+  document.getElementById('restaurar-pessoa')?.addEventListener('click', async e => {
+    const botao = e.currentTarget; botao.disabled = true;
+    try { await api('POST', `/pessoas/${id}/restaurar`); await telaPessoa(id); aviso('Cadastro restaurado'); }
+    catch (erro) { aviso(erro.message, true); } finally { botao.disabled = false; }
   });
 }
 
@@ -1262,8 +1310,7 @@ async function navegar() {
     if (!pagina) await telaPainel();
     else if (pagina === 'estoque') await telaLista('estoque');
     else if (pagina === 'vendidos') await telaLista('vendido');
-    else if (pagina === 'pessoas') await telaPessoas();
-    else if (pagina === 'pessoa') await telaPessoa(Number(id));
+    else if (pagina === 'pessoas' || pagina === 'pessoa') { if (id) await telaPessoa(Number(id)); else await telaPessoas(); }
     else if (pagina === 'configuracoes') await telaConfiguracoes();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();

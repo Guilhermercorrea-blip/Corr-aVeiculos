@@ -1,0 +1,62 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+const dados = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'correa-pessoas-test-'));
+process.env.PASTA_DADOS = dados;
+let db;
+try {
+  // Simula um banco com compras anteriores à coluna de arquivamento.
+  const antigo = spawnSync(process.execPath, ['-e', `
+    const db = require('./db');
+    db.criarCompra({ pessoa: { nome: 'Fornecedor de teste', cpf: '52998224725' }, veiculo: { marca_modelo: 'Carro fictício', tipo_entrada: 'compra', valor_compra: 4000000 } });
+    db.conexao.exec('ALTER TABLE pessoas DROP COLUMN arquivado_em');
+    db.conexao.close();
+  `], { cwd: root, env: process.env, encoding: 'utf8' });
+  assert.equal(antigo.status, 0, antigo.stderr);
+  db = require('../db');
+  const carro = db.listarVeiculos()[0];
+  const fornecedor = db.obterVeiculo(carro.id).fornecedor;
+  assert.equal(fornecedor.arquivado_em, null);
+  assert.equal(carro.valor_compra, 4000000);
+  db.registrarVenda(carro.id, { pessoa: { nome: 'Comprador de teste', cpf: '11144477735' }, venda: { valor_venda: 5000000, meios_pagamento: ['pix'], valor_pix: 5000000, km_saida: 1000 } });
+  const comprador = db.obterVeiculo(carro.id).comprador.id;
+  db.atualizarPessoa(comprador, { nome: 'Cliente corrigido', telefone: '11999999999', email: 'teste@example.invalid', uf: 'sp' });
+  assert.equal(db.obterVeiculo(carro.id).comprador.nome, 'Cliente corrigido');
+  assert.equal(db.obterVeiculo(carro.id).comprador.uf, 'SP');
+  assert.match(require('../contratos').gerarContrato(carro.id, 'venda'), /Cliente corrigido/);
+  db.atualizarPessoa(comprador, { telefone: '', email: '', cpf: '12345678909' });
+  assert.equal(db.obterPessoa(comprador).pessoa.telefone, null);
+  assert.equal(db.obterPessoa(comprador).pessoa.email, null);
+  assert.equal(db.listarPessoas({ cpf: '12345678909' }).id, comprador);
+  assert.throws(() => db.atualizarPessoa(comprador, { cpf: fornecedor.cpf }), { status: 409 });
+  for (const p of [{ cpf: '11111111111' }, { cpf: 'texto' }, { nome: '' }, { email: 'erro' }, { cep: '123' }, { uf: 'SPO' }, { nascimento: '2026-02-30' }]) assert.throws(() => db.atualizarPessoa(comprador, p), { status: 400 });
+  db.atualizarPessoa(comprador, { id: fornecedor.id, arquivado_em: 'ontem' });
+  assert.equal(db.obterPessoa(comprador).pessoa.arquivado_em, null);
+  assert.equal(db.excluirPessoa(fornecedor.id).acao, 'arquivado');
+  assert.ok(!db.listarPessoas().some(p => p.id === fornecedor.id));
+  assert.ok(db.listarPessoas({ arquivadas: true }).some(p => p.id === fornecedor.id));
+  assert.equal(db.obterVeiculo(carro.id).fornecedor.id, fornecedor.id);
+  db.atualizarVeiculo(carro.id, { veiculo: { cor: 'Azul' }, pessoa: db.obterPessoa(fornecedor.id).pessoa });
+  assert.ok(db.obterPessoa(fornecedor.id).pessoa.arquivado_em);
+  const outro = db.criarCompra({ pessoa: { nome: 'Fornecedor de teste', cpf: fornecedor.cpf }, veiculo: { marca_modelo: 'Outro carro fictício', tipo_entrada: 'compra', valor_compra: 3000000 } }).id;
+  assert.equal(db.obterVeiculo(outro).fornecedor.id, fornecedor.id);
+  assert.equal(db.obterPessoa(fornecedor.id).pessoa.arquivado_em, null);
+  db.excluirPessoa(fornecedor.id);
+  db.restaurarPessoa(fornecedor.id);
+  assert.equal(db.obterPessoa(fornecedor.id).pessoa.arquivado_em, null);
+  assert.ok(db.listarPessoas({ busca: '123.456.789-09' }).some(p => p.id === comprador));
+  assert.equal(db.excluirPessoa(comprador).acao, 'arquivado');
+  db.desfazerVenda(carro.id);
+  assert.equal(db.obterPessoa(comprador).vinculos.length, 0);
+  assert.equal(db.excluirPessoa(comprador).acao, 'excluido');
+  for (const fn of [db.obterPessoa, db.excluirPessoa, db.restaurarPessoa]) assert.throws(() => fn(comprador), { status: 404 });
+  assert.equal(db.conexao.prepare('PRAGMA foreign_key_check').all().length, 0);
+  assert.equal(db.conexao.prepare('PRAGMA quick_check').get().quick_check, 'ok');
+  console.log('OK: migração, edição, validação, histórico, arquivamento, restauração e exclusão sem vínculos.');
+} finally {
+  if (db) db.conexao.close();
+  fs.rmSync(dados, { recursive: true, force: true });
+}

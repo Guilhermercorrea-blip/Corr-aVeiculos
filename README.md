@@ -48,7 +48,7 @@ O site público disponibiliza somente título, descrição, preço de anúncio, 
 
 A aplicação roda no servidor Oracle em `/opt/correa-veiculos`, com dados em `/var/lib/correa/data` e serviço `correa-veiculos`. O Caddy entrega HTTPS e encaminha para a aplicação na porta 3000.
 
-O domínio próprio ainda precisa ser escolhido e registrado. Depois disso:
+O domínio escolhido é **correaveiculosbb.com.br** (endereço principal com `www`), e ainda precisa ser registrado. O site continua no endereço temporário até essa etapa ser concluída. Veja o [passo a passo de DNS e ativação](nuvem/DOMINIO.md). O script de configuração está preparado e não deve ser executado antes do registro e do apontamento. Depois disso:
 
 1. Configurar o DNS do domínio para o servidor e conferir os registros de `www`.
 2. Configurar o domínio no Caddy, validar a configuração e ativar HTTPS.
@@ -61,4 +61,4 @@ Não altere DNS nem o endereço do serviço antes de confirmar a posse e a resol
 
 O código versionado é a referência para futuras alterações. Não envie o banco, documentos de clientes, chaves, senhas ou PDFs com dados da conta ao GitHub.
 
-O cadastro de pessoas já permite edição. A proposta anterior de excluir cadastros sem vínculos e arquivar cadastros ligados a operações ainda precisa ser integrada e validada; não faz parte desta versão do site.
+O cadastro de pessoas permite edição, exclusão de pessoas sem vínculos e arquivamento de pessoas ligadas a compras ou vendas, com confirmação. O filtro **Arquivados** permite restaurar o cadastro. Arquivar mantém os vínculos e o histórico dos veículos. Uma nova operação com o mesmo CPF reaproveita e reativa o cadastro; editar um veículo antigo não o reativa automaticamente.
