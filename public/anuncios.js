@@ -2,7 +2,6 @@
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const reais = v => v === null ? 'Sob consulta' : (v / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const OPCIONAIS = ['Ar-condicionado', 'Direção hidráulica', 'Direção elétrica', 'Vidros elétricos', 'Travas elétricas', 'Airbags', 'Freios ABS', 'Rodas de liga leve', 'Central multimídia', 'Câmera de ré', 'Sensores de estacionamento', 'Bancos de couro', 'Controle de estabilidade', 'Piloto automático', 'Teto solar'];
 let anuncios = [], atual = null, fotos = [], ordem = [], alterado = false, salvando = false, sequenciaFoto = 0;
 let timerAviso, etapa = 1, fotoPrevia = 0, cidadeLoja = 'Barra Bonita/SP';
 const TIPOS_VEICULO = ['Carro/picape', 'Motocicleta', 'Veículos para esportes', 'Trailer', 'Reboque', 'Barco', 'Comercial/industrial', 'Outro'];
@@ -63,7 +62,6 @@ function editor(p) {
   fotos = p.fotos_disponiveis.map(f => ({ ...f })); ordem = p.fotos.map(f => f.id);
   lista(); document.body.classList.add('editando-anuncio'); fundoInerte(true);
   const bloqueado = p.veiculo_id && p.estado_estoque !== 'estoque';
-  const selecionados = new Set(p.opcionais), itens = [...new Set([...OPCIONAIS, ...p.opcionais])];
   const partes = separarModelo(p), outro = partes.fabricante && !FABRICANTES.includes(partes.fabricante);
   const anos = Array.from({length: new Date().getFullYear() + 2 - 1900}, (_,i) => new Date().getFullYear() + 1 - i);
   const automatico = [p.marca_modelo, p.versao].filter(Boolean).join(' ');
@@ -86,20 +84,14 @@ function editor(p) {
             <div id="outro-fabricante" ${outro ? '' : 'hidden'}>${campo('fabricante_outro', 'Nome do fabricante', outro ? partes.fabricante : '', 'maxlength="60"')}</div>
             ${campo('modelo', 'Modelo', partes.modelo, 'required maxlength="140" placeholder="Ex.: Onix"')}
             ${campo('km', 'Quilometragem', p.km, 'type="number" min="0" step="1" placeholder="Ex.: 45000"')}
+            ${selecionar('ano_fab', 'Ano de fabricação', anos, p.ano_fab)}
+            ${selecionar('combustivel', 'Combustível', [...new Set(['Flex', 'Gasolina', 'Etanol', 'Diesel', 'Híbrido', 'Elétrico', 'GNV', p.combustivel].filter(Boolean))], p.combustivel)}
+            ${selecionar('cambio', 'Câmbio', ['Manual', 'Automático', 'Automatizado', 'CVT'], p.cambio)}
             <h3>Preço</h3>${campo('preco', 'Preço do veículo', p.preco === null ? '' : (p.preco / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 'inputmode="decimal" placeholder="Ex.: 45.900,00"')}
             <p class="nota-editor">Em branco, aparece “Sob consulta”.</p>
             <h3>Descrição</h3><label class="campo"><span>Descrição do veículo</span><textarea name="descricao" rows="5" maxlength="6000" placeholder="Conte sobre o estado do veículo e seus diferenciais…">${esc(p.descricao)}</textarea></label>
           </section>
-          <section data-etapa="2" hidden><h2 class="titulo-etapa">Mais detalhes</h2><p class="nota-editor">Complete as informações que você quer mostrar aos compradores.</p>
-            ${campo('versao', 'Versão (opcional)', p.versao, 'maxlength="140" placeholder="Ex.: 1.0 LT Turbo"')}
-            ${selecionar('ano_fab', 'Ano de fabricação', anos, p.ano_fab)}
-            ${selecionar('cor', 'Cor', [...new Set(['Branco', 'Preto', 'Prata', 'Cinza', 'Vermelho', 'Azul', 'Verde', 'Bege', 'Marrom', 'Amarelo', 'Laranja', 'Dourado', p.cor].filter(Boolean))], p.cor)}
-            ${selecionar('combustivel', 'Combustível', [...new Set(['Flex', 'Gasolina', 'Etanol', 'Diesel', 'Híbrido', 'Elétrico', 'GNV', p.combustivel].filter(Boolean))], p.combustivel)}
-            ${selecionar('cambio', 'Câmbio', ['Manual', 'Automático', 'Automatizado', 'CVT'], p.cambio)}
-            ${selecionar('portas', 'Portas', [2, 3, 4, 5], p.portas)}
-            <details class="opcionais-anuncio" ${p.opcionais.length ? 'open' : ''}><summary>Opcionais e equipamentos</summary><div class="grade-opcionais">${itens.map(v => `<label><input type="checkbox" name="opcional" value="${esc(v)}" ${selecionados.has(v) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div></details>
-          </section>
-          <section data-etapa="3" hidden><h2 class="titulo-etapa">Conferir e publicar</h2><p class="nota-editor">Confira a prévia. Ao publicar, o anúncio ficará disponível no site da loja.</p>
+          <section data-etapa="2" hidden><h2 class="titulo-etapa">Conferir e publicar</h2><p class="nota-editor">Confira a prévia. Ao publicar, o anúncio ficará disponível no site da loja.</p>
             ${campo('titulo', 'Título personalizado (opcional)', p.titulo === automatico ? '' : p.titulo, 'maxlength="140" placeholder="Usa fabricante, modelo e versão"')}
             <label class="opcao-publicacao"><input type="checkbox" name="destaque" ${p.destaque ? 'checked' : ''}><span>Destacar este veículo<small>Aparece primeiro na vitrine da loja.</small></span></label>
             <div id="resumo-publicacao" class="aviso-publicacao"></div>
@@ -108,7 +100,7 @@ function editor(p) {
           </section>
           <div id="progresso-fotos" role="status" hidden></div>
         </div>
-        <div class="compositor-rodape"><div class="passos-anuncio" aria-label="Progresso"><span></span><span></span><span></span></div><p id="etapa-atual" class="nota-editor" aria-live="polite"></p><div class="acoes-etapas"><button type="button" id="etapa-anterior" class="secundario" hidden>Voltar</button><button type="button" id="proxima-etapa">Avançar</button><button type="button" id="publicar-anuncio" hidden ${bloqueado || p.situacao === 'vendido' ? 'disabled' : ''}>${p.visivel ? 'Salvar alterações' : 'Publicar no site'}</button></div></div>
+        <div class="compositor-rodape"><div class="passos-anuncio" aria-label="Progresso"><span></span><span></span></div><p id="etapa-atual" class="nota-editor" aria-live="polite"></p><div class="acoes-etapas"><button type="button" id="etapa-anterior" class="secundario" hidden>Voltar</button><button type="button" id="proxima-etapa">Avançar</button><button type="button" id="publicar-anuncio" hidden ${bloqueado || p.situacao === 'vendido' ? 'disabled' : ''}>${p.visivel ? 'Salvar alterações' : 'Publicar no site'}</button></div></div>
       </fieldset></form>
     </aside>
     <section class="compositor-previa" aria-label="Prévia do anúncio"><div class="previa-papel"><div class="previa-cabecalho"><strong>Prévia do anúncio</strong><span>Atualiza enquanto você preenche</span></div><div id="previa-viva"></div></div></section>
@@ -116,7 +108,7 @@ function editor(p) {
   const form = $('form-anuncio');
   form.addEventListener('input', () => { alterado = true; atualizarPrevia(); });
   form.addEventListener('change', () => { alterado = true; atualizarPrevia(); });
-  form.addEventListener('submit', e => { e.preventDefault(); if (etapa < 3) avancarEtapa(); });
+  form.addEventListener('submit', e => { e.preventDefault(); if (etapa < ETAPAS.length) avancarEtapa(); });
   form.elements.preco.addEventListener('blur', () => { try { const n = parsePreco(form.elements.preco.value); if (n !== null) form.elements.preco.value = (n / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); atualizarPrevia(); } catch {} });
   form.elements.fabricante.onchange = () => { const outro = form.elements.fabricante.value === 'Outro'; $('outro-fabricante').hidden = !outro; form.elements.fabricante_outro.required = outro; atualizarPrevia(); };
   form.elements.fabricante_outro.required = Boolean(outro);
@@ -154,12 +146,15 @@ function alternarPrevia(ativo) {
   $('editor').classList.toggle('mostra-previa', ativo);
   $('aba-editar').setAttribute('aria-pressed', String(!ativo)); $('aba-previa').setAttribute('aria-pressed', String(ativo));
 }
+// Duas etapas: preencher tudo numa tela só e depois conferir e publicar
+const ETAPAS = ['Fotos e informações', 'Conferir e publicar'];
 function mostrarEtapa(n) {
-  etapa = Math.max(1, Math.min(3, n));
+  etapa = Math.max(1, Math.min(ETAPAS.length, n));
   document.querySelectorAll('[data-etapa]').forEach(s => { s.hidden = Number(s.dataset.etapa) !== etapa; });
   document.querySelectorAll('.passos-anuncio span').forEach((s,i) => { s.classList.toggle('concluido', i < etapa); });
-  $('etapa-atual').textContent = `Etapa ${etapa} de 3 · ${['Fotos e informações', 'Mais detalhes', 'Conferir e publicar'][etapa - 1]}`;
-  $('etapa-anterior').hidden = etapa === 1; $('proxima-etapa').hidden = etapa === 3; $('publicar-anuncio').hidden = etapa !== 3;
+  $('etapa-atual').textContent = `Etapa ${etapa} de ${ETAPAS.length} · ${ETAPAS[etapa - 1]}`;
+  const ultima = etapa === ETAPAS.length;
+  $('etapa-anterior').hidden = etapa === 1; $('proxima-etapa').hidden = ultima; $('publicar-anuncio').hidden = !ultima;
   document.querySelector('.compositor-rolagem').scrollTop = 0;
   atualizarPrevia();
 }
@@ -176,7 +171,8 @@ function lerForm() {
   const form = $('form-anuncio'), e = form.elements, num = nome => e[nome].value === '' ? null : Number(e[nome].value);
   const fabricante = (e.fabricante.value === 'Outro' ? e.fabricante_outro.value : e.fabricante.value).trim(), modelo = e.modelo.value.trim();
   let preco = null; try { preco = parsePreco(e.preco.value); } catch {}
-  return { tipo_veiculo: e.tipo_veiculo.value, fabricante, modelo, marca_modelo: [fabricante, modelo].filter(Boolean).join(' '), versao: e.versao.value.trim(), titulo: e.titulo.value.trim(), ano_fab: num('ano_fab'), ano_mod: num('ano_mod'), km: num('km'), cor: e.cor.value, combustivel: e.combustivel.value, cambio: e.cambio.value, portas: num('portas'), opcionais: [...form.querySelectorAll('[name=opcional]:checked')].map(x => x.value), descricao: e.descricao.value.trim(), preco, destaque: e.destaque.checked };
+  // Versão, cor, portas e opcionais saíram do formulário: mantém o que o anúncio já tinha
+  return { tipo_veiculo: e.tipo_veiculo.value, fabricante, modelo, marca_modelo: [fabricante, modelo].filter(Boolean).join(' '), versao: atual.versao || '', titulo: e.titulo.value.trim(), ano_fab: num('ano_fab'), ano_mod: num('ano_mod'), km: num('km'), cor: atual.cor || '', combustivel: e.combustivel.value, cambio: e.cambio.value, portas: atual.portas ?? null, opcionais: atual.opcionais || [], descricao: e.descricao.value.trim(), preco, destaque: e.destaque.checked };
 }
 function atualizarPrevia() {
   if (!$('previa-viva')) return;
@@ -275,7 +271,14 @@ async function gravar(situacaoDesejada) {
     }
     const salvo = await api('PUT', `/publicacoes/${atual.id}`, { ...dados, revisao: atual.revisao, fotos: ordem });
     const i = anuncios.findIndex(p => p.id === salvo.id); if (i < 0) anuncios.unshift(salvo); else anuncios[i] = salvo;
-    alterado = false; bloquear(false); editor(salvo);
+    alterado = false; bloquear(false);
+    // Publicou: já abre um anúncio novo em branco para o próximo carro
+    if (situacaoDesejada === 'publicado' && salvo.visivel) {
+      await novo();
+      aviso(`${salvo.titulo} publicado no site. Pronto para o próximo carro.`);
+      return salvo;
+    }
+    editor(salvo);
     aviso(salvo.visivel ? 'Anúncio salvo e publicado no site.' : salvo.situacao === 'vendido' ? 'Anúncio marcado como vendido e retirado do site.' : 'Rascunho salvo. Ele ainda não aparece no site.');
     return salvo;
   } catch (e) { alterado = true; aviso(e.message + ' Suas alterações continuam nesta tela para você conferir e tentar novamente.', true); bloquear(false); $('progresso-fotos').hidden = true; renderFotos(); }
