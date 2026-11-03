@@ -189,3 +189,8 @@ body.editando-anuncio { overflow: hidden; }
 .previa-redes > button { width: 100%; font-size: .8rem; padding: 12px; }
 #dialog-redes { max-width: 720px; }
 #texto-redes { font: .9rem/1.65 system-ui,sans-serif; width: 100%; resize: vertical; background: #f8fafc; }
+
+/* Postar no Facebook e no Instagram */
+.redes-postar { display: grid; gap: 8px; margin-top: 10px; }
+.redes-postar small { display: block; color: var(--texto-suave, #5f6670); }
+.redes-postar .erro-rede { color: #b42318; }

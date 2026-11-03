@@ -103,7 +103,7 @@ function editor(p) {
             ${campo('titulo', 'Título personalizado (opcional)', p.titulo === automatico ? '' : p.titulo, 'maxlength="140" placeholder="Usa fabricante, modelo e versão"')}
             <label class="opcao-publicacao"><input type="checkbox" name="destaque" ${p.destaque ? 'checked' : ''}><span>Destacar este veículo<small>Aparece primeiro na vitrine da loja.</small></span></label>
             <div id="resumo-publicacao" class="aviso-publicacao"></div>
-            <div class="previa-redes"><h3>Facebook e Instagram</h3><p class="nota-editor">Confira o texto com valor, endereço e os contatos das publicações.</p><button type="button" id="previa-redes" class="secundario">Prévia para Facebook e Instagram</button><p class="nota-editor">O envio automático ainda depende da conexão das contas.</p></div>
+            <div class="previa-redes"><h3>Facebook e Instagram</h3><p class="nota-editor">Confira o texto com valor, endereço e os contatos das publicações.</p><button type="button" id="previa-redes" class="secundario">Prévia para Facebook e Instagram</button><div id="redes-postar" class="redes-postar"><p class="nota-editor">Verificando a conexão com as redes…</p></div></div>
             ${p.veiculo_id ? `<p class="nota-editor">Vinculado ao estoque. As alterações aqui valem apenas para o anúncio. <a href="/sistema#/carro/${p.veiculo_id}" target="_blank" rel="noopener">Abrir no sistema ↗</a></p>` : '<p class="nota-editor">Este cadastro é só para divulgação. Não cria uma compra, venda ou contrato.</p>'}
             ${p.id ? `<div class="acoes acoes-situacao">${p.visivel ? `<a class="botao-link secundario" href="/carro/${p.id}" target="_blank" rel="noopener">Ver no site ↗</a><button type="button" id="retirar" class="perigo">Retirar do site</button>` : ''}${!p.veiculo_id && p.situacao !== 'vendido' ? '<button type="button" id="marcar-vendido" class="secundario">Marcar como vendido</button>' : ''}${p.situacao === 'vendido' ? '<button type="button" id="voltar-rascunho" class="secundario">Voltar para rascunho</button>' : ''}</div>` : ''}
           </section>
@@ -139,6 +139,7 @@ function editor(p) {
   $('etapa-anterior').onclick = () => mostrarEtapa(etapa - 1);
   $('publicar-anuncio').onclick = () => gravar('publicado');
   $('previa-redes').onclick = abrirPreviaRedes;
+  carregarRedes(p);
   $('aba-editar').onclick = () => alternarPrevia(false);
   $('aba-previa').onclick = () => alternarPrevia(true);
   $('retirar')?.addEventListener('click', retirar);
@@ -290,8 +291,55 @@ function bloquear(ativo) {
   for (const id of ['novo-anuncio', 'trazer-estoque', 'abrir-config']) $(id).disabled = ativo;
   lista();
 }
+// ---------- Postar no Facebook e no Instagram ----------
+const NOME_REDE = { facebook: 'Facebook', instagram: 'Instagram' };
+async function carregarRedes(p) {
+  const caixa = $('redes-postar');
+  let conectado, redes = {};
+  try {
+    conectado = await api('GET', '/redes/conexao');
+    if (p.id) redes = (await api('GET', `/publicacoes/${p.id}/redes`)).redes;
+  } catch { caixa.innerHTML = ''; return; }
+  if (!$('redes-postar') || atual?.id !== p.id) return; // trocou de anúncio enquanto carregava
+  const ativas = Object.keys(NOME_REDE).filter(r => conectado[r]);
+  if (!ativas.length) {
+    caixa.innerHTML = '<p class="nota-editor">Postagem automática desligada: as contas do Facebook e do Instagram ainda não foram conectadas. Use a prévia para copiar o texto.</p>';
+    return;
+  }
+  caixa.innerHTML = ativas.map(r => {
+    const s = redes[r];
+    const feito = s?.status === 'postado';
+    const info = feito ? `<small>✓ Postado em ${esc(s.atualizado_em)}</small>` : s?.status === 'erro' ? `<small class="erro-rede">Última tentativa falhou: ${esc(s.erro)}</small>` : '';
+    return `<label class="opcao-publicacao"><input type="checkbox" name="postar_rede" value="${r}" ${feito ? '' : 'checked'}><span>${feito ? 'Postar de novo' : 'Postar também'} no ${NOME_REDE[r]}${info}</span></label>`;
+  }).join('') + (p.visivel ? '<button type="button" id="postar-redes-agora" class="secundario">Postar nas redes agora</button>' : '<p class="nota-editor">Ao clicar em Publicar no site, o anúncio também vai para as redes marcadas.</p>');
+  // Marcar as caixinhas não conta como alteração do anúncio
+  caixa.addEventListener('input', e => e.stopPropagation());
+  caixa.addEventListener('change', e => e.stopPropagation());
+  $('postar-redes-agora')?.addEventListener('click', async () => {
+    const escolhidas = redesMarcadas();
+    if (!escolhidas.length) return aviso('Marque Facebook e/ou Instagram.', true);
+    const botao = $('postar-redes-agora'); botao.disabled = true; botao.textContent = 'Postando…';
+    const r = await postarRedes(p.id, escolhidas);
+    aviso(r.texto, r.falhou);
+    if (atual?.id === p.id) carregarRedes(p);
+  });
+}
+function redesMarcadas() { return [...document.querySelectorAll('[name=postar_rede]:checked')].map(c => c.value); }
+async function postarRedes(id, redes) {
+  try {
+    const r = await api('POST', `/publicacoes/${id}/redes`, { redes, repetir: true });
+    return {
+      texto: redes.map(rede => `${NOME_REDE[rede]}: ${r[rede]?.ok ? 'postado ✓' : 'não postou (' + (r[rede]?.erro || 'erro') + ')'}`).join(' · '),
+      falhou: redes.some(rede => !r[rede]?.ok),
+    };
+  } catch (e) {
+    return { texto: 'Redes: ' + e.message, falhou: true };
+  }
+}
+
 async function gravar(situacaoDesejada) {
   if (salvando) return;
+  const redesEscolhidas = situacaoDesejada === 'publicado' && !atual.visivel ? redesMarcadas() : [];
   let dados;
   try { dados = dadosForm(situacaoDesejada); } catch (e) { return aviso(e.message, true); }
   if (!dados) return;
@@ -314,7 +362,13 @@ async function gravar(situacaoDesejada) {
     // Publicou: já abre um anúncio novo em branco para o próximo carro
     if (situacaoDesejada === 'publicado' && salvo.visivel) {
       await novo();
-      aviso(`${salvo.titulo} publicado no site. Pronto para o próximo carro.`);
+      if (redesEscolhidas.length) {
+        aviso(`${salvo.titulo} publicado no site. Postando nas redes…`);
+        const r = await postarRedes(salvo.id, redesEscolhidas);
+        aviso(`${salvo.titulo} publicado no site. ${r.texto}`, r.falhou);
+      } else {
+        aviso(`${salvo.titulo} publicado no site. Pronto para o próximo carro.`);
+      }
       return salvo;
     }
     editor(salvo);

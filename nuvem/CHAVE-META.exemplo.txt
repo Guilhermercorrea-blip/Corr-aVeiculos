@@ -1,0 +1,6 @@
+# Modelo do arquivo CHAVE-META.txt (fica só no servidor, em /opt/correa-veiculos/CHAVE-META.txt).
+# Preencha as 3 linhas abaixo e rode: sudo -u correa node nuvem/conectar-meta.js
+# O script troca tudo por uma chave permanente da Página e apaga o APP_SECRET e o USER_TOKEN daqui.
+APP_ID=
+APP_SECRET=
+USER_TOKEN=
