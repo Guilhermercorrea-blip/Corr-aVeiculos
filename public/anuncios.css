@@ -180,3 +180,8 @@ body.editando-anuncio { overflow: hidden; }
   .previa-conteudo h2 { font-size: 1.3rem; }
   .compositor-rodape { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
 }
+
+/* Descrição com IA */
+.ia-descricao h4 { margin: 14px 0 0; font-size: .85rem; }
+.ia-descricao > .campo, .ia-descricao > button { margin-top: 12px; }
+.ia-descricao > button { width: 100%; }

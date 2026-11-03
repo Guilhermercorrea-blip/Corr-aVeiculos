@@ -89,7 +89,15 @@ function editor(p) {
             ${selecionar('cambio', 'Câmbio', ['Manual', 'Automático', 'Automatizado', 'CVT'], p.cambio)}
             <h3>Preço</h3>${campo('preco', 'Preço do veículo', p.preco === null ? '' : (p.preco / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }), 'inputmode="decimal" placeholder="Ex.: 45.900,00"')}
             <p class="nota-editor">Em branco, aparece “Sob consulta”.</p>
-            <h3>Descrição</h3><label class="campo"><span>Descrição do veículo</span><textarea name="descricao" rows="5" maxlength="6000" placeholder="Conte sobre o estado do veículo e seus diferenciais…">${esc(p.descricao)}</textarea></label>
+            <h3>Descrição</h3>
+            <details class="opcionais-anuncio ia-descricao" id="ia-descricao"><summary>✨ Escrever a descrição com IA</summary>
+              <p class="nota-editor">Marque o que o carro tem e clique em Gerar. A IA escreve no estilo da loja usando só o que foi marcado e preenchido acima. Depois você pode ajustar o texto.</p>
+              <h4>Acessórios e conforto</h4><div class="grade-opcionais" id="ia-acessorios"></div>
+              <h4>Destaques</h4><div class="grade-opcionais" id="ia-destaques"></div>
+              <label class="campo"><span>Outros detalhes (opcional)</span><textarea name="ia_outros" rows="2" maxlength="600" placeholder="Ex.: motor 1.6, versão i-Trend, 5 pneus novos, segundo dono"></textarea></label>
+              <button type="button" id="gerar-descricao">Gerar descrição</button>
+            </details>
+            <label class="campo"><span>Descrição do veículo</span><textarea name="descricao" rows="5" maxlength="6000" placeholder="Conte sobre o estado do veículo e seus diferenciais…">${esc(p.descricao)}</textarea></label>
           </section>
           <section data-etapa="2" hidden><h2 class="titulo-etapa">Conferir e publicar</h2><p class="nota-editor">Confira a prévia. Ao publicar, o anúncio ficará disponível no site da loja.</p>
             ${campo('titulo', 'Título personalizado (opcional)', p.titulo === automatico ? '' : p.titulo, 'maxlength="140" placeholder="Usa fabricante, modelo e versão"')}
@@ -117,6 +125,8 @@ function editor(p) {
   $('escolher-fotos').onclick = () => $('novas-fotos').click();
   $('tirar-foto').onclick = () => $('camera-anuncio').click();
   $('usar-celular-anuncio').onclick = abrirCelularAnuncio;
+  montarCaixasIA();
+  $('gerar-descricao').onclick = gerarDescricaoIA;
   const area = $('area-fotos');
   area.ondragover = e => { e.preventDefault(); if (!salvando) area.classList.add('arrastando'); };
   area.ondragleave = () => area.classList.remove('arrastando');
@@ -133,6 +143,33 @@ function editor(p) {
   $('marcar-vendido')?.addEventListener('click', async () => { if (await confirmarAcao('Marcar este anúncio como vendido e retirá-lo do site? Isso atualiza somente a divulgação, sem registrar uma venda financeira.', 'Marcar como vendido')) gravar('vendido'); });
   $('voltar-rascunho')?.addEventListener('click', () => gravar('rascunho'));
   alternarPrevia(false); mostrarEtapa(1); renderFotos();
+}
+// Descrição com IA: as caixinhas servem só para montar o texto (não ficam salvas no anúncio)
+let opcoesIA = null;
+async function montarCaixasIA() {
+  try { opcoesIA ??= await api('GET', '/descricao/opcoes'); } catch { $('ia-descricao').hidden = true; return; }
+  const caixas = (nome, itens) => itens.map(v => `<label><input type="checkbox" name="${nome}" value="${esc(v)}"> ${esc(v)}</label>`).join('');
+  $('ia-acessorios').innerHTML = caixas('ia_acessorio', opcoesIA.acessorios);
+  $('ia-destaques').innerHTML = caixas('ia_destaque', opcoesIA.destaques);
+}
+async function gerarDescricaoIA() {
+  const form = $('form-anuncio'), botao = $('gerar-descricao');
+  const marcados = nome => [...form.querySelectorAll(`[name=${nome}]:checked`)].map(x => x.value);
+  const p = lerForm();
+  if (!p.modelo) { form.elements.modelo.reportValidity(); return; }
+  if (form.elements.descricao.value.trim() && !await confirmarAcao('Já existe uma descrição. Trocar pelo texto novo da IA?', 'Trocar descrição')) return;
+  botao.disabled = true; botao.textContent = 'Escrevendo…';
+  try {
+    const r = await api('POST', '/descricao', { ...p, acessorios: marcados('ia_acessorio'), destaques: marcados('ia_destaque'), outros: form.elements.ia_outros.value.trim() });
+    form.elements.descricao.value = r.descricao;
+    form.elements.descricao.dispatchEvent(new Event('input', { bubbles: true }));
+    form.elements.descricao.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    aviso('Descrição escrita. Confira e ajuste se quiser.');
+  } catch (e) {
+    aviso(e.message, true);
+  } finally {
+    botao.disabled = false; botao.textContent = 'Gerar descrição';
+  }
 }
 async function fecharEditor() {
   if (!await podeTrocar()) return;

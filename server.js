@@ -13,6 +13,7 @@ const contratos = require('./contratos');
 const anuncios = require('./anuncios');
 const publicacoes = require('./publicacoes');
 const enviosAnuncios = require('./envios-anuncios');
+const descricao = require('./descricao');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -125,6 +126,8 @@ rota('POST', '/api/site/publicacoes/:id/retirar', (p, q, corpo) => publicacoes.r
 rota('POST', '/api/site/publicacoes/:id/fotos', (p, q, corpo) => publicacoes.adicionarFoto(p.id, {
   conteudo: Buffer.from(String(corpo.base64 || ''), 'base64'), tipoMime: corpo.tipo_mime, nomeOriginal: corpo.nome,
 }));
+rota('GET', '/api/site/descricao/opcoes', () => ({ acessorios: descricao.ACESSORIOS, destaques: descricao.DESTAQUES }));
+rota('POST', '/api/site/descricao', (p, q, corpo) => descricao.gerarDescricao(corpo));
 rota('GET', '/api/site/estoque', () => publicacoes.estoque());
 rota('GET', '/api/site/estoque/:id', p => publicacoes.dadosEstoque(p.id));
 rota('POST', '/api/site/publicacoes/:id/celular', p => {
