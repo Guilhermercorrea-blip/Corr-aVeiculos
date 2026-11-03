@@ -51,12 +51,23 @@ function renderizar() {
 function detalhe(carro) {
   el('inicio').hidden = true; el('detalhe').hidden = false;
   document.title = `${carro.titulo} | ${loja.nome}`;
-  const atributos = [['Ano', [carro.ano_fab, carro.ano_mod].filter(Boolean).join('/') || 'Não informado'], ['Quilometragem', carro.km === null ? 'Não informada' : numero(carro.km) + ' km'], ['Combustível', carro.combustivel || 'Não informado'], ['Cor', carro.cor || 'Não informada']];
+  const atributos = [['Ano', [carro.ano_fab, carro.ano_mod].filter(Boolean).join('/') || 'Não informado'], ['Quilometragem', carro.km === null ? 'Não informada' : numero(carro.km) + ' km'], ['Combustível', carro.combustivel || 'Não informado'], ['Cor', carro.cor || 'Não informada'], ...(carro.versao ? [['Versão', carro.versao]] : []), ...(carro.cambio ? [['Câmbio', carro.cambio]] : []), ...(carro.portas ? [['Portas', carro.portas]] : [])];
   el('detalhe').innerHTML = `<a class="voltar" href="/#estoque">← Voltar para os carros</a><div class="detalhe-grid"><div><div id="foto-principal">${imagem(carro.fotos[0], carro.titulo, 'foto-grande')}</div>${carro.fotos.length > 1 ? `<div class="miniaturas" aria-label="Fotos do carro">${carro.fotos.map((f, i) => `<button type="button" aria-label="Ver foto ${i + 1}" aria-pressed="${i === 0}" data-foto-indice="${i}">${imagem(f, `Foto ${i + 1} de ${carro.titulo}`)}</button>`).join('')}</div>` : ''}</div><div><p class="etiqueta">${esc(loja.nome.toUpperCase())}</p><h1>${esc(carro.titulo)}</h1><p class="preco-detalhe">${dinheiro(carro.preco)}</p><dl class="ficha">${atributos.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${contato(whatsapp(`Olá! Tenho interesse no ${carro.titulo}. ${location.origin}/carro/${carro.id}`), 'Tenho interesse neste carro')}<p class="descricao">${esc(carro.descricao)}</p><p class="nota">Consulte a equipe para confirmar disponibilidade, valores e condições.</p></div></div>`;
+  if (carro.tipo_veiculo && carro.tipo_veiculo !== 'Carro/picape') {
+    const item = document.createElement('div');
+    item.innerHTML = `<dt>Tipo de veículo</dt><dd>${esc(carro.tipo_veiculo)}</dd>`;
+    el('detalhe').querySelector('.ficha').prepend(item);
+  }
   document.querySelectorAll('[data-foto-indice]').forEach(b => b.addEventListener('click', () => {
     el('foto-principal').innerHTML = imagem(carro.fotos[Number(b.dataset.fotoIndice)], carro.titulo, 'foto-grande');
     document.querySelectorAll('[data-foto-indice]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   }));
+  if (carro.opcionais?.length) {
+    const equipamentos = document.createElement('section');
+    equipamentos.className = 'opcionais-publicos';
+    equipamentos.innerHTML = `<h2>Opcionais e equipamentos</h2><ul>${carro.opcionais.map(v => `<li>${esc(v)}</li>`).join('')}</ul>`;
+    el('detalhe').append(equipamentos);
+  }
 }
 async function carregar() {
   const id = /^\/carro\/(\d+)$/.exec(location.pathname)?.[1];

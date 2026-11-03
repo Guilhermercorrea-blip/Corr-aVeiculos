@@ -11,6 +11,7 @@ const auth = require('./auth');
 const leitor = require('./leitor');
 const contratos = require('./contratos');
 const anuncios = require('./anuncios');
+const publicacoes = require('./publicacoes');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -113,6 +114,16 @@ rota('PUT', '/api/site/anuncios/:id', (p, q, corpo) => anuncios.salvarAnuncio(p.
 rota('DELETE', '/api/site/anuncios/:id', p => anuncios.retirarAnuncio(p.id));
 rota('GET', '/api/site/config', () => anuncios.configPublica());
 rota('PUT', '/api/site/config', (p, q, corpo) => anuncios.configurarSite(corpo));
+rota('GET', '/api/site/publicacoes', () => publicacoes.listar());
+rota('GET', '/api/site/publicacoes/:id', p => publicacoes.obter(p.id));
+rota('POST', '/api/site/publicacoes', (p, q, corpo) => publicacoes.criar(corpo));
+rota('PUT', '/api/site/publicacoes/:id', (p, q, corpo) => publicacoes.salvar(p.id, corpo));
+rota('POST', '/api/site/publicacoes/:id/retirar', (p, q, corpo) => publicacoes.retirar(p.id, corpo.revisao));
+rota('POST', '/api/site/publicacoes/:id/fotos', (p, q, corpo) => publicacoes.adicionarFoto(p.id, {
+  conteudo: Buffer.from(String(corpo.base64 || ''), 'base64'), tipoMime: corpo.tipo_mime, nomeOriginal: corpo.nome,
+}));
+rota('GET', '/api/site/estoque', () => publicacoes.estoque());
+rota('GET', '/api/site/estoque/:id', p => publicacoes.dadosEstoque(p.id));
 
 rota('GET', '/api/resumo', () => db.resumo());
 rota('GET', '/api/veiculos', (p, q) => db.listarVeiculos(q.get('status')));

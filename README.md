@@ -13,13 +13,15 @@ O login usa as mesmas contas já cadastradas no sistema. Para cadastrar contas, 
 
 ## Publicar um carro
 
-1. Cadastre o veículo no estoque do sistema. As fotos de carro podem ser enviadas pelo mesmo QR Code usado para documentos.
-2. Abra **Anúncios** e selecione o veículo.
-3. Informe o título, o preço de anúncio (em branco: **Sob consulta**) e a descrição pública.
-4. Marque as fotos que deseja mostrar e escolha a capa.
-5. Marque **Publicar no site** e salve.
+1. Entre em **Gerenciar anúncios → Novo anúncio**. Não é necessário cadastrar uma compra, vendedor ou contrato. Para aproveitar um veículo existente, use **Trazer do estoque**.
+2. No painel à esquerda, selecione tipo de veículo, ano e fabricante; preencha modelo, quilometragem, preço e descrição. Use **Outro** para um fabricante que não esteja na lista. Preço em branco aparece como **Sob consulta**.
+3. Adicione fotos do computador/galeria, arraste e solte ou tire uma foto pelo celular. São aceitas até 40 fotos selecionadas; use **Capa** ou as setas para ordenar. As fotos novas são enviadas ao salvar. Documentos do estoque não aparecem entre as opções.
+4. A prévia à direita acompanha o preenchimento. No celular, alterne entre **Preencher** e **Ver prévia**. Use **Avançar** para completar detalhes e opcionais e chegar à conferência final.
+5. **Salvar rascunho** guarda o cadastro sem divulgá-lo. Na última etapa, **Publicar no site** torna o anúncio visível. Em anúncios já publicados, **Salvar alterações** atualiza o conteúdo no ar. **Retirar do site** preserva o cadastro como rascunho.
 
-Nenhum veículo ou foto é anunciado automaticamente. O preço do anúncio é independente do custo de compra e dos contratos. Ao registrar a venda, o carro e suas fotos deixam de ser disponibilizados na vitrine pública. Ao desfazer a venda, um anúncio ainda marcado como publicado volta a aparecer. Para mantê-lo oculto, retire o anúncio do site.
+Nenhum veículo ou foto é anunciado automaticamente. O preço do anúncio é independente do custo de compra e dos contratos. Em anúncios vinculados ao estoque, registrar a venda oculta o carro e suas fotos da vitrine pública. Desfazer a venda permite que um anúncio ainda publicado volte a aparecer. Em anúncios independentes, **Marcar como vendido** oculta a divulgação sem registrar uma venda financeira; **Voltar para rascunho** permite prepará-lo novamente.
+
+Os anúncios usam as tabelas `publicacoes`, `publicacao_fotos` e `publicacao_uploads`. A migração preserva os IDs e links dos anúncios antigos, seus preços, seleção de fotos e estado de publicação. Atualizações conferem a revisão do registro para impedir que uma aba antiga sobrescreva outra. O cadastro usa uma chave de reenvio para evitar duplicação ao repetir uma tentativa com falha de conexão.
 
 Em **Dados do site**, edite nome, chamada principal, apresentação, contatos, endereço, horário e Instagram. Essas informações não alteram os dados dos contratos.
 
@@ -42,7 +44,7 @@ O SQLite e os anexos ficam na pasta definida por `PASTA_DADOS` (padrão: `data/`
 
 A leitura de documentos e do hodômetro usa a integração Anthropic existente. Configure a chave no servidor pelo mecanismo já usado pelo sistema (`CHAVE-API-CLAUDE.txt` ou variável de ambiente aceita pelo leitor). A chave não deve ser versionada.
 
-O site público disponibiliza somente título, descrição, preço de anúncio, ano, cor, combustível, quilometragem e fotos de veículo explicitamente selecionadas. Dados de pessoas, documentos, placa, chassi, RENAVAM, custos e lucro continuam em rotas com login. As fotos públicas são conferidas a cada acesso, inclusive após retirar o anúncio ou vender o carro.
+O site público disponibiliza somente título, descrição, preço de anúncio, tipo de veículo, fabricante, modelo, versão, ano, cor, combustível, câmbio, portas, quilometragem, opcionais e fotos explicitamente selecionadas. Dados de pessoas, documentos, placa, chassi, RENAVAM, custos e lucro continuam em rotas com login. As fotos públicas são conferidas a cada acesso, inclusive após retirar o anúncio ou vender o carro.
 
 ## Servidor e domínio
 

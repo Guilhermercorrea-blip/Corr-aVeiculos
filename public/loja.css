@@ -6,6 +6,10 @@
 .hero-logo{padding-bottom:80px}@media(max-width:600px){.hero-logo{padding:32px 25px 70px}}
 
 /* Banner da loja inteiro, com os menus e o acesso logo abaixo. */
+.opcionais-publicos { border-top: 1px solid var(--borda); margin-top: 38px; padding-top: 28px; }
+.opcionais-publicos h2 { font-size: 24px; }
+.opcionais-publicos ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 25px; padding-left: 20px; color: var(--suave); font-size: 14px; }
+@media (max-width: 600px) { .opcionais-publicos ul { grid-template-columns: 1fr; } }
 .banner-topo { display: block; background: #fff; }
 .banner-topo img { display: block; width: 100%; max-width: 1180px; height: auto; margin: 0 auto; }
 .cabeca { justify-content: space-between; }

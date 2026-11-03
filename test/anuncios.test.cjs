@@ -38,7 +38,7 @@ async function main() {
   anuncios.salvarAnuncio(carro1, entrada({ publicado: true }));
   let catalogo = anuncios.catalogo();
   check(catalogo.carros.length === 1 && catalogo.carros[0].fotos[0].id === f2, 'Publicação respeita seleção e capa');
-  assert.deepEqual(Object.keys(catalogo.carros[0]).sort(), ['id', 'titulo', 'descricao', 'preco', 'destaque', 'ano_fab', 'ano_mod', 'cor', 'combustivel', 'km', 'fotos'].sort()); checks++;
+  assert.deepEqual(Object.keys(catalogo.carros[0]).sort(), ['id', 'titulo', 'marca_modelo', 'tipo_veiculo', 'fabricante', 'modelo', 'versao', 'descricao', 'preco', 'destaque', 'ano_fab', 'ano_mod', 'cor', 'combustivel', 'cambio', 'portas', 'opcionais', 'km', 'fotos'].sort()); checks++;
   const publico = JSON.stringify(catalogo);
   for (const segredo of ['52998224725', '99999999999', 'Cliente fictício', 'Representante privado', 'ABC1D23', 'CHASSI-PRIVADO', '3100000', 'Observação interna privada']) check(!publico.includes(segredo), 'API pública não expõe ' + segredo);
   check(anuncios.fotoPublica(carro1, f1).tipo === 'foto_veiculo', 'Foto selecionada liberada');
