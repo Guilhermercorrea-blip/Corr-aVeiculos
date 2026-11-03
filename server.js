@@ -14,6 +14,7 @@ const anuncios = require('./anuncios');
 const publicacoes = require('./publicacoes');
 const enviosAnuncios = require('./envios-anuncios');
 const descricao = require('./descricao');
+const placa = require('./placa');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -150,6 +151,8 @@ rota('PUT', '/api/veiculos/:id', (p, q, corpo) => db.atualizarVeiculo(p.id, corp
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
 rota('POST', '/api/estoque-rapido', (p, q, corpo) => db.criarEstoqueRapido(corpo.carros));
 rota('DELETE', '/api/veiculos/:id', p => db.excluirVeiculo(p.id));
+rota('GET', '/api/veiculos/:id/placa', p => placa.obter(p.id));
+rota('PUT', '/api/veiculos/:id/placa', (p, q, corpo) => placa.salvar(p.id, corpo));
 rota('POST', '/api/veiculos/:id/gastos', (p, q, corpo) => db.adicionarGasto(p.id, corpo));
 rota('DELETE', '/api/gastos/:id', p => db.removerGasto(p.id));
 rota('POST', '/api/veiculos/:id/venda', (p, q, corpo) => db.registrarVenda(p.id, corpo));

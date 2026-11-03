@@ -790,6 +790,7 @@ async function telaCarro(id) {
 
   <div class="cartao">
     <h2>Contratos</h2>
+    <p><a class="botao-link secundario" href="/placa.html?id=${id}" target="_blank">Imprimir placa de preço para o vidro (A4)</a></p>
     ${v.tipo_entrada === 'compra_sem_transferir' ? `<p>Valor do contrato de compra: <strong>${reais(v.valor_compra)}</strong><br>Valor do contrato de consignação (preço para venda): <strong>${reais(v.valor_consignacao)}</strong></p>` : ''}
     <div class="acoes">
       ${v.tipo_entrada === 'compra_sem_transferir' ? `
