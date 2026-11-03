@@ -24,10 +24,9 @@ function montarPublicacao(dados) {
   const preco = dados.preco ?? null;
   if (preco !== null && (!Number.isSafeInteger(preco) || preco <= 0)) throw invalido('Confira o preço para anunciar.');
   const valor = preco === null ? '💰 Valor: sob consulta' : '💰 Valor: ' + (preco / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\u00a0/g,' ');
-  // Link do próprio carro no site (sem o https://, que o Facebook reconhece igual e fica mais limpo)
-  const site = (process.env.ENDERECO_PUBLICO || SITE_PADRAO).replace(/\/+$/,'');
-  const id = Number.isSafeInteger(dados.id) && dados.id > 0 ? dados.id : null;
-  const link = '🌐 ' + (id ? 'Mais fotos e detalhes: ' : 'Veja nossos carros: ') + (site + (id ? '/carro/' + id : '')).replace(/^https?:\/\//,'');
+  // Página inicial do site (sem o https://, que o Facebook reconhece igual e fica mais limpo)
+  const site = new URL(process.env.ENDERECO_PUBLICO || SITE_PADRAO).host;
+  const link = '🌐 Veja todos os nossos carros: ' + site;
   return {texto:[titulo,descricao,valor,RODAPE.replace('{SITE}',link)].filter(Boolean).join('\n\n')};
 }
 module.exports = {montarPublicacao};

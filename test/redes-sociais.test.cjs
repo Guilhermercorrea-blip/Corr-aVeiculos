@@ -9,8 +9,8 @@ test('texto contém descrição, centavos corretos e o rodapé com o contato da 
   assert.ok(texto.includes('WhatsApp: (14) 99887-0734'));
   assert.ok(texto.includes('Telefone: (14) 3641-8510'));
   assert.ok(texto.endsWith('🤝 Transparência, procedência e confiança.'));
-  assert.ok(texto.includes('🌐 Veja nossos carros: www.correaveiculosbb.com.br\n'));
-  assert.ok(montarPublicacao({titulo:'Teste',id:12}).texto.includes('🌐 Mais fotos e detalhes: www.correaveiculosbb.com.br/carro/12\n'));
+  assert.ok(texto.includes('🌐 Veja todos os nossos carros: www.correaveiculosbb.com.br\n'));
+  assert.ok(!montarPublicacao({titulo:'Teste',id:12}).texto.includes('/carro/'));
   for(const s of ['3000000','DADO-PRIVADO','NUMERO-DO-SITE']) assert.ok(!texto.includes(s));
 });
 test('preço não informado aparece sob consulta; valores inválidos são rejeitados',() => {
