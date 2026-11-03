@@ -49,6 +49,14 @@
     .ano { font-size: 15mm; line-height: 1.05; }
     .destaque { background: #000; color: #fff; border-radius: 3mm; font-family: "Archivo", Arial, sans-serif; font-weight: 900; font-style: italic;
       text-transform: uppercase; text-align: center; font-size: 15mm; line-height: 1.25; margin: 2mm 4mm 3mm; white-space: nowrap; overflow: hidden; }
+    .destaque.segunda { font-size: 10mm; margin: -1mm 10mm 3mm; }
+    /* Placa cheia (2ª faixa ou 5 opcionais): letras um pouco menores para tudo caber */
+    .folha.cheia .preco .valor { font-size: 36mm; }
+    .folha.cheia .preco .rs { font-size: 11mm; margin-top: 3mm; }
+    .folha.cheia .preco .cent { font-size: 10mm; margin-bottom: 2mm; }
+    .folha.cheia .versao span, .folha.cheia .ano { font-size: 12mm; }
+    .folha.cheia .destaque:not(.segunda) { font-size: 12mm; }
+    .opc { padding: 2mm 0; }
     .preco { border: .6mm solid #000; border-radius: 3mm; display: flex; align-items: flex-end; justify-content: center; padding: 1mm 4mm 2mm;
       font-family: Anton, Impact, sans-serif; font-style: italic; white-space: nowrap; }
     .preco .rs { font-size: 14mm; align-self: flex-start; margin-top: 4mm; margin-right: 2mm; }
@@ -60,6 +68,11 @@
       text-transform: uppercase; text-align: center; font-size: 5mm; line-height: 1.1; padding: 0 2mm; }
     .opc .item + .item { border-left: .5mm solid #000; }
     .opc svg { width: 18mm; height: 18mm; }
+    .opc.muitos .item { font-size: 3.8mm; padding: 0 1mm; }
+    .opc.muitos svg { width: 14mm; height: 14mm; }
+    .ia { background: #eef3fa; border: 1px solid #c9d6e8; border-radius: 10px; padding: 12px; margin-bottom: 16px; }
+    .ia textarea { font: inherit; width: 100%; padding: 9px 10px; border: 1px solid var(--borda); border-radius: 8px; resize: vertical; }
+    .ia button { width: 100%; margin-top: 8px; }
     .contatos { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 3mm; padding: 1mm 0; }
     .contatos .sep { width: .5mm; height: 11mm; background: #000; }
     .contato { display: flex; align-items: center; justify-content: center; gap: 2.5mm; font-family: Anton, Impact, sans-serif; font-style: italic; font-size: 11mm; white-space: nowrap; }
@@ -91,20 +104,26 @@
     <form class="painel" id="form" novalidate>
       <h1>Placa do vidro (A4)</h1>
       <p id="carro">Carregando…</p>
+      <div class="ia">
+        <label class="campo" style="margin-bottom:0"><span><strong>✨ Escreva o carro em uma frase</strong></span>
+          <textarea name="frase" rows="2" maxlength="300" placeholder="Ex.: Fox 1.6 2013 iTrend completo 41 e 900"></textarea></label>
+        <button type="button" id="preencher-ia">Preencher com IA</button>
+      </div>
       <label class="campo"><span>Modelo (letra grande)</span><input name="modelo" maxlength="30"></label>
       <label class="campo"><span>Versão</span><input name="versao" maxlength="40" placeholder="Ex.: LS"></label>
       <label class="campo"><span>Ano</span><input name="ano" maxlength="12" placeholder="Ex.: 2015 ou 2014/2015"></label>
       <label class="campo"><span>Faixa de destaque</span>
         <select name="destaque_opcao">
           <option value="">Sem faixa</option>
-          <option>Único dono</option><option>Segundo dono</option><option>Cautelar aprovada</option><option>Baixa km</option>
+          <option>Completo</option><option>Único dono</option><option>Segundo dono</option><option>Cautelar aprovada</option><option>Baixa km</option>
           <option>Aceita troca</option><option>Financiamos</option><option>Revisado</option><option>Pneus novos</option>
           <option value="outro">Outro (escrever)</option>
         </select>
       </label>
       <label class="campo" id="campo-destaque-outro" hidden><span>Texto da faixa</span><input name="destaque_outro" maxlength="40"></label>
+      <label class="campo"><span>Segunda faixa (opcional, menor)</span><input name="destaque2" maxlength="40" placeholder="Ex.: Com central multimídia"></label>
       <label class="campo"><span>Preço</span><input name="preco" inputmode="decimal" placeholder="Ex.: 46.900 (em branco: Consulte)"></label>
-      <div class="campo"><span>Opcionais com ícone (até 4)</span></div>
+      <div class="campo"><span>Opcionais com ícone (até 5)</span></div>
       <div class="opcionais" id="opcionais"></div>
       <div class="aviso" id="aviso"></div>
       <div class="acoes">

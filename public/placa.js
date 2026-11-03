@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const id = Number(new URLSearchParams(location.search).get('id'));
 const form = $('form');
-const MAX_OPCIONAIS = 4;
+const MAX_OPCIONAIS = 5;
 let loja = {};
 
 // Ícones simples em preto, desenhados em SVG (imprimem nítidos em qualquer impressora)
@@ -80,6 +80,7 @@ function ler() {
     versao: e.versao.value.trim(),
     ano: e.ano.value.trim(),
     destaque,
+    destaque2: e.destaque2.value.trim(),
     preco: paraCentavos(e.preco.value),
     opcionais: [...form.querySelectorAll('[name=opcional]:checked')].map(c => c.value),
   };
@@ -108,10 +109,11 @@ function desenhar() {
     ${d.versao ? `<div class="versao"><span id="t-versao">${esc(d.versao)}</span></div>` : ''}
     ${d.ano ? `<div class="ano">${esc(d.ano)}</div>` : ''}
     ${d.destaque ? `<div class="destaque" id="t-destaque">${esc(d.destaque)}</div>` : ''}
+    ${d.destaque2 ? `<div class="destaque segunda" id="t-destaque2">${esc(d.destaque2)}</div>` : ''}
     <div class="preco ${d.preco === null ? 'consulta' : ''}">${d.preco === null
       ? '<span class="valor">CONSULTE</span>'
       : `<span class="rs">R$</span><span class="valor">${inteiro}</span><span class="cent">,${cent}</span>`}</div>
-    <div class="opc">${d.opcionais.map(o => `<div class="item">${icone(o)}<span>${esc(o)}</span></div>`).join('')}</div>
+    <div class="opc ${d.opcionais.length > 4 ? 'muitos' : ''}">${d.opcionais.map(o => `<div class="item">${icone(o)}<span>${esc(o)}</span></div>`).join('')}</div>
     <div class="linha"></div>
     <div class="contatos">
       <div class="contato">${TELEFONE}<span>${formatarFone(loja.telefone)}</span></div>
@@ -120,9 +122,12 @@ function desenhar() {
     </div>
     <div class="linha"></div>
     <div class="endereco">${PINO}<span>${endereco.map(esc).join('<br>')}</span></div>`;
-  caber($('t-modelo'), 60);
-  if ($('t-versao')) caber($('t-versao'), 15);
-  if ($('t-destaque')) caber($('t-destaque'), 15);
+  const cheia = Boolean(d.destaque2) || d.opcionais.length > 4;
+  $('folha').classList.toggle('cheia', cheia);
+  caber($('t-modelo'), cheia ? 52 : 60);
+  if ($('t-versao')) caber($('t-versao'), cheia ? 12 : 15);
+  if ($('t-destaque')) caber($('t-destaque'), cheia ? 12 : 15);
+  if ($('t-destaque2')) caber($('t-destaque2'), 10);
   ajustarEscala();
 }
 
@@ -146,9 +151,43 @@ async function salvar() {
   await api('PUT', `/veiculos/${id}/placa`, dados);
 }
 
+let listaOpcionais = [];
+
+// Coloca os dados (salvos, sugeridos ou vindos da IA) nos campos do formulário
+function preencherCampos(s) {
+  const e = form.elements;
+  e.modelo.value = s.modelo || '';
+  e.versao.value = s.versao || '';
+  e.ano.value = s.ano || '';
+  const conhecido = [...e.destaque_opcao.options].find(o => o.value.toLowerCase() === String(s.destaque || '').toLowerCase());
+  e.destaque_opcao.value = !s.destaque ? '' : conhecido ? conhecido.value : 'outro';
+  e.destaque_outro.value = conhecido ? '' : s.destaque || '';
+  $('campo-destaque-outro').hidden = e.destaque_opcao.value !== 'outro';
+  e.destaque2.value = s.destaque2 || '';
+  e.preco.value = s.preco == null ? '' : (s.preco / 100).toLocaleString('pt-BR');
+  listaOpcionais = [...new Set([...listaOpcionais, ...(s.opcionais || [])])];
+  $('opcionais').innerHTML = listaOpcionais.map(o => `<label><input type="checkbox" name="opcional" value="${esc(o)}" ${s.opcionais?.includes(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('');
+}
+
+async function preencherComIA() {
+  const frase = form.elements.frase.value.trim();
+  if (!frase) { aviso('Escreva o carro em uma frase. Ex.: Fox 1.6 2013 iTrend completo 41 e 900', true); return; }
+  const botao = $('preencher-ia');
+  botao.disabled = true; botao.textContent = 'Preenchendo…';
+  try {
+    preencherCampos(await api('POST', '/placa/interpretar', { frase }));
+    desenhar();
+    aviso('Placa preenchida. Confira e imprima.');
+  } catch (e) {
+    aviso(e.message, true);
+  } finally {
+    botao.disabled = false; botao.textContent = 'Preencher com IA';
+  }
+}
+
 async function iniciar() {
   if (!Number.isInteger(id) || id <= 0) { aviso('Carro não informado.', true); return; }
-  const [info, opcoes] = await Promise.all([api('GET', `/veiculos/${id}/placa`), api('GET', '/site/descricao/opcoes').catch(() => ({ acessorios: [] }))]);
+  const [info, opcoesPlaca] = await Promise.all([api('GET', `/veiculos/${id}/placa`), api('GET', '/placa/opcionais').catch(() => [])]);
   loja = info.loja;
   const v = info.veiculo;
   $('carro').textContent = `${v.marca_modelo}${v.ano_fab || v.ano_mod ? ' · ' + [v.ano_fab, v.ano_mod].filter(Boolean).join('/') : ''}`;
@@ -161,17 +200,8 @@ async function iniciar() {
     preco: info.anuncio?.preco ?? v.valor_consignacao ?? null,
     opcionais: (info.anuncio?.opcionais || []).slice(0, MAX_OPCIONAIS),
   };
-  const e = form.elements;
-  e.modelo.value = s.modelo || '';
-  e.versao.value = s.versao || '';
-  e.ano.value = s.ano || '';
-  const conhecido = [...e.destaque_opcao.options].some(o => o.value === s.destaque);
-  e.destaque_opcao.value = !s.destaque ? '' : conhecido ? s.destaque : 'outro';
-  e.destaque_outro.value = conhecido ? '' : s.destaque || '';
-  $('campo-destaque-outro').hidden = e.destaque_opcao.value !== 'outro';
-  e.preco.value = s.preco == null ? '' : (s.preco / 100).toLocaleString('pt-BR');
-  const lista = [...new Set([...(opcoes.acessorios || []), 'Câmbio automático', 'Completo', ...(s.opcionais || [])])];
-  $('opcionais').innerHTML = lista.map(o => `<label><input type="checkbox" name="opcional" value="${esc(o)}" ${s.opcionais?.includes(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('');
+  listaOpcionais = [...new Set([...opcoesPlaca, ...(s.opcionais || [])])];
+  preencherCampos(s);
   document.title = `Placa ${s.modelo || v.marca_modelo} - Corrêa Veículos`;
   if (document.fonts) await document.fonts.ready;
   desenhar();
@@ -186,6 +216,8 @@ form.addEventListener('change', e => {
   }
   desenhar();
 });
+$('preencher-ia').onclick = preencherComIA;
+form.elements.frase.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); preencherComIA(); } });
 $('salvar').onclick = async () => {
   try { await salvar(); aviso('Placa salva.'); } catch (e) { aviso(e.message, true); }
 };
