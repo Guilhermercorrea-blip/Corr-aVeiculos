@@ -35,6 +35,8 @@ Facebook e Instagram aparecem logo abaixo da navegação na página inicial e ta
 
 ## Executar no computador
 
+A descrição com IA alterna abordagens de escrita e evita as oito últimas aberturas geradas pelo serviço. Se a abertura se repetir, faz no máximo uma tentativa adicional. O histórico é temporário e reinicia com o serviço; os fatos do veículo continuam restritos aos dados informados pela equipe.
+
 Requer Node.js 24 e as dependências do `package-lock.json`.
 
 ```sh
