@@ -1,38 +1,57 @@
 'use strict';
+// Sorteia uma "direção" diferente para cada descrição gerada pela IA (tom, abertura, formato e emojis),
+// sem repetir as últimas usadas, e evita aberturas parecidas com as recentes.
 const { randomInt } = require('node:crypto');
-const ABORDAGENS = [
-  'Abra apresentando o modelo e convidando o leitor a conhecer esta unidade, com uma frase original.',
-  'Abra com uma pergunta curta que convide o leitor a conhecer o modelo, sem supor como ele usa o carro.',
-  'Abra destacando um acessório informado pela equipe. Se nenhum foi informado, apresente o modelo de forma direta.',
-  'Abra com um destaque confirmado pela equipe. Se não houver, convide para conferir os dados do veículo.',
-  'Abra com uma apresentação curta e objetiva do veículo, sem slogan ou adjetivos genéricos.',
-  'Abra com um convite para conhecer o veículo na loja, mencionando o modelo naturalmente.',
-  'Abra combinando o nome do modelo e um dado concreto informado, em uma frase fluida.',
-  'Abra com uma chamada breve de conversa, sem clichês, e apresente o veículo logo em seguida.',
-  'Abra usando o ano e o modelo, se o ano foi informado. Varie a construção da frase.',
-  'Abra com uma frase curta que desperte curiosidade pelos detalhes informados, sem promessas ou superlativos.',
+const TONS = [
+  'Tom de vendedor animado e simpático, com entusiasmo genuíno, como quem mostra o carro no pátio.',
+  'Tom de conversa entre amigos: leve, bem-humorado e próximo, com uma brincadeira sutil.',
+  'Tom direto e confiante, para quem já sabe o que quer: frases curtas, nada de enrolação.',
+  'Tom que conta uma pequena cena do dia a dia que o carro resolve (trabalho, família, viagem, cidade), sem inventar fatos do carro.',
+  'Tom de oportunidade: senso de urgência leve e elegante, sem exagero nem promessa de preço.',
+  'Tom caprichado e acolhedor, valorizando o cuidado da loja ao escolher cada veículo, sem afirmar fatos não informados.',
+  'Tom regional e caloroso, falando com quem é de Barra Bonita e região.',
 ];
-const ESTRUTURAS = [
-  'Após a abertura, apresente o veículo em um parágrafo curto e organize os dados confirmados em uma lista.',
-  'Após a abertura, dê prioridade aos dados principais e depois aos acessórios e destaques confirmados.',
-  'Após a abertura, escreva uma apresentação de uma ou duas frases; agrupe os detalhes confirmados em tópicos curtos.',
+const ABERTURAS = [
+  'Abra com uma pergunta curta e instigante.',
+  'Abra com uma frase de impacto de até 8 palavras.',
+  'Abra destacando o item mais interessante entre os informados.',
+  'Abra com o nome do modelo e o ano de um jeito criativo.',
+  'Abra com uma exclamação que chame a atenção no feed.',
+  'Abra pintando uma cena rápida (ex.: estrada, trânsito, fim de semana) e traga o carro logo em seguida.',
+  'Abra com um "Procurando..." ou "Se você quer..." falando direto com quem busca esse tipo de veículo.',
+  'Abra com um destaque confirmado pela equipe; se não houver, use o tipo de veículo.',
 ];
+const FORMATOS = [
+  'Formato: um parágrafo curto e depois os itens em lista com um emoji por linha.',
+  'Formato: dois parágrafos corridos, sem lista, com os itens citados dentro do texto.',
+  'Formato: frases curtas em linhas separadas, ritmo rápido, estilo post de rede social.',
+  'Formato: um bloco "Destaques" em lista e um fechamento de uma linha.',
+];
+const EMOJIS = ['Use poucos emojis (2 a 3).', 'Use emojis com vontade, um por linha de item.', 'Use emojis moderadamente (4 a 6).'];
+
 const abertura = texto => String(texto).trim().split(/\n|(?<=[.!?])\s/)[0].slice(0,220).trim();
-const assinatura = texto => abertura(texto).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').trim().split(/\s+/).slice(0,8).join(' ');
+const assinatura = texto => abertura(texto).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').trim().split(/\s+/).slice(0,8).join(' ');
+
 function criarVariacoes({ sortear = randomInt } = {}) {
-  const recentes = [], usadas = []; let estruturaAnterior = -1;
+  const recentes = [];
+  // Para cada lista, guarda os últimos índices usados para não repetir em sequência
+  const memoria = new Map();
+  function escolher(nome, lista, guardar) {
+    const usados = memoria.get(nome) || [];
+    const livres = lista.map((_, i) => i).filter(i => !usados.includes(i));
+    const i = livres[sortear(livres.length)];
+    memoria.set(nome, [...usados, i].slice(-guardar));
+    return lista[i];
+  }
   function preparar() {
-    const disponiveis = ABORDAGENS.map((_,i) => i).filter(i => !usadas.includes(i));
-    const indice = disponiveis[sortear(disponiveis.length)]; usadas.push(indice); if (usadas.length > 3) usadas.shift();
-    const estruturas = ESTRUTURAS.map((_,i) => i).filter(i => i !== estruturaAnterior);
-    estruturaAnterior = estruturas[sortear(estruturas.length)];
-    return `Direção editorial desta geração (não copie estas instruções na resposta):\n${ABORDAGENS[indice]}\n${ESTRUTURAS[estruturaAnterior]}\nUse apenas os fatos disponíveis, mesmo quando o estilo sugerido mencionar um dado ausente. Escreva uma abertura nova; não use uma frase pronta recorrente.${recentes.length ? '\nAberturas recentes a evitar, inclusive pequenas variações:\n' + recentes.map(s => '- ' + s).join('\n') : ''}`;
+    const direcao = [escolher('tom', TONS, 3), escolher('abertura', ABERTURAS, 3), escolher('formato', FORMATOS, 1), escolher('emoji', EMOJIS, 1)];
+    return `Direção editorial desta geração (siga, mas não copie estas instruções na resposta):\n${direcao.join('\n')}\nUse apenas os fatos disponíveis, mesmo quando a direção mencionar um dado ausente. Crie uma primeira linha nova; nada de frase pronta.${recentes.length ? '\nAberturas recentes a evitar, inclusive pequenas variações:\n' + recentes.map(s => '- ' + s).join('\n') : ''}`;
   }
   function repetida(texto) {
     const chave = assinatura(texto);
     return !chave || chave.startsWith('conforto desempenho e procedencia em um so carro') || recentes.some(s => assinatura(s) === chave);
   }
-  function registrar(texto) { recentes.push(abertura(texto)); if (recentes.length > 8) recentes.shift(); }
+  function registrar(texto) { recentes.push(abertura(texto)); if (recentes.length > 12) recentes.shift(); }
   return { preparar, repetida, registrar };
 }
 module.exports = { criarVariacoes };

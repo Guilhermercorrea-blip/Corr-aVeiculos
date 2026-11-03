@@ -6,9 +6,9 @@ const { criarVariacoes } = require('../descricao-variacoes');
 test('estilos alternam e o histórico de aberturas é limitado', () => {
   const v = criarVariacoes({sortear: () => 0}); let anterior;
   for(let i=0;i<20;i++) { const pedido=v.preparar(); assert.notEqual(pedido,anterior); anterior=pedido; }
-  for(let i=0;i<10;i++) v.registrar(`Apresentação número ${i}: conheça os detalhes.`);
-  assert.equal(v.repetida('APRESENTAÇÃO NÚMERO 9: conheça os detalhes.'),true);
-  assert.equal(v.repetida('Apresentação número 0: conheça os detalhes.'),false);
+  for(let i=0;i<14;i++) v.registrar(`Apresentação número ${i}: conheça os detalhes.`);
+  assert.equal(v.repetida('APRESENTAÇÃO NÚMERO 13: conheça os detalhes.'),true);
+  assert.equal(v.repetida('Apresentação número 1: conheça os detalhes.'),false);
   assert.equal(v.repetida('🔥 Conforto, desempenho e procedência em um só carro!'),true);
 });
 function gerador(respostas) {
