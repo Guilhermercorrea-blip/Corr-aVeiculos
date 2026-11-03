@@ -21,14 +21,21 @@ const ABERTURAS = [
   'Abra com um "Procurando..." ou "Se você quer..." falando direto com quem busca esse tipo de veículo.',
   'Abra com um destaque confirmado pela equipe; se não houver, use o tipo de veículo.',
 ];
+// Formatos no modelo de anúncio que a loja já usa: blocos com ícone na frente de cada linha,
+// títulos de seção em MAIÚSCULAS e uma frase final de destaque.
 const FORMATOS = [
-  'Formato: um parágrafo curto e depois os itens em lista com um emoji por linha.',
-  'Formato: dois parágrafos corridos, sem lista, com os itens citados dentro do texto.',
-  'Formato: frases curtas em linhas separadas, ritmo rápido, estilo post de rede social.',
-  'Formato: um bloco "Destaques" em lista e um fechamento de uma linha.',
+  'Formato vitrine: abertura de 1 ou 2 linhas; bloco dos dados principais com um ícone de check na frente de cada linha; seção com título em MAIÚSCULAS (ex.: "🔹 ACESSÓRIOS E CONFORTO:") listando cada acessório com "✔️"; frase final em MAIÚSCULAS com um ícone de troféu ou estrela.',
+  'Formato vitrine em blocos: abertura curta; seção "DESTAQUES" e seção "ACESSÓRIOS", cada título em MAIÚSCULAS com um ícone; um item por linha com ícone na frente; fechamento com chamada para a ação.',
+  'Formato vitrine compacto: abertura de impacto; uma lista única com um ícone diferente e temático por linha (ano, km, câmbio, cada acessório); frase final em MAIÚSCULAS.',
+  'Formato vitrine com benefícios: abertura curta; lista de itens com check na frente, cada um seguido de um benefício curto depois de um travessão; seção final em MAIÚSCULAS chamando para a loja.',
 ];
-const EMOJIS = ['Use poucos emojis (2 a 3).', 'Use emojis com vontade, um por linha de item.', 'Use emojis moderadamente (4 a 6).'];
-
+const ICONES = [
+  'Ícones desta vez: ✅ para os itens, 🔹 nos títulos, 🏆 no fechamento.',
+  'Ícones desta vez: 🔥 nos destaques, ✔️ nos itens, 🚀 no fechamento.',
+  'Ícones desta vez: ⭐ nos destaques, ✅ nos itens, 💎 no fechamento.',
+  'Ícones desta vez: ✈️ ou 🛣️ para viagem/estrada, ✅ nos itens, 📲 no fechamento.',
+  'Ícones desta vez: temáticos por item (❄️ ar-condicionado, 📷 câmera, 🔒 travas/alarme, 🎵 multimídia, 🛞 rodas), ✔️ no resto, 🏁 no fechamento.',
+];
 const abertura = texto => String(texto).trim().split(/\n|(?<=[.!?])\s/)[0].slice(0,220).trim();
 const assinatura = texto => abertura(texto).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').trim().split(/\s+/).slice(0,8).join(' ');
 
@@ -44,7 +51,7 @@ function criarVariacoes({ sortear = randomInt } = {}) {
     return lista[i];
   }
   function preparar() {
-    const direcao = [escolher('tom', TONS, 3), escolher('abertura', ABERTURAS, 3), escolher('formato', FORMATOS, 1), escolher('emoji', EMOJIS, 1)];
+    const direcao = [escolher('tom', TONS, 3), escolher('abertura', ABERTURAS, 3), escolher('formato', FORMATOS, 1), escolher('icones', ICONES, 2)];
     return `Direção editorial desta geração (siga, mas não copie estas instruções na resposta):\n${direcao.join('\n')}\nUse apenas os fatos disponíveis, mesmo quando a direção mencionar um dado ausente. Crie uma primeira linha nova; nada de frase pronta.${recentes.length ? '\nAberturas recentes a evitar, inclusive pequenas variações:\n' + recentes.map(s => '- ' + s).join('\n') : ''}`;
   }
   function repetida(texto) {
