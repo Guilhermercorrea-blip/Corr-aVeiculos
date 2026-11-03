@@ -17,6 +17,7 @@ const descricao = require('./descricao');
 const placa = require('./placa');
 const redesSociais = require('./redes-sociais');
 const redesMeta = require('./redes-meta');
+const galeriaLoja = require('./galeria-loja');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -37,6 +38,7 @@ const PAGINAS_LIVRES = new Set(['/', '/loja.html', '/loja.css', '/loja.js', '/lo
 const API_LIVRE = [
   ['GET', /^\/api\/publico\/catalogo$/],
   ['GET', /^\/api\/publico\/carros\/\d+$/],
+  ['GET', /^\/api\/publico\/loja-fotos$/],
   ['POST', /^\/api\/login$/],
   ['GET', /^\/api\/redefinir-senha\/[\w-]+$/],
   ['POST', /^\/api\/redefinir-senha$/],
@@ -51,7 +53,7 @@ const API_LIVRE = [
 
 function acessoLivre(metodo, caminho) {
   if (caminho.startsWith('/api/')) return API_LIVRE.some(([m, re]) => m === metodo && re.test(caminho));
-  return PAGINAS_LIVRES.has(caminho) || caminho.startsWith('/img/') || /^\/carro\/\d+$/.test(caminho) || /^\/midia\/anuncios\/\d+\/\d+$/.test(caminho);
+  return PAGINAS_LIVRES.has(caminho) || caminho.startsWith('/img/') || /^\/carro\/\d+$/.test(caminho) || /^\/midia\/anuncios\/\d+\/\d+$/.test(caminho) || /^\/midia\/loja\/\d+$/.test(caminho);
 }
 
 const rotas = [];
@@ -115,6 +117,14 @@ rota('PUT', '/api/minha-senha', (p, q, corpo, ctx) => auth.trocarSenha(ctx.usuar
 
 // A API pública tem sua própria lista de campos; nunca reutilizar a API financeira aqui.
 rota('GET', '/api/publico/catalogo', () => anuncios.catalogo());
+rota('GET', '/api/publico/loja-fotos', () => galeriaLoja.listar());
+// Galeria de fotos da loja (área da equipe)
+rota('GET', '/api/site/loja-fotos', () => galeriaLoja.listar());
+rota('POST', '/api/site/loja-fotos', (p, q, corpo) => galeriaLoja.adicionar({
+  conteudo: Buffer.from(String(corpo.base64 || ''), 'base64'), tipoMime: corpo.tipo_mime, nomeOriginal: corpo.nome,
+}));
+rota('PUT', '/api/site/loja-fotos/ordem', (p, q, corpo) => galeriaLoja.ordenar(corpo.ids));
+rota('DELETE', '/api/site/loja-fotos/:id', p => galeriaLoja.remover(p.id));
 rota('GET', '/api/publico/carros/:id', p => anuncios.anuncioPublico(p.id));
 rota('GET', '/api/site/anuncios', () => anuncios.listarAnuncios());
 rota('PUT', '/api/site/anuncios/:id', (p, q, corpo) => anuncios.salvarAnuncio(p.id, corpo));
@@ -352,7 +362,7 @@ function estatico(res, url) {
 
 function enviarAnexo(res, id, veiculoPublico = null) {
   let anexo;
-  try { anexo = veiculoPublico === null ? db.obterAnexo(id) : anuncios.fotoPublica(veiculoPublico, id); }
+  try { anexo = veiculoPublico === 'loja' ? galeriaLoja.fotoPublica(id) : veiculoPublico === null ? db.obterAnexo(id) : anuncios.fotoPublica(veiculoPublico, id); }
   catch { res.writeHead(404, { 'Cache-Control': 'no-store' }); return res.end('Anexo não encontrado'); }
   fs.readFile(anexo.caminho, (err, conteudo) => {
     if (err) { res.writeHead(404); return res.end('Arquivo não encontrado'); }
@@ -400,6 +410,8 @@ http.createServer((req, res) => {
   }
   const fotoPublica = req.method === 'GET' && url.pathname.match(/^\/midia\/anuncios\/(\d+)\/(\d+)$/);
   if (fotoPublica) return enviarAnexo(res, Number(fotoPublica[2]), Number(fotoPublica[1]));
+  const fotoLoja = req.method === 'GET' && url.pathname.match(/^\/midia\/loja\/(\d+)$/);
+  if (fotoLoja) return enviarAnexo(res, Number(fotoLoja[1]), 'loja');
 
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));

@@ -427,7 +427,37 @@ $('form-estoque').onsubmit = async e => {
 };
 $('busca-anuncio').addEventListener('input', lista);
 $('filtro-anuncios').addEventListener('change', lista);
-$('abrir-config').onclick = () => { $('config-site').hidden = !$('config-site').hidden; };
+$('abrir-config').onclick = () => { $('config-site').hidden = !$('config-site').hidden; if (!$('config-site').hidden) carregarFotosLoja(); };
+// ---------- Fotos da loja (galeria do Como chegar) ----------
+function mostrarFotosLoja(fotos) {
+  const caixa = $('fotos-loja');
+  caixa.innerHTML = fotos.length ? fotos.map((f, i) => `<figure><img src="${esc(f.url)}" alt="Foto ${i + 1} da loja" loading="lazy"><figcaption>
+    <span><button type="button" class="secundario" data-mover="-1" data-foto="${f.id}" ${i === 0 ? 'disabled' : ''} aria-label="Mover para a esquerda">←</button>
+    <button type="button" class="secundario" data-mover="1" data-foto="${f.id}" ${i === fotos.length - 1 ? 'disabled' : ''} aria-label="Mover para a direita">→</button></span>
+    <button type="button" class="perigo" data-remover="${f.id}" aria-label="Remover foto">Remover</button></figcaption></figure>`).join('')
+    : '<p class="nota-editor">Nenhuma foto ainda. Adicione fotos da fachada, do pátio e do atendimento.</p>';
+  caixa.querySelectorAll('[data-mover]').forEach(b => b.onclick = async () => {
+    const ids = fotos.map(f => f.id), i = ids.indexOf(Number(b.dataset.foto)), j = i + Number(b.dataset.mover);
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    try { mostrarFotosLoja(await api('PUT', '/loja-fotos/ordem', { ids })); } catch (e) { aviso(e.message, true); }
+  });
+  caixa.querySelectorAll('[data-remover]').forEach(b => b.onclick = async () => {
+    if (!confirm('Remover esta foto do site?')) return;
+    try { mostrarFotosLoja(await api('DELETE', '/loja-fotos/' + b.dataset.remover)); aviso('Foto removida do site.'); } catch (e) { aviso(e.message, true); }
+  });
+}
+async function carregarFotosLoja() {
+  try { mostrarFotosLoja(await api('GET', '/loja-fotos')); } catch (e) { $('fotos-loja').textContent = e.message; }
+}
+$('enviar-fotos-loja').onchange = async e => {
+  const arquivos = [...e.target.files]; e.target.value = '';
+  let fotos = null;
+  for (const [i, arquivo] of arquivos.entries()) {
+    aviso(`Enviando foto ${i + 1} de ${arquivos.length}…`);
+    try { fotos = await api('POST', '/loja-fotos', await prepararFoto(arquivo)); } catch (erro) { aviso(erro.message, true); break; }
+  }
+  if (fotos) { mostrarFotosLoja(fotos); aviso('Fotos da loja atualizadas no site.'); }
+};
 $('fechar-config').onclick = () => { $('config-site').hidden = true; };
 $('form-config').onsubmit = async e => {
   e.preventDefault(); if (!$('form-config').reportValidity()) return;

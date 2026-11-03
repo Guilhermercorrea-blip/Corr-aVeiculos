@@ -194,3 +194,13 @@ body.editando-anuncio { overflow: hidden; }
 .redes-postar { display: grid; gap: 8px; margin-top: 10px; }
 .redes-postar small { display: block; color: var(--texto-suave, #5f6670); }
 .redes-postar .erro-rede { color: #b42318; }
+
+/* Galeria de fotos da loja (Dados do site) */
+.galeria-admin { border-top: 1px solid var(--borda, #dce2e7); margin-top: 18px; padding-top: 16px; }
+.galeria-admin h3 { margin: 0 0 4px; }
+.fotos-loja { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.fotos-loja figure { margin: 0; border: 1px solid var(--borda, #dce2e7); border-radius: 8px; overflow: hidden; background: #fff; }
+.fotos-loja img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.fotos-loja figcaption { display: flex; gap: 4px; padding: 6px; justify-content: space-between; align-items: center; font-size: .8rem; }
+.fotos-loja figcaption button { padding: 4px 9px; min-height: 0; font-size: .85rem; }
+.enviar-fotos-loja { cursor: pointer; display: inline-flex; }

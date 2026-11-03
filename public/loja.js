@@ -34,7 +34,37 @@ function preencherLoja(dados) {
     for (const id of [rede, rede + '-inicio']) { el(id).hidden = !valido; if (valido) el(id).href = url.href; }
   }
   document.querySelector('.redes-inicio').hidden = el('facebook-inicio').hidden && el('instagram-inicio').hidden;
-  if (loja.endereco) { el('mapa').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${loja.nome}, ${loja.endereco}, ${loja.cidade}`); el('mapa').hidden = false; }
+  if (loja.endereco) {
+    const local = `${loja.nome}, ${loja.endereco}, ${loja.cidade}`;
+    el('mapa').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(local);
+    el('mapa-google').src = 'https://maps.google.com/maps?q=' + encodeURIComponent(local) + '&z=16&output=embed';
+    el('endereco-chegar').textContent = [loja.endereco, loja.cidade].filter(Boolean).join(' – ');
+    el('como-chegar').hidden = false;
+  }
+}
+
+// Galeria da loja: passa sozinha a cada 5 segundos, e a pessoa pode arrastar ou usar as setas
+async function carregarGaleria() {
+  let fotos = [];
+  try { const r = await fetch('/api/publico/loja-fotos'); if (r.ok) fotos = await r.json(); } catch {}
+  if (!fotos.length) { document.querySelector('.chegar-grid').classList.add('sem-fotos'); return; }
+  const trilho = el('galeria-trilho'), pontos = el('galeria-pontos');
+  trilho.innerHTML = fotos.map((f, i) => `<img src="${esc(f.url)}" alt="Foto ${i + 1} da ${esc(loja.nome || 'loja')}" loading="lazy">`).join('');
+  pontos.innerHTML = fotos.length > 1 ? fotos.map((_, i) => `<button type="button" aria-label="Ver foto ${i + 1}"></button>`).join('') : '';
+  for (const id of ['galeria-anterior', 'galeria-proxima']) el(id).hidden = fotos.length < 2;
+  el('galeria').hidden = false;
+  const atual = () => Math.round(trilho.scrollLeft / Math.max(1, trilho.clientWidth));
+  const ir = i => trilho.scrollTo({ left: ((i + fotos.length) % fotos.length) * trilho.clientWidth });
+  const marcar = () => [...pontos.children].forEach((b, i) => b.setAttribute('aria-current', String(i === atual())));
+  let timer;
+  const automatico = () => { clearInterval(timer); if (fotos.length > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches) timer = setInterval(() => ir(atual() + 1), 5000); };
+  el('galeria-anterior').onclick = () => { ir(atual() - 1); automatico(); };
+  el('galeria-proxima').onclick = () => { ir(atual() + 1); automatico(); };
+  [...pontos.children].forEach((b, i) => { b.onclick = () => { ir(i); automatico(); }; });
+  trilho.addEventListener('scroll', () => requestAnimationFrame(marcar), { passive: true });
+  trilho.addEventListener('pointerdown', automatico);
+  trilho.addEventListener('keydown', e => { if (e.key === 'ArrowRight') el('galeria-proxima').click(); if (e.key === 'ArrowLeft') el('galeria-anterior').click(); });
+  marcar(); automatico();
 }
 function imagem(foto, titulo, classe = '') {
   return foto ? `<img class="${classe}" src="${esc(foto.url)}" alt="${esc(titulo)}" loading="lazy" data-foto>` : '<span class="falha-foto">Fotos em breve</span>';
@@ -81,6 +111,7 @@ async function carregar() {
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(resposta.status === 404 ? 'Este anúncio não está mais disponível. Confira os outros carros da loja.' : 'Não foi possível carregar os carros agora. Tente novamente em instantes.');
     preencherLoja(dados.loja);
+    carregarGaleria();
     document.title = id ? document.title : `${loja.nome} | Encontre seu próximo carro`;
     if (id) return detalhe(dados.carro);
     carros = dados.carros; renderizar();
