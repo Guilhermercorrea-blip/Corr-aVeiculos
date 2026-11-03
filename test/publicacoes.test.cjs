@@ -73,7 +73,10 @@ async function main() {
   let cookie = '';
   const req = (metodo, url, corpo, logado = true) => fetch(base + url, { method: metodo, redirect: 'manual', headers: { ...(logado ? { Cookie: cookie } : {}), ...(corpo !== undefined ? { 'Content-Type': 'application/json' } : {}) }, body: corpo !== undefined ? JSON.stringify(corpo) : undefined });
   for (const [m, url, corpo] of [['GET', '/api/site/publicacoes'], ['POST', '/api/site/publicacoes', {}], ['PUT', '/api/site/publicacoes/1', {}], ['POST', '/api/site/publicacoes/1/fotos', {}], ['POST', '/api/site/publicacoes/1/retirar', {}], ['GET', '/api/site/estoque']]) ok((await req(m, url, corpo, false)).status === 401, 'Login obrigatório em ' + url);
+  ok((await req('POST','/api/site/redes/previa',{titulo:'Teste'},false)).status === 401,'Prévia de redes exige login');
   let r = await req('POST', '/api/login', { usuario: 'teste-publicacoes', senha: 'TesteLocal123' }, false); cookie = r.headers.get('set-cookie').split(';')[0];
+  r = await req('POST','/api/site/redes/previa',{titulo:'Anúncio fictício',preco:5990050});
+  ok(r.status === 200 && (await r.json()).texto.includes('WhatsApp: (14) 99629-7483'),'Prévia devolve o rodapé escolhido sem publicar');
   r = await req('POST', '/api/site/publicacoes', { tipo_veiculo: 'Motocicleta', fabricante: 'Honda', modelo: 'CG 160', preco: 3590000, cambio: 'Manual' });
   ok(r.status === 200, 'Cadastro por API'); const cadastro = await r.json();
   r = await req('POST', `/api/site/publicacoes/${cadastro.id}/fotos`, { nome: 'Foto API.jpg', tipo_mime: 'image/jpeg', base64: imagem.toString('base64') });

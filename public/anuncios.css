@@ -185,3 +185,7 @@ body.editando-anuncio { overflow: hidden; }
 .ia-descricao h4 { margin: 14px 0 0; font-size: .85rem; }
 .ia-descricao > .campo, .ia-descricao > button { margin-top: 12px; }
 .ia-descricao > button { width: 100%; }
+.previa-redes { border-top: 1px solid var(--borda); padding-block: 10px; margin-bottom: 16px; }
+.previa-redes > button { width: 100%; font-size: .8rem; padding: 12px; }
+#dialog-redes { max-width: 720px; }
+#texto-redes { font: .9rem/1.65 system-ui,sans-serif; width: 100%; resize: vertical; background: #f8fafc; }

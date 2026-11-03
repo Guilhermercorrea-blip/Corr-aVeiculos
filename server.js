@@ -15,6 +15,7 @@ const publicacoes = require('./publicacoes');
 const enviosAnuncios = require('./envios-anuncios');
 const descricao = require('./descricao');
 const placa = require('./placa');
+const redesSociais = require('./redes-sociais');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -129,6 +130,7 @@ rota('POST', '/api/site/publicacoes/:id/fotos', (p, q, corpo) => publicacoes.adi
 }));
 rota('GET', '/api/site/descricao/opcoes', () => ({ acessorios: descricao.ACESSORIOS, destaques: descricao.DESTAQUES }));
 rota('POST', '/api/site/descricao', (p, q, corpo) => descricao.gerarDescricao(corpo));
+rota('POST', '/api/site/redes/previa', (p, q, corpo) => redesSociais.montarPublicacao(corpo));
 rota('GET', '/api/site/estoque', () => publicacoes.estoque());
 rota('GET', '/api/site/estoque/:id', p => publicacoes.dadosEstoque(p.id));
 rota('POST', '/api/site/publicacoes/:id/celular', p => {

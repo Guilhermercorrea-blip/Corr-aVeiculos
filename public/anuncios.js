@@ -103,6 +103,7 @@ function editor(p) {
             ${campo('titulo', 'Título personalizado (opcional)', p.titulo === automatico ? '' : p.titulo, 'maxlength="140" placeholder="Usa fabricante, modelo e versão"')}
             <label class="opcao-publicacao"><input type="checkbox" name="destaque" ${p.destaque ? 'checked' : ''}><span>Destacar este veículo<small>Aparece primeiro na vitrine da loja.</small></span></label>
             <div id="resumo-publicacao" class="aviso-publicacao"></div>
+            <div class="previa-redes"><h3>Facebook e Instagram</h3><p class="nota-editor">Confira o texto com valor, endereço e os contatos das publicações.</p><button type="button" id="previa-redes" class="secundario">Prévia para Facebook e Instagram</button><p class="nota-editor">O envio automático ainda depende da conexão das contas.</p></div>
             ${p.veiculo_id ? `<p class="nota-editor">Vinculado ao estoque. As alterações aqui valem apenas para o anúncio. <a href="/sistema#/carro/${p.veiculo_id}" target="_blank" rel="noopener">Abrir no sistema ↗</a></p>` : '<p class="nota-editor">Este cadastro é só para divulgação. Não cria uma compra, venda ou contrato.</p>'}
             ${p.id ? `<div class="acoes acoes-situacao">${p.visivel ? `<a class="botao-link secundario" href="/carro/${p.id}" target="_blank" rel="noopener">Ver no site ↗</a><button type="button" id="retirar" class="perigo">Retirar do site</button>` : ''}${!p.veiculo_id && p.situacao !== 'vendido' ? '<button type="button" id="marcar-vendido" class="secundario">Marcar como vendido</button>' : ''}${p.situacao === 'vendido' ? '<button type="button" id="voltar-rascunho" class="secundario">Voltar para rascunho</button>' : ''}</div>` : ''}
           </section>
@@ -137,6 +138,7 @@ function editor(p) {
   $('proxima-etapa').onclick = avancarEtapa;
   $('etapa-anterior').onclick = () => mostrarEtapa(etapa - 1);
   $('publicar-anuncio').onclick = () => gravar('publicado');
+  $('previa-redes').onclick = abrirPreviaRedes;
   $('aba-editar').onclick = () => alternarPrevia(false);
   $('aba-previa').onclick = () => alternarPrevia(true);
   $('retirar')?.addEventListener('click', retirar);
@@ -380,6 +382,23 @@ $('form-config').onsubmit = async e => {
   catch (erro) { aviso(erro.message, true); }
   finally { $('campos-config').disabled = false; }
 };
+async function abrirPreviaRedes() {
+  if (salvando) return;
+  const botao = $('previa-redes'); botao.disabled = true;
+  try {
+    const dados = dadosForm(atual.situacao); if (!dados) return;
+    const r = await api('POST','/redes/previa',dados);
+    const dialog = $('dialog-redes');
+    dialog.innerHTML = `<h2 id="titulo-redes">Publicação no Facebook e Instagram</h2><p class="nota-editor">${ordem.length} foto(s) selecionada(s). A primeira é a capa.</p><label class="campo"><span>Texto da publicação</span><textarea id="texto-redes" readonly rows="17">${esc(r.texto)}</textarea></label><p class="nota-editor">O WhatsApp deste rodapé é exclusivo das publicações. O envio automático ainda não está conectado.</p><div class="acoes-form"><button type="button" id="copiar-texto-redes">Copiar texto</button><button type="button" id="fechar-redes" class="secundario">Voltar</button></div><p id="status-redes" class="nota-editor" role="status" aria-live="polite"></p>`;
+    $('fechar-redes').onclick = () => dialog.close();
+    $('copiar-texto-redes').onclick = async () => {
+      try { await navigator.clipboard.writeText(r.texto); $('status-redes').textContent = 'Texto copiado.'; }
+      catch { $('texto-redes').focus(); $('texto-redes').select(); $('status-redes').textContent = 'Selecione e copie o texto.'; }
+    };
+    dialog.showModal();
+  } catch(e) { aviso(e.message,true); }
+  finally { botao.disabled = false; }
+}
 let envioCelularAnuncio = null, timerCelularAnuncio, encerrandoCelularAnuncio = false, abrindoCelularAnuncio = false;
 function incluirFotosCelular(envio) {
   if (!envioCelularAnuncio || atual?.id !== envioCelularAnuncio.id) return;

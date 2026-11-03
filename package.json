@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/anuncios.test.cjs test/pessoas.test.cjs test/publicacoes.test.cjs test/celular-anuncios.test.cjs test/descricao.test.cjs"
+    "test": "node --disable-warning=ExperimentalWarning --test test/anuncios.test.cjs test/pessoas.test.cjs test/publicacoes.test.cjs test/celular-anuncios.test.cjs test/descricao.test.cjs test/redes-sociais.test.cjs"
   },
   "engines": {
     "node": ">=22.13"

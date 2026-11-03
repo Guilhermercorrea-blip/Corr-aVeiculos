@@ -33,6 +33,8 @@ O link vale por uma hora, permite somente enviar até 40 imagens para aquele an�
 
 Facebook e Instagram aparecem logo abaixo da navegação na página inicial e também na área de contato. Os endereços podem ser atualizados em **Dados do site**, nos campos **Facebook** e **Instagram**. Eles abrem em outra aba.
 
+Na etapa **Conferir e publicar**, **Prévia para Facebook e Instagram** monta título, descrição, preço do anúncio e o rodapé fornecido pela loja. O WhatsApp `(14) 99629-7483` é exclusivo desse texto; o contato do site permanece separado. A prévia pode ser copiada e usa os dados em preenchimento sem salvar ou publicar. O envio automático às redes ainda depende de conectar e autorizar as contas na Meta.
+
 ## Executar no computador
 
 A descrição com IA alterna abordagens de escrita e evita as oito últimas aberturas geradas pelo serviço. Se a abertura se repetir, faz no máximo uma tentativa adicional. O histórico é temporário e reinicia com o serviço; os fatos do veículo continuam restritos aos dados informados pela equipe.
