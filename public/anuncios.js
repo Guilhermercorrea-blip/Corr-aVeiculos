@@ -441,7 +441,7 @@ async function abrirPreviaRedes() {
   const botao = $('previa-redes'); botao.disabled = true;
   try {
     const dados = dadosForm(atual.situacao); if (!dados) return;
-    const r = await api('POST','/redes/previa',dados);
+    const r = await api('POST','/redes/previa',{ ...dados, id: atual.id });
     const dialog = $('dialog-redes');
     dialog.innerHTML = `<h2 id="titulo-redes">Publicação no Facebook e Instagram</h2><p class="nota-editor">${ordem.length} foto(s) selecionada(s). A primeira é a capa.</p><label class="campo"><span>Texto da publicação</span><textarea id="texto-redes" readonly rows="17">${esc(r.texto)}</textarea></label><p class="nota-editor">Este é o texto que vai para o Facebook e o Instagram.</p><div class="acoes-form"><button type="button" id="copiar-texto-redes">Copiar texto</button><button type="button" id="fechar-redes" class="secundario">Voltar</button></div><p id="status-redes" class="nota-editor" role="status" aria-live="polite"></p>`;
     $('fechar-redes').onclick = () => dialog.close();

@@ -6,8 +6,10 @@ Jardim Ouro Verde – Barra Bonita/SP
 
 📲 WhatsApp: (14) 99887-0734
 ☎️ Telefone: (14) 3641-8510
+{SITE}
 
 🤝 Transparência, procedência e confiança.`;
+const SITE_PADRAO = 'https://www.correaveiculosbb.com.br';
 function invalido(mensagem) { return Object.assign(new Error(mensagem), {status:400}); }
 function texto(valor, maximo) {
   if (valor == null) return '';
@@ -22,6 +24,10 @@ function montarPublicacao(dados) {
   const preco = dados.preco ?? null;
   if (preco !== null && (!Number.isSafeInteger(preco) || preco <= 0)) throw invalido('Confira o preço para anunciar.');
   const valor = preco === null ? '💰 Valor: sob consulta' : '💰 Valor: ' + (preco / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\u00a0/g,' ');
-  return {texto:[titulo,descricao,valor,RODAPE].filter(Boolean).join('\n\n')};
+  // Link do próprio carro no site (sem o https://, que o Facebook reconhece igual e fica mais limpo)
+  const site = (process.env.ENDERECO_PUBLICO || SITE_PADRAO).replace(/\/+$/,'');
+  const id = Number.isSafeInteger(dados.id) && dados.id > 0 ? dados.id : null;
+  const link = '🌐 ' + (id ? 'Mais fotos e detalhes: ' : 'Veja nossos carros: ') + (site + (id ? '/carro/' + id : '')).replace(/^https?:\/\//,'');
+  return {texto:[titulo,descricao,valor,RODAPE.replace('{SITE}',link)].filter(Boolean).join('\n\n')};
 }
 module.exports = {montarPublicacao};

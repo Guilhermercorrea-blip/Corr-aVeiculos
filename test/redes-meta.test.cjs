@@ -68,7 +68,7 @@ async function main() {
   ok(r.instagram.ok && r.instagram.post_id === 'IG_POST', 'Instagram postado em carrossel');
   const feed = chamadas.find(x => x.caminho === 'PAGINA/feed');
   ok(feed.p['attached_media[2]'] && !feed.p['attached_media[3]'], 'Post do Facebook leva as 3 fotos');
-  ok(feed.p.message.includes('Fictício 1.0 2020') && feed.p.message.includes('R$') && feed.p.message.includes('Transparência, procedência e confiança'), 'Texto tem título, preço e o rodapé da loja');
+  ok(feed.p.message.includes('Fictício 1.0 2020') && feed.p.message.includes('R$') && feed.p.message.includes('Transparência, procedência e confiança') && feed.p.message.includes('www.exemplo-loja.test/carro/' + salvo.id), 'Texto tem título, preço e o rodapé da loja');
   const fotosFb = chamadas.filter(x => x.caminho === 'PAGINA/photos');
   ok(fotosFb.every(x => x.p.published === 'false' && x.p.url.startsWith('https://www.exemplo-loja.test/')), 'Fotos vão pelo endereço público e sem publicar sozinhas');
   const itensIg = chamadas.filter(x => x.caminho === 'IG/media' && x.p.is_carousel_item === 'true');
