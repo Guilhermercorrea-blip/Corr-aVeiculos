@@ -1,10 +1,10 @@
 'use strict';
-// Rodapé fornecido pela loja. O WhatsApp abaixo é exclusivo das publicações.
+// Rodapé fornecido pela loja, colocado no fim de cada post do Facebook e do Instagram.
 const RODAPE = `📍 Corrêa Veículos
 📌 Av. Papa João Paulo II, 3143
 Jardim Ouro Verde – Barra Bonita/SP
 
-📲 WhatsApp: (14) 99629-7483
+📲 WhatsApp: (14) 99887-0734
 ☎️ Telefone: (14) 3641-8510
 
 🤝 Transparência, procedência e confiança.`;

@@ -1,12 +1,12 @@
 'use strict';
 const {test}=require('node:test'), assert=require('node:assert/strict');
 const {montarPublicacao}=require('../redes-sociais');
-test('texto contém descrição, centavos corretos e o contato exclusivo das publicações',() => {
+test('texto contém descrição, centavos corretos e o rodapé com o contato da loja',() => {
   const {texto}=montarPublicacao({marca_modelo:'Carro fictício',descricao:'Primeira linha.\nSegunda linha.',preco:5990050,valor_compra:3000000,cpf:'DADO-PRIVADO',whatsapp:'NUMERO-DO-SITE'});
   assert.ok(texto.startsWith('Carro fictício\n\nPrimeira linha.\nSegunda linha.'));
   assert.ok(texto.includes('💰 Valor: R$ 59.900,50'));
   assert.ok(texto.includes('📌 Av. Papa João Paulo II, 3143\nJardim Ouro Verde – Barra Bonita/SP'));
-  assert.ok(texto.includes('WhatsApp: (14) 99629-7483'));
+  assert.ok(texto.includes('WhatsApp: (14) 99887-0734'));
   assert.ok(texto.includes('Telefone: (14) 3641-8510'));
   assert.ok(texto.endsWith('🤝 Transparência, procedência e confiança.'));
   for(const s of ['3000000','DADO-PRIVADO','NUMERO-DO-SITE']) assert.ok(!texto.includes(s));
