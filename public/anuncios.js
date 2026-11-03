@@ -78,6 +78,7 @@ function editor(p) {
             <section class="secao-fotos"><h3>Fotos <span id="contador-fotos" class="suave pequeno"></span></h3><p class="nota-editor">A primeira foto será a capa do anúncio.</p>
               <div class="enviar-fotos" id="area-fotos"><button type="button" id="escolher-fotos" class="secundario"><span class="icone-upload" aria-hidden="true">＋</span><strong>Adicionar fotos</strong><span>ou arraste e solte aqui</span></button><button type="button" id="tirar-foto" class="secundario mini">Tirar foto pelo celular</button><input type="file" id="novas-fotos" accept="image/*" multiple hidden><input type="file" id="camera-anuncio" accept="image/*" capture="environment" hidden><small class="suave">Até 40 fotos. Enviadas ao salvar.</small></div>
               <div id="fotos-selecionadas" class="fotos-anuncio"></div><details id="biblioteca" hidden><summary>Outras fotos disponíveis <span id="total-biblioteca"></span></summary><button type="button" id="selecionar-todas" class="secundario mini">Adicionar todas</button><div id="fotos-disponiveis" class="fotos-anuncio"></div></details>
+              <div class="atalho-celular"><span aria-hidden="true">▦</span><div><strong>Fotos direto do celular</strong><p>Aponte a câmera para o QR Code e envie para este anúncio.</p><button type="button" id="usar-celular-anuncio" class="secundario">Usar celular (QR Code)</button>${!p.id ? '<small>Primeiro preencha o modelo. Ao gerar o código, um rascunho será salvo.</small>' : ''}</div></div>
             </section>
             <h3>Sobre este veículo</h3><p class="local-anuncio">⌖ <span id="local-form">${esc(cidadeLoja)}</span></p>
             ${selecionar('ano_mod', 'Ano do modelo', anos, p.ano_mod)}
@@ -123,6 +124,7 @@ function editor(p) {
   $('camera-anuncio').addEventListener('change', e => adicionarArquivos(e.target));
   $('escolher-fotos').onclick = () => $('novas-fotos').click();
   $('tirar-foto').onclick = () => $('camera-anuncio').click();
+  $('usar-celular-anuncio').onclick = abrirCelularAnuncio;
   const area = $('area-fotos');
   area.ondragover = e => { e.preventDefault(); if (!salvando) area.classList.add('arrastando'); };
   area.ondragleave = () => area.classList.remove('arrastando');
@@ -275,6 +277,7 @@ async function gravar(situacaoDesejada) {
     const i = anuncios.findIndex(p => p.id === salvo.id); if (i < 0) anuncios.unshift(salvo); else anuncios[i] = salvo;
     alterado = false; bloquear(false); editor(salvo);
     aviso(salvo.visivel ? 'Anúncio salvo e publicado no site.' : salvo.situacao === 'vendido' ? 'Anúncio marcado como vendido e retirado do site.' : 'Rascunho salvo. Ele ainda não aparece no site.');
+    return salvo;
   } catch (e) { alterado = true; aviso(e.message + ' Suas alterações continuam nesta tela para você conferir e tentar novamente.', true); bloquear(false); $('progresso-fotos').hidden = true; renderFotos(); }
 }
 function confirmarAcao(texto, rotulo) {
@@ -337,5 +340,75 @@ $('form-config').onsubmit = async e => {
   catch (erro) { aviso(erro.message, true); }
   finally { $('campos-config').disabled = false; }
 };
+let envioCelularAnuncio = null, timerCelularAnuncio, encerrandoCelularAnuncio = false, abrindoCelularAnuncio = false;
+function incluirFotosCelular(envio) {
+  if (!envioCelularAnuncio || atual?.id !== envioCelularAnuncio.id) return;
+  let novas = 0;
+  for (const foto of envio.fotos) if (!fotos.some(f => f.id === foto.id)) {
+    fotos.push(foto); if (ordem.length < 40) ordem.push(foto.id); novas++;
+  }
+  if (novas) { alterado = true; renderFotos(); }
+  $('status-celular-anuncio').textContent = envio.recebidas ? `${envio.recebidas} foto(s) recebida(s). Confira e salve o anúncio ao concluir.` : 'Aguardando fotos do celular…';
+  if (ordem.length >= 40) $('status-celular-anuncio').textContent += ' A seleção está completa; as demais ficam em Outras fotos disponíveis.';
+}
+async function abrirCelularAnuncio() {
+  if (salvando || envioCelularAnuncio || abrindoCelularAnuncio) return;
+  abrindoCelularAnuncio = true;
+  const botao = $('usar-celular-anuncio'); botao.disabled = true;
+  try {
+    if (!atual.id && !await gravar('rascunho')) return;
+    const id = atual.id, envio = await api('POST', `/publicacoes/${id}/celular`, {});
+    envioCelularAnuncio = { ...envio, id };
+    const dialog = $('dialog-celular-anuncio');
+    dialog.innerHTML = `<div class="cabecalho"><div><h2 id="titulo-celular-anuncio">Enviar fotos pelo celular</h2><p class="suave pequeno">${esc(atual.titulo)}</p></div></div><div class="qr-anuncio-grade"><div id="qr-anuncio" aria-label="QR Code para abrir o envio no celular"></div><div><ol><li>Aponte a câmera do celular para o código.</li><li>Abra o link e escolha a galeria ou tire as fotos.</li><li>As fotos chegam aqui. Conclua e salve o anúncio.</li></ol><p class="nota-editor">Válido por 1 hora. Este link serve apenas para enviar fotos a este anúncio.</p><label class="campo"><span>Link para abrir no celular</span><input id="link-celular-anuncio" type="url" readonly value="${esc(envio.url)}"></label><button type="button" id="copiar-link-anuncio" class="secundario mini">Copiar link</button></div></div><p id="status-celular-anuncio" class="aviso-publicacao" role="status" aria-live="polite">Aguardando fotos do celular…</p><p class="nota-editor">Receber fotos não altera o anúncio publicado. Confira a capa e salve para atualizar o site.</p><div class="acoes-form"><button type="button" id="concluir-celular-anuncio">Concluir envio</button></div>`;
+    $('concluir-celular-anuncio').onclick = encerrarCelularAnuncio;
+    dialog.oncancel = e => { e.preventDefault(); encerrarCelularAnuncio(); };
+    $('copiar-link-anuncio').onclick = async () => {
+      try { await navigator.clipboard.writeText(envio.url); $('copiar-link-anuncio').textContent = 'Link copiado'; }
+      catch { $('link-celular-anuncio').focus(); $('link-celular-anuncio').select(); aviso('Selecione e copie o link para abrir no celular.'); }
+    };
+    dialog.showModal();
+    new window.QRCode($('qr-anuncio'), { text: envio.url, width: 220, height: 220, correctLevel: window.QRCode.CorrectLevel.M });
+    acompanharCelularAnuncio();
+  } catch (e) {
+    if (envioCelularAnuncio) {
+      const envio = envioCelularAnuncio; envioCelularAnuncio = null;
+      await api('POST', `/publicacoes/${envio.id}/celular/${envio.codigo}/encerrar`, {}).catch(() => {});
+      $('dialog-celular-anuncio').close();
+    }
+    aviso(e.message, true);
+  } finally { abrindoCelularAnuncio = false; if ($('usar-celular-anuncio')) $('usar-celular-anuncio').disabled = false; }
+}
+async function acompanharCelularAnuncio() {
+  const envio = envioCelularAnuncio; if (!envio || encerrandoCelularAnuncio) return;
+  try {
+    const recebido = await api('GET', `/publicacoes/${envio.id}/celular/${envio.codigo}`);
+    if (envioCelularAnuncio !== envio || encerrandoCelularAnuncio) return;
+    incluirFotosCelular(recebido);
+  } catch (e) {
+    if (envioCelularAnuncio !== envio) return;
+    $('status-celular-anuncio').textContent = e.message + ' As fotos já recebidas continuam guardadas.';
+  }
+  if (envioCelularAnuncio === envio && !encerrandoCelularAnuncio) timerCelularAnuncio = setTimeout(acompanharCelularAnuncio, 2000);
+}
+async function encerrarCelularAnuncio() {
+  const envio = envioCelularAnuncio; if (!envio || encerrandoCelularAnuncio) return;
+  encerrandoCelularAnuncio = true; clearTimeout(timerCelularAnuncio);
+  $('concluir-celular-anuncio').disabled = true;
+  try {
+    const recebido = await api('POST', `/publicacoes/${envio.id}/celular/${envio.codigo}/encerrar`, {});
+    incluirFotosCelular(recebido);
+    envioCelularAnuncio = null; $('dialog-celular-anuncio').close();
+    if (recebido.recebidas) aviso('Fotos recebidas. Confira a capa e salve o anúncio.');
+  } catch (e) {
+    // Um código vencido não pode mais receber fotos; a biblioteca continua salva.
+    if (e.message.includes('venceu') || e.message.includes('não encontrado')) {
+      envioCelularAnuncio = null; $('dialog-celular-anuncio').close(); aviso(e.message, true);
+    } else {
+      $('status-celular-anuncio').textContent = e.message + ' Tente concluir novamente.';
+      $('concluir-celular-anuncio').disabled = false;
+    }
+  } finally { encerrandoCelularAnuncio = false; }
+}
 window.addEventListener('beforeunload', e => { if (alterado || salvando) { e.preventDefault(); e.returnValue = ''; } });
 iniciar();

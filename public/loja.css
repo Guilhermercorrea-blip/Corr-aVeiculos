@@ -14,6 +14,15 @@
 .banner-topo img { display: block; width: 100%; max-width: 1180px; height: auto; margin: 0 auto; }
 .cabeca { justify-content: space-between; }
 .cabeca .acesso { margin-left: auto; }
+.redes-inicio { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--borda); padding-block: 14px; }
+.redes-inicio > span { color: var(--suave); font-size: 12px; margin-right: 6px; }
+.redes-inicio > a { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 6px; font-size: 12px; font-weight: 650; border: 1px solid var(--borda); }
+.redes-inicio > a:hover { background: var(--fundo); }
+.rede-facebook { color: #1760ba; }
+.rede-facebook > span { font: 750 21px system-ui; line-height: 1; width: 16px; text-align: center; }
+.rede-instagram { color: #9d365a; }
+.rede-instagram svg { width: 19px; height: 19px; stroke: currentColor; stroke-width: 1.7; fill: none; }
+@media(max-width: 600px) { .redes-inicio { flex-wrap: wrap; gap: 8px; padding-block: 10px; } .redes-inicio > span { width: 100%; font-size: 11px; } .redes-inicio > a { min-height: 40px; } }
 @media (max-width: 600px) {
   .cabeca { flex-wrap: nowrap; gap: 12px; padding-block: 10px; }
   .cabeca nav { order: 0; width: auto; border: 0; padding: 0; margin: 0; gap: 12px; font-size: 12px; }

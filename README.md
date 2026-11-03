@@ -23,7 +23,15 @@ Nenhum veículo ou foto é anunciado automaticamente. O preço do anúncio é in
 
 Os anúncios usam as tabelas `publicacoes`, `publicacao_fotos` e `publicacao_uploads`. A migração preserva os IDs e links dos anúncios antigos, seus preços, seleção de fotos e estado de publicação. Atualizações conferem a revisão do registro para impedir que uma aba antiga sobrescreva outra. O cadastro usa uma chave de reenvio para evitar duplicação ao repetir uma tentativa com falha de conexão.
 
-Em **Dados do site**, edite nome, chamada principal, apresentação, contatos, endereço, horário e Instagram. Essas informações não alteram os dados dos contratos.
+Em **Dados do site**, edite nome, chamada principal, apresentação, contatos, endereço, horário, Facebook e Instagram. Essas informações não alteram os dados dos contratos.
+
+### Enviar fotos do anúncio por QR Code
+
+Em **Novo anúncio** ou ao editar um anúncio, preencha o modelo e use **Usar celular (QR Code)** na área de fotos. Um anúncio novo é salvo como rascunho antes de gerar o código. Aponte a câmera do telefone, abra o link e use **Tirar foto** ou **Escolher fotos da galeria**; não precisa entrar no sistema pelo celular. As fotos aparecem automaticamente no computador. Clique **Concluir envio**, confira a capa e **salve o anúncio** para aplicar a seleção.
+
+O link vale por uma hora, permite somente enviar até 40 imagens para aquele anúncio e deixa de funcionar ao concluir ou gerar outro código. As fotos recebidas ficam guardadas na biblioteca privada; o link não permite consultar documentos, alterar preços ou publicar. Reiniciar o serviço invalida os códigos abertos, preservando as fotos já recebidas. O QR Code é desenhado no próprio navegador com a biblioteca local em `public/vendor`.
+
+Facebook e Instagram aparecem logo abaixo da navegação na página inicial e também na área de contato. Os endereços podem ser atualizados em **Dados do site**, nos campos **Facebook** e **Instagram**. Eles abrem em outra aba.
 
 ## Executar no computador
 

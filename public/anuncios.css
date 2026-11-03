@@ -137,6 +137,18 @@ body.editando-anuncio { overflow: hidden; }
 .previa-opcionais { padding-left: 18px; font-size: .8rem; line-height: 1.9; }
 .previa-contato { background: #e5f2eb; color: #236040; padding: 12px; border-radius: 7px; margin-top: 26px; text-align: center; font-size: .8rem; font-weight: 650; }
 .alternar-previa { display: none; }
+.atalho-celular { display: flex; gap: 12px; background: var(--azul-claro); border-radius: 8px; padding: 14px; margin: 18px 0; }
+.atalho-celular > span { font-size: 1.8rem; color: var(--azul); }
+.atalho-celular strong { font-size: .8rem; }
+.atalho-celular p, .atalho-celular small { display: block; font-size: .72rem; line-height: 1.5; margin: 5px 0 10px; }
+.atalho-celular button { font-size: .75rem; padding: 10px; }
+#dialog-celular-anuncio { max-width: 760px; }
+.qr-anuncio-grade { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 24px; }
+#qr-anuncio { padding: 20px; background: white; border: 1px solid var(--borda); border-radius: 8px; width: max-content; }
+#qr-anuncio img, #qr-anuncio canvas { display: block; max-width: 100%; height: auto; }
+.qr-anuncio-grade ol { padding-left: 20px; font-size: .85rem; line-height: 1.8; }
+.qr-anuncio-grade input { font-size: .75rem; }
+@media(max-width: 600px) { .qr-anuncio-grade { grid-template-columns: 1fr; gap: 12px; } #qr-anuncio { margin-inline: auto; padding: 12px; } }
 @media(max-width: 1150px) {
   .compositor { grid-template-columns: 330px minmax(0, 1fr); }
   .classificado-previa { grid-template-columns: 1fr; }

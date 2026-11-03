@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS site_config (chave TEXT PRIMARY KEY, valor TEXT NOT N
 `);
 
 const publicacoes = require('./publicacoes');
-const CAMPOS_SITE = ['nome', 'chamada', 'sobre', 'endereco', 'cidade', 'telefone', 'whatsapp', 'horario', 'instagram'];
+const CAMPOS_SITE = ['nome', 'chamada', 'sobre', 'endereco', 'cidade', 'telefone', 'whatsapp', 'horario', 'instagram', 'facebook'];
 function objeto(dados) {
   if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw erro('Dados inválidos');
   return dados;
@@ -43,10 +43,10 @@ function configurarSite(dados) {
     const n = valores.whatsapp.replace(/\D/g, '');
     if (![10, 11].includes(n.length) && !(/^55\d{10,11}$/.test(n))) throw erro('Informe o WhatsApp com DDD');
   }
-  if (valores.instagram) {
+  for (const campo of ['instagram', 'facebook']) if (valores[campo]) {
     let url;
-    try { url = new URL(valores.instagram); } catch { throw erro('Informe o endereço completo do Instagram'); }
-    if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.username || url.password) throw erro('Use um endereço https://www.instagram.com/ da loja');
+    try { url = new URL(valores[campo]); } catch { throw erro(`Informe o endereço completo do ${campo}`); }
+    if (url.protocol !== 'https:' || ![`${campo}.com`, `www.${campo}.com`].includes(url.hostname) || url.username || url.password || url.port) throw erro(`Use um endereço https://www.${campo}.com/ da loja`);
   }
   const gravar = db.prepare('INSERT INTO site_config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor');
   db.exec('BEGIN');
@@ -63,7 +63,7 @@ function configPublica() {
     nome: 'Corrêa Veículos', chamada: 'Seu próximo carro está aqui.',
     sobre: 'Conheça os veículos da Corrêa Veículos e fale com a nossa equipe para saber mais.',
     endereco: loja.endereco, cidade: loja.cidade, telefone: loja.telefone, whatsapp: loja.whatsapp,
-    horario: '', instagram: '', ...salvos,
+    horario: '', instagram: 'https://www.instagram.com/correa.veiculos/', facebook: 'https://www.facebook.com/correaveiculosltda', ...salvos,
   };
 }
 function catalogo() {

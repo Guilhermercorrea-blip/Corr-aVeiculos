@@ -12,6 +12,7 @@ const leitor = require('./leitor');
 const contratos = require('./contratos');
 const anuncios = require('./anuncios');
 const publicacoes = require('./publicacoes');
+const enviosAnuncios = require('./envios-anuncios');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -28,7 +29,7 @@ const TIPOS = {
 };
 
 // Endereços que abrem sem login
-const PAGINAS_LIVRES = new Set(['/', '/loja.html', '/loja.css', '/loja.js', '/login.html', '/celular.html', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
+const PAGINAS_LIVRES = new Set(['/', '/loja.html', '/loja.css', '/loja.js', '/login.html', '/celular.html', '/fotos-anuncio.html', '/fotos-anuncio.js', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
 const API_LIVRE = [
   ['GET', /^\/api\/publico\/catalogo$/],
   ['GET', /^\/api\/publico\/carros\/\d+$/],
@@ -40,6 +41,8 @@ const API_LIVRE = [
   ['POST', /^\/api\/primeiro-usuario$/],
   ['GET', /^\/api\/envios\/[\w-]+$/],
   ['POST', /^\/api\/envios\/[\w-]+\/foto$/],
+  ['GET', /^\/api\/anuncios-celular\/[\w-]+$/],
+  ['POST', /^\/api\/anuncios-celular\/[\w-]+\/fotos$/],
 ];
 
 function acessoLivre(metodo, caminho) {
@@ -124,6 +127,18 @@ rota('POST', '/api/site/publicacoes/:id/fotos', (p, q, corpo) => publicacoes.adi
 }));
 rota('GET', '/api/site/estoque', () => publicacoes.estoque());
 rota('GET', '/api/site/estoque/:id', p => publicacoes.dadosEstoque(p.id));
+rota('POST', '/api/site/publicacoes/:id/celular', p => {
+  const envio = enviosAnuncios.criar(p.id), rede = enderecosRede();
+  const url = new URL('/fotos-anuncio.html', process.env.ENDERECO_PUBLICO || rede.ips[0] || rede.nome);
+  url.searchParams.set('c', envio.codigo);
+  return { ...envio, url: url.href };
+});
+rota('GET', '/api/site/publicacoes/:id/celular/:codigo', p => enviosAnuncios.acompanhar(p.id, p.codigo));
+rota('POST', '/api/site/publicacoes/:id/celular/:codigo/encerrar', p => enviosAnuncios.encerrar(p.id, p.codigo));
+rota('GET', '/api/anuncios-celular/:codigo', p => enviosAnuncios.publico(p.codigo));
+rota('POST', '/api/anuncios-celular/:codigo/fotos', (p, q, corpo) => enviosAnuncios.enviar(p.codigo, {
+  chave: corpo.chave, conteudo: Buffer.from(String(corpo.base64 || ''), 'base64'), tipoMime: corpo.tipo_mime, nomeOriginal: corpo.nome,
+}));
 
 rota('GET', '/api/resumo', () => db.resumo());
 rota('GET', '/api/veiculos', (p, q) => db.listarVeiculos(q.get('status')));
@@ -316,7 +331,7 @@ function estatico(res, url) {
   if (arquivo !== PUBLICO && !arquivo.startsWith(PUBLICO + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(arquivo, (err, conteudo) => {
     if (err) { res.writeHead(404); return res.end('Não encontrado'); }
-    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arquivo)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arquivo)] || 'application/octet-stream', 'Cache-Control': url.pathname === '/fotos-anuncio.html' ? 'no-store' : 'no-cache' });
     res.end(conteudo);
   });
 }
@@ -352,7 +367,8 @@ http.createServer((req, res) => {
   } catch { return responder(res, 400, { erro: 'Endereço inválido' }); }
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (['/sistema', '/index.html', '/acesso.html', '/anuncios.html', '/login.html'].includes(url.pathname)) res.setHeader('X-Robots-Tag', 'noindex');
+  if (['/sistema', '/index.html', '/acesso.html', '/anuncios.html', '/login.html', '/fotos-anuncio.html'].includes(url.pathname)) res.setHeader('X-Robots-Tag', 'noindex');
+  if (url.pathname === '/fotos-anuncio.html' || url.pathname.startsWith('/api/anuncios-celular/')) res.setHeader('Referrer-Policy', 'no-referrer');
   const token = lerCookie(req, 'sessao');
   const usuario = auth.usuarioDaSessao(token);
   const ctx = { req, res, token, usuario };

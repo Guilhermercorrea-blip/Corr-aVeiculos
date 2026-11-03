@@ -28,7 +28,12 @@ function preencherLoja(dados) {
   }
   const tel = String(loja.telefone || '').replace(/[^\d+]/g, '');
   if (tel) { el('telefone').href = 'tel:' + tel; el('telefone').textContent = loja.telefone; el('telefone').hidden = false; }
-  if (loja.instagram && /^https:\/\/(www\.)?instagram\.com\//.test(loja.instagram)) { el('instagram').href = loja.instagram; el('instagram').hidden = false; }
+  for (const rede of ['facebook', 'instagram']) {
+    let url; try { url = new URL(loja[rede]); } catch {}
+    const valido = url && url.protocol === 'https:' && [rede + '.com', 'www.' + rede + '.com'].includes(url.hostname) && !url.username && !url.password && !url.port;
+    for (const id of [rede, rede + '-inicio']) { el(id).hidden = !valido; if (valido) el(id).href = url.href; }
+  }
+  document.querySelector('.redes-inicio').hidden = el('facebook-inicio').hidden && el('instagram-inicio').hidden;
   if (loja.endereco) { el('mapa').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${loja.nome}, ${loja.endereco}, ${loja.cidade}`); el('mapa').hidden = false; }
 }
 function imagem(foto, titulo, classe = '') {

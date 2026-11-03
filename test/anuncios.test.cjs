@@ -55,7 +55,7 @@ async function main() {
   anuncios.salvarAnuncio(carro1, entrada({ publicado: true }));
   anuncios.salvarAnuncio(carro2, entrada({ titulo: 'Demonstração · Chevrolet Onix', preco: null, destaque: false, publicado: true, fotos: [] }));
   check(anuncios.anuncioPublico(carro2).carro.preco === null, 'Sob consulta independente do custo');
-  for (const dados of [{ instagram: 'javascript:alert(1)' }, { instagram: 'https://instagram.com.evil.example/' }, { nome: '' }, { whatsapp: '123' }, { nome: {} }]) { assert.throws(() => anuncios.configurarSite(dados)); checks++; }
+  for (const dados of [{ instagram: 'javascript:alert(1)' }, { instagram: 'https://instagram.com.evil.example/' }, { facebook: 'https://facebook.com.evil.example/' }, { facebook: 'https://usuario:senha@facebook.com/' }, { facebook: 'http://facebook.com/' }, { nome: '' }, { whatsapp: '123' }, { nome: {} }]) { assert.throws(() => anuncios.configurarSite(dados)); checks++; }
   anuncios.configurarSite({ nome: 'Corrêa Veículos', whatsapp: '(14) 99887-0734', horario: 'Horário de teste', representante_cpf: 'NAO-PODE-SAIR' });
   check(!('representante_cpf' in anuncios.configPublica()), 'Config pública ignora campos privados');
   check(db.obterConfig().representante_cpf === '99999999999', 'Alterações do site não afetam contratos');
