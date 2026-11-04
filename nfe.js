@@ -134,6 +134,14 @@ const TIPOS_NOTA = {
     bloqueio: d => (TIPOS_CONSIGNACAO.includes(d.veiculo.tipo_entrada) ? null : 'A nota de entrada de consignação é só para carro em consignação, troca ou compra sem transferir'),
     valor: d => (d.veiculo.tipo_entrada === 'compra_sem_transferir' ? d.veiculo.valor_consignacao : d.veiculo.valor_compra),
   },
+  // Carro consignado que volta para o dono (ou que o dono transfere direto ao comprador).
+  // Igual às notas 1067-1069: finalidade 4, CFOP 1918, aponta a chave da NF-e de entrada (BA02).
+  devolucao_consignacao: {
+    nome: 'devolução de consignação', natOp: 'DEVOLUÇÃO', cfop: 1918, tpNF: 0, finNFe: 4, referencia: true,
+    pessoa: d => d.fornecedor, quem: 'dono',
+    bloqueio: d => (TIPOS_CONSIGNACAO.includes(d.veiculo.tipo_entrada) ? null : 'A devolução de consignação é só para carro em consignação, troca ou compra sem transferir'),
+    valor: d => (d.veiculo.tipo_entrada === 'compra_sem_transferir' ? d.veiculo.valor_consignacao : d.veiculo.valor_compra),
+  },
   venda: {
     nome: 'venda', natOp: 'SAIDA', cfop: 5102, tpNF: 1,
     pessoa: d => d.comprador, quem: 'comprador',
@@ -210,8 +218,14 @@ function sugestao(veiculoId, tipo) {
   if (!config) throw db.erro('Tipo de nota inválido', 404);
   const d = db.obterVeiculo(veiculoId);
   const anterior = db.conexao.prepare('SELECT * FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(veiculoId, tipo);
-  const valor = anterior?.valor ?? config.valor(d) ?? null;
+  // A devolução aponta a nota de entrada: a gerada pelo sistema, se houver (senão o usuário cola a chave)
+  const entrada = config.referencia
+    ? db.conexao.prepare("SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = 'entrada_consignacao' ORDER BY id DESC").get(veiculoId)
+    : null;
+  const valor = anterior?.valor ?? entrada?.valor ?? config.valor(d) ?? null;
   return {
+    referencia: config.referencia ? (anterior?.referencia || entrada?.chave || '') : null,
+    entrada: entrada ? { numero: entrada.numero, chave: entrada.chave } : null,
     tipo, permitido: !config.bloqueio(d), motivo: config.bloqueio(d),
     numero: anterior?.numero || proximoNumero(),
     ncm: anterior?.ncm || sugerirNcm(d.veiculo),
@@ -287,6 +301,13 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const uf = p.uf.toUpperCase();
   if (!C_UF[uf]) throw db.erro(`UF do ${config.quem} inválida`);
   const ficha = tipo === 'venda' ? validarFicha({ ...lerFicha(veiculoId), ...(dados.ficha || {}) }, v) : null;
+  let referencia = null;
+  if (config.referencia) {
+    referencia = digitos(dados.referencia);
+    if (referencia.length !== 44 || digitoChave(referencia.slice(0, 43)) !== Number(referencia[43])) {
+      throw db.erro('Informe a chave de acesso da nota de entrada (44 números, está na DANFE ou no Sebrae)');
+    }
+  }
   const cMun = await codigoMunicipio(p);
   if (!cMun) throw db.erro(`Não achei o código IBGE da cidade "${p.cidade}/${uf}". Confira a cidade e o CEP do ${config.quem}.`);
   const pagamentos = tipo === 'venda' ? pagamentosVenda(d.venda, valor) : null;
@@ -314,7 +335,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const linhas = [
     'NOTAFISCAL|1',
     `A|4.00|NFe${chave}|`,
-    `B|${C_UF.SP}|${cNF}|${config.natOp}|55|1|${numero}|${dhEmi}|${dhEmi}||${config.tpNF}|${uf === 'SP' ? 1 : 2}|${EMITENTE.cMun}||1|1|${cDV}|${homologacao ? 2 : 1}|1|||${indFinal}|0|||3|4.01_sebrae_b057|||`,
+    `B|${C_UF.SP}|${cNF}|${config.natOp}|55|1|${numero}|${dhEmi}|${dhEmi}||${config.tpNF}|${uf === 'SP' ? 1 : 2}|${EMITENTE.cMun}||1|1|${cDV}|${homologacao ? 2 : 1}|${config.finNFe || 1}|||${indFinal}|0|||3|4.01_sebrae_b057|||`,
+    ...(referencia ? ['BA|', `BA02|${referencia}|`] : []),
     `C|${EMITENTE.xNome}|${EMITENTE.xFant}|${EMITENTE.ie}||${EMITENTE.im}|${EMITENTE.cnae}|${EMITENTE.crt}||`,
     `C02|${EMITENTE.cnpj}|`,
     `C05|${EMITENTE.xLgr}|${EMITENTE.nro}||${EMITENTE.xBairro}|${EMITENTE.cMun}|${EMITENTE.xMun}|${EMITENTE.uf}|${EMITENTE.cep}|1058|BRASIL|${EMITENTE.fone}|`,
@@ -345,13 +367,13 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const conteudo = linhas.join('\r\n');
 
   if (!homologacao) {
-    db.conexao.prepare(`INSERT INTO nfe_notas (veiculo_id, tipo, serie, numero, chave, valor, ncm) VALUES (?, ?, 1, ?, ?, ?, ?)
-      ON CONFLICT(serie, numero) DO UPDATE SET chave = excluded.chave, valor = excluded.valor, ncm = excluded.ncm, criado_em = datetime('now', 'localtime')`)
-      .run(veiculoId, tipo, numero, chave, valor, ncm);
+    db.conexao.prepare(`INSERT INTO nfe_notas (veiculo_id, tipo, serie, numero, chave, valor, ncm, referencia) VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+      ON CONFLICT(serie, numero) DO UPDATE SET chave = excluded.chave, valor = excluded.valor, ncm = excluded.ncm, referencia = excluded.referencia, criado_em = datetime('now', 'localtime')`)
+      .run(veiculoId, tipo, numero, chave, valor, ncm, referencia);
     if (ficha) db.conexao.prepare('UPDATE veiculos SET ficha_nfe = ? WHERE id = ?').run(JSON.stringify({ ...ficha, chassi: undefined }), veiculoId);
   }
 
-  const sufixo = tipo === 'venda' ? 'venda' : 'entrada-consignacao';
+  const sufixo = { venda: 'venda', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao' }[tipo];
   return { conteudo, chave, numero, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
 }
 const gerarEntradaConsignacao = (id, dados) => gerarNota(id, 'entrada_consignacao', dados);

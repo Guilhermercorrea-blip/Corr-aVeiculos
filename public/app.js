@@ -827,7 +827,7 @@ async function telaCarro(id) {
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
   </div>
 
-  ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? '<div class="cartao" id="cartao-nfe-entrada_consignacao"><h2>Nota fiscal de entrada (consignação)</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
+  ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? ['entrada_consignacao', 'devolucao_consignacao'].map(t => `<div class="cartao" id="cartao-nfe-${t}"><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('') : ''}
   ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
 
   ${d.anexos.some(a => a.tipo === 'foto_veiculo') ? `
@@ -872,7 +872,7 @@ async function telaCarro(id) {
   </div>` : ''}`;
 
   const formGasto = document.getElementById('form-gasto');
-  for (const tipo of ['entrada_consignacao', 'venda']) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
+  for (const tipo of Object.keys(TITULO_NFE)) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
   formGasto?.addEventListener('submit', e => {
     e.preventDefault();
     enviar(formGasto, async dados => {
@@ -918,8 +918,13 @@ async function telaCarro(id) {
 }
 
 // Gera o arquivo TXT da nota para importar no Emissor do Sebrae (Sistema → Importar arquivos).
-// tipo: 'entrada_consignacao' (CFOP 1917) ou 'venda' (CFOP 5102, com os dados do RENAVE).
-const TITULO_NFE = { entrada_consignacao: 'Nota fiscal de entrada (consignação)', venda: 'Nota fiscal de venda' };
+// tipo: 'entrada_consignacao' (CFOP 1917), 'devolucao_consignacao' (CFOP 1918, aponta a entrada)
+// ou 'venda' (CFOP 5102, com os dados do RENAVE).
+const TITULO_NFE = {
+  entrada_consignacao: 'Nota fiscal de entrada (consignação)',
+  devolucao_consignacao: 'Nota fiscal de devolução (consignação)',
+  venda: 'Nota fiscal de venda',
+};
 async function cartaoNfe(id, tipo) {
   const el = document.getElementById(`cartao-nfe-${tipo}`);
   const titulo = TITULO_NFE[tipo];
@@ -938,6 +943,9 @@ async function cartaoNfe(id, tipo) {
       ${selecao('Tipo do veículo (NCM)', 'ncm', Object.fromEntries(Object.entries(o.ncms).map(([k, t]) => [k, `${t} · ${k}`])), s.ncm, 'c5')}
       ${campo('Valor da nota', 'valor', { valor: paraTexto(s.valor), dinheiro: true, obrig: true, largura: 'c4' })}
       ${campo('Data e hora', 'data', { valor: agoraLocal().slice(0, 16), tipo: 'datetime-local', obrig: true, largura: 'c4' })}
+      ${s.referencia !== null ? `
+      ${campo('Chave da nota de entrada', 'referencia', { valor: s.referencia, obrig: true, largura: 'c12', extra: 'inputmode="numeric" maxlength="54" placeholder="44 números da DANFE da entrada"' })}
+      <div class="campo c12"><small class="suave">${s.entrada ? `Já preenchida com a nota de entrada nº ${s.entrada.numero}, gerada pelo sistema.` : 'Se a entrada foi feita direto no Sebrae, copie a chave de acesso dela (está na DANFE).'} Use quando o carro volta para o dono ou quando o dono transfere direto para o comprador.</small></div>` : ''}
       ${tipo === 'venda' ? `
       <div class="campo c12"><span><b>Dados do CRLV para o RENAVE</b> (aba "Veículo Novo" do Sebrae). Ficam guardados no carro.</span></div>
       ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: true, largura: 'c4' })}
@@ -956,7 +964,7 @@ async function cartaoNfe(id, tipo) {
       <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
     </form>
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
-    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${tipo === 'venda' ? 'CFOP 5102, cBenef SP020110, igual às suas vendas.' : 'CFOP 1917, igual às suas notas de consignação.'}</p>`;
+    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
     const form = document.getElementById(`form-nfe-${tipo}`);
     form.addEventListener('submit', e => {
       e.preventDefault();

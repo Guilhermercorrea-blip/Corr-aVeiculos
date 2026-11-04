@@ -111,3 +111,33 @@ test('formas de pagamento fecham com o valor da nota', () => {
   assert.equal(nfe.pagamentosVenda({ valor_pix: 100 }, 300).at(-1).valor, 200);
   assert.throws(() => nfe.pagamentosVenda({ valor_pix: 500 }, 300), /passa do valor/);
 });
+
+test('devolução de consignação no padrão das notas 1067-1069 (aponta a chave da entrada)', async () => {
+  const id = db.criarCompra({ pessoa: { ...dono, cpf: '39053344705' }, veiculo: { ...carro, placa: 'FFF6G78' } }).id;
+  const sem = nfe.sugestao(id, 'devolucao_consignacao');
+  assert.equal(sem.referencia, '');
+  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 100 }), /chave de acesso/);
+
+  const entrada = await nfe.gerarNota(id, 'entrada_consignacao', { numero: 1199, ncm: '87032100', valor: 3000000, data: '2026-11-01T09:00' });
+  const s = nfe.sugestao(id, 'devolucao_consignacao');
+  assert.equal(s.referencia, entrada.chave);
+  assert.equal(s.entrada.numero, 1199);
+  assert.equal(s.valor, 3000000);
+  assert.equal(s.numero, 1200);
+
+  const r = await nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, data: '2026-11-04T15:00', referencia: s.referencia });
+  const l = r.conteudo.split('\r\n');
+  assert.equal(l[2], `B|35|${r.chave.slice(35, 43)}|DEVOLUÇÃO|55|1|1200|2026-11-04T15:00:00-03:00|2026-11-04T15:00:00-03:00||0|1|3505302||1|1|${r.chave.slice(43)}|1|4|||0|0|||3|4.01_sebrae_b057|||`);
+  assert.equal(l[3], 'BA|');
+  assert.equal(l[4], `BA02|${entrada.chave}|`);
+  assert.match(l[12], /\|87032100\|\|\|1918\|UN\|/);
+  assert.deepEqual(l.slice(13), ['M||', 'N|', 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||', 'Q|', 'Q04|07|', 'S|', 'S04|07|', 'W|',
+    'W02|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|30000.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|30000.00|0.00|',
+    'W04c|0.00|', 'W04e|0.00|', 'W04g|0.00|', 'X|0|', 'YA', 'YA01||90||0.00||||']);
+  assert.match(r.arquivo, /devolucao-consignacao/);
+  // chave colada à mão (entrada feita no Sebrae) também vale, desde que o dígito confira
+  const outra = '35261007793106000139550010000010791540730549';
+  const r2 = await nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.replace(/(\d{4})/g, '$1 ') });
+  assert.ok(r2.conteudo.includes(`BA02|${outra}|`));
+  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.slice(0, 43) + '0' }), /chave de acesso/);
+});
