@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
+const { calcularImpostosVenda } = require('./impostos');
 
 // PASTA_DADOS permite rodar testes sem mexer nos dados reais da loja
 const PASTA_DADOS = process.env.PASTA_DADOS || path.join(__dirname, 'data');
@@ -106,6 +107,20 @@ CREATE TABLE IF NOT EXISTS config (
   valor TEXT
 );
 
+-- Notas fiscais geradas para importar no Emissor do Sebrae (o número não pode repetir na série)
+CREATE TABLE IF NOT EXISTS nfe_notas (
+  id INTEGER PRIMARY KEY,
+  veiculo_id INTEGER NOT NULL REFERENCES veiculos(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  serie INTEGER NOT NULL DEFAULT 1,
+  numero INTEGER NOT NULL,
+  chave TEXT NOT NULL,
+  valor INTEGER NOT NULL,
+  ncm TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE (serie, numero)
+);
+
 CREATE INDEX IF NOT EXISTS idx_gastos_veiculo ON gastos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_anexos_veiculo ON anexos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_veiculos_status ON veiculos(status);
@@ -126,6 +141,8 @@ const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.
 if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');
 const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
 if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos ADD COLUMN valor_consignacao INTEGER');
+// Dados técnicos do CRLV para a nota de venda (RENAVE): motor, potência, cilindradas, peso... (JSON)
+if (!colunasVeiculo.includes('ficha_nfe')) db.exec('ALTER TABLE veiculos ADD COLUMN ficha_nfe TEXT');
 const colunasVenda = db.prepare('PRAGMA table_info(vendas)').all().map(c => c.name);
 for (const [coluna, tipo] of [['forma_pagamento', 'TEXT'], ['valor_pix', 'INTEGER'], ['valor_deposito', 'INTEGER'], ['valor_dinheiro', 'INTEGER']]) {
   if (!colunasVenda.includes(coluna)) db.exec(`ALTER TABLE vendas ADD COLUMN ${coluna} ${tipo}`);
@@ -231,11 +248,16 @@ function diasEntre(inicio, fim) {
   return Math.max(0, Math.floor((new Date(fim) - new Date(inicio)) / 86400000));
 }
 
-// Custo total = compra + gastos; lucro = venda - custo total
+// Custo total = compra + gastos (+ impostos da venda, quando o carro comprado pela loja já foi vendido);
+// lucro = venda - custo total. Os impostos seguem a nota fiscal de venda (ver impostos.js).
 function comCalculos(v) {
-  const custo_total = v.valor_compra + v.total_gastos;
+  const impostos = v.valor_venda != null && v.tipo_entrada === 'compra'
+    ? calcularImpostosVenda(v.valor_venda, v.valor_compra, v.vendido_em) : null;
+  const custo_total = v.valor_compra + v.total_gastos + (impostos?.total || 0);
   return {
     ...v,
+    impostos,
+    total_impostos: impostos?.total || 0,
     custo_total,
     lucro: v.valor_venda == null ? null : v.valor_venda - custo_total,
     dias_estoque: diasEntre(v.entrada_em, v.vendido_em || agora()),
@@ -525,6 +547,8 @@ const CONFIG_PADRAO = {
   foro: 'Barra Bonita/SP',
   garantia_dias: '90',
   garantia_km: '3000',
+  // Última nota emitida no Sebrae (série 1); o sistema sugere a seguinte
+  nfe_ultimo_numero: '1079',
 };
 
 function obterConfig() {
@@ -533,10 +557,11 @@ function obterConfig() {
 }
 
 function salvarConfig(dados = {}) {
-  for (const chave of ['garantia_dias', 'garantia_km']) {
+  const nomes = { garantia_dias: 'dias de garantia', garantia_km: 'km de garantia', nfe_ultimo_numero: 'última nota emitida' };
+  for (const chave of Object.keys(nomes)) {
     if (chave in dados) {
       const n = Number(dados[chave]);
-      if (!['string', 'number'].includes(typeof dados[chave]) || !Number.isSafeInteger(n) || n <= 0) throw erro(`Informe um número inteiro maior que zero em ${chave === 'garantia_dias' ? 'dias de garantia' : 'km de garantia'}`);
+      if (!['string', 'number'].includes(typeof dados[chave]) || !Number.isSafeInteger(n) || n <= 0) throw erro(`Informe um número inteiro maior que zero em ${nomes[chave]}`);
     }
   }
   return transacao(() => {

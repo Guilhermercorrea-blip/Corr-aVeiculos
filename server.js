@@ -18,6 +18,7 @@ const placa = require('./placa');
 const redesSociais = require('./redes-sociais');
 const redesMeta = require('./redes-meta');
 const galeriaLoja = require('./galeria-loja');
+const nfe = require('./nfe');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -164,6 +165,9 @@ rota('GET', '/api/resumo', () => db.resumo());
 rota('GET', '/api/veiculos', (p, q) => db.listarVeiculos(q.get('status')));
 rota('GET', '/api/veiculos/:id', p => db.obterVeiculo(p.id));
 rota('PUT', '/api/veiculos/:id', (p, q, corpo) => db.atualizarVeiculo(p.id, corpo));
+// Nota fiscal de entrada de consignação: XML para importar no Emissor do Sebrae
+rota('GET', '/api/veiculos/:id/nfe/:tipo', p => nfe.sugestao(p.id, p.tipo));
+rota('POST', '/api/veiculos/:id/nfe/:tipo', (p, q, corpo) => nfe.gerarNota(p.id, p.tipo, corpo));
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
 rota('POST', '/api/estoque-rapido', (p, q, corpo) => db.criarEstoqueRapido(corpo.carros));
 rota('DELETE', '/api/veiculos/:id', p => db.excluirVeiculo(p.id));

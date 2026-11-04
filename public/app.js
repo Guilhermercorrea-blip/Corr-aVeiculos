@@ -734,12 +734,32 @@ async function telaCarro(id) {
     <div class="conta">
       <div><span>${v.tipo_entrada === 'consignacao' ? 'Valor líquido ao dono' : v.tipo_entrada === 'troca' ? 'Valor da troca' : 'Valor de compra'}</span><span>${reais(v.valor_compra)}</span></div>
       <div><span>Gastos (${d.gastos.length})</span><span>${reais(v.total_gastos)}</span></div>
+      ${v.impostos ? `<div><span>Impostos da venda</span><span>${reais(v.impostos.total)}</span></div>` : ''}
       <div class="total"><span>Custo total</span><span>${reais(v.custo_total)}</span></div>
       ${vendido ? `
       <div><span>Valor de venda</span><span>${reais(v.valor_venda)}</span></div>
       <div class="total"><span>Lucro</span><span class="${v.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(v.lucro)}</span></div>` : ''}
     </div>
   </div>
+
+  ${v.impostos ? `
+  <div class="cartao">
+    <h2>Impostos da venda</h2>
+    <p class="pequeno">Diferença entre venda e compra: <strong>${reais(v.impostos.margem)}</strong>. É sobre ela que incidem PIS, COFINS, IRPJ e CSLL.</p>
+    <div class="tabela-rolagem"><table>
+      <thead><tr><th>Imposto</th><th>Como calcula</th><th class="num">Base</th><th class="num">Valor</th><th>Quando</th><th>Vencimento</th></tr></thead>
+      <tbody>${v.impostos.itens.map(i => `
+        <tr><td><strong>${i.nome}</strong></td><td class="pequeno">${i.regra}</td><td class="num">${reais(i.base)}</td><td class="num">${reais(i.valor)}</td>
+        <td class="pequeno">${esc(i.quando)}</td><td class="pequeno">${/^\d{4}-/.test(i.vence || '') ? dataBR(i.vence) : esc(i.vence || '—')}</td></tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="3">Já na nota (ICMS, PIS, COFINS)</td><td class="num">${reais(v.impostos.naNota)}</td><td colspan="2"></td></tr>
+        <tr><td colspan="3">Trimestrais, pagos depois (IRPJ, CSLL)</td><td class="num">${reais(v.impostos.futuros)}</td><td colspan="2"></td></tr>
+        <tr><td colspan="3"><strong>Total de impostos</strong></td><td class="num"><strong>${reais(v.impostos.total)}</strong></td><td colspan="2"></td></tr>
+      </tfoot>
+    </table></div>
+    <p class="suave pequeno">Estimativa no regime de lucro presumido, igual às suas notas de venda. Vencimentos já pulando fim de semana e feriados nacionais fixos. Confirme os valores com o contador.</p>
+  </div>` : ''}
 
   <div class="cartao">
     <h2>Gastos com o carro</h2>
@@ -807,6 +827,9 @@ async function telaCarro(id) {
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
   </div>
 
+  ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? '<div class="cartao" id="cartao-nfe-entrada_consignacao"><h2>Nota fiscal de entrada (consignação)</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
+  ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
+
   ${d.anexos.some(a => a.tipo === 'foto_veiculo') ? `
   <div class="cartao">
     <h2>Fotos do carro</h2>
@@ -849,6 +872,7 @@ async function telaCarro(id) {
   </div>` : ''}`;
 
   const formGasto = document.getElementById('form-gasto');
+  for (const tipo of ['entrada_consignacao', 'venda']) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
   formGasto?.addEventListener('submit', e => {
     e.preventDefault();
     enviar(formGasto, async dados => {
@@ -891,6 +915,65 @@ async function telaCarro(id) {
       telaCarro(id);
     } catch (e) { aviso(e.message, true); }
   });
+}
+
+// Gera o arquivo TXT da nota para importar no Emissor do Sebrae (Sistema → Importar arquivos).
+// tipo: 'entrada_consignacao' (CFOP 1917) ou 'venda' (CFOP 5102, com os dados do RENAVE).
+const TITULO_NFE = { entrada_consignacao: 'Nota fiscal de entrada (consignação)', venda: 'Nota fiscal de venda' };
+async function cartaoNfe(id, tipo) {
+  const el = document.getElementById(`cartao-nfe-${tipo}`);
+  const titulo = TITULO_NFE[tipo];
+  try {
+    const s = await api('GET', `/veiculos/${id}/nfe/${tipo}`);
+    if (!s.permitido) { el.innerHTML = `<h2>${titulo}</h2><p class="pequeno">${esc(s.motivo)}</p>`; return; }
+    const o = s.opcoes;
+    const f = s.ficha || {};
+    const c = s.calculo;
+    el.innerHTML = `
+    <h2>${titulo}</h2>
+    <p class="pequeno">Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
+    ${s.ultima ? `<p class="pequeno">Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>` : ''}
+    <form id="form-nfe-${tipo}" class="grade" novalidate>
+      ${campo('Número da nota', 'numero', { valor: s.numero, obrig: true, largura: 'c3', extra: 'inputmode="numeric"' })}
+      ${selecao('Tipo do veículo (NCM)', 'ncm', Object.fromEntries(Object.entries(o.ncms).map(([k, t]) => [k, `${t} · ${k}`])), s.ncm, 'c5')}
+      ${campo('Valor da nota', 'valor', { valor: paraTexto(s.valor), dinheiro: true, obrig: true, largura: 'c4' })}
+      ${campo('Data e hora', 'data', { valor: agoraLocal().slice(0, 16), tipo: 'datetime-local', obrig: true, largura: 'c4' })}
+      ${tipo === 'venda' ? `
+      <div class="campo c12"><span><b>Dados do CRLV para o RENAVE</b> (aba "Veículo Novo" do Sebrae). Ficam guardados no carro.</span></div>
+      ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: true, largura: 'c4' })}
+      ${campo('Potência (CV)', 'ficha.potencia', { valor: f.potencia, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Cilindradas (cm³)', 'ficha.cilindrada', { valor: f.cilindrada, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Peso bruto (t)', 'ficha.peso', { valor: f.peso, obrig: true, largura: 'c2', extra: 'inputmode="decimal" placeholder="1,51"' })}
+      ${campo('CMT (t)', 'ficha.cmt', { valor: f.cmt, largura: 'c2', extra: 'inputmode="decimal" placeholder="igual ao peso"' })}
+      ${campo('Eixos', 'ficha.eixos', { valor: f.eixos, largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Lotação', 'ficha.lotacao', { valor: f.lotacao, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${selecao('Combustível', 'ficha.combustivel', o.combustiveis, f.combustivel, 'c4')}
+      ${selecao('Tipo', 'ficha.tipo', o.tipos, f.tipo, 'c4')}
+      ${selecao('Espécie', 'ficha.especie', o.especies, f.especie, 'c4')}
+      ${selecao('Cor (DENATRAN)', 'ficha.cor', o.cores, f.cor, 'c4')}
+      ${selecao('Pintura', 'ficha.pintura', o.pinturas, f.pintura, 'c4')}
+      ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}` : ''}
+      <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
+    </form>
+    ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
+    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${tipo === 'venda' ? 'CFOP 5102, cBenef SP020110, igual às suas vendas.' : 'CFOP 1917, igual às suas notas de consignação.'}</p>`;
+    const form = document.getElementById(`form-nfe-${tipo}`);
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      enviar(form, async dados => {
+        const r = await api('POST', `/veiculos/${id}/nfe/${tipo}`, dados);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'text/plain;charset=utf-8' }));
+        link.download = r.arquivo;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+        aviso(`Nota nº ${r.numero} gerada. Agora importe o arquivo no Emissor do Sebrae.`);
+        cartaoNfe(id, tipo);
+      });
+    });
+  } catch (e) {
+    el.innerHTML = `<h2>${titulo}</h2><p class="pequeno">${esc(e.message)}</p>`;
+  }
 }
 
 async function telaVenda(id) {
@@ -1004,7 +1087,7 @@ async function telaVenda(id) {
     el.className = 'conferencia' + (total && falta === 0 ? ' ok' : '');
     el.innerHTML = !total ? 'Digite o valor da venda.' :
       `${falta === 0 ? 'Pagamento fecha com o valor da venda.' : falta > 0 ? `Falta distribuir <strong>${reais(falta)}</strong> nas formas de pagamento.` : `As formas de pagamento passam <strong>${reais(-falta)}</strong> do valor da venda.`}
-       · Lucro previsto: <strong class="${lucro >= 0 ? 'positivo' : 'negativo'}">${reais(lucro)}</strong>`;
+       · Lucro previsto antes dos impostos: <strong class="${lucro >= 0 ? 'positivo' : 'negativo'}">${reais(lucro)}</strong>`;
   };
   form.addEventListener('input', conferir);
   conferir();
