@@ -76,3 +76,11 @@ Não altere DNS nem o endereço do serviço antes de confirmar a posse e a resol
 O código versionado é a referência para futuras alterações. Não envie o banco, documentos de clientes, chaves, senhas ou PDFs com dados da conta ao GitHub.
 
 O cadastro de pessoas permite edição, exclusão de pessoas sem vínculos e arquivamento de pessoas ligadas a compras ou vendas, com confirmação. O filtro **Arquivados** permite restaurar o cadastro. Arquivar mantém os vínculos e o histórico dos veículos. Uma nova operação com o mesmo CPF reaproveita e reativa o cadastro; editar um veículo antigo não o reativa automaticamente.
+
+## Convite para avaliação no Google
+
+Depois de registrar a venda, abra o carro em **Vendidos**. Logo abaixo dos contratos, **Avaliação no Google → Abrir convite no WhatsApp** prepara uma mensagem com o primeiro nome do comprador e o link de avaliação da loja. O telefone vem do cadastro do comprador; se estiver ausente ou inválido, a tela oferece o acesso para corrigi-lo.
+
+Confira se o WhatsApp aberto está na conta da loja **(14) 99887-0734** e toque em **Enviar**. O sistema não envia automaticamente nem escolhe a conta do WhatsApp. Depois do envio, clique em **Já enviei o convite**. A confirmação da equipe fica guardada por venda, inclusive entre computadores. Abrir o convite não confirma envio e o sistema não identifica entrega, leitura ou avaliação. Convites confirmados ficam recolhidos para evitar repetição; **Preparar convite novamente** permite reabri-los conscientemente. Desfazer a venda remove a confirmação daquela venda.
+
+As rotas de convite e confirmação exigem login. A tabela adicional `avaliacao_convites` guarda somente o ID da venda e a data da confirmação, sem alterar contratos, clientes, impostos ou publicações nas redes. Os testes usam dados fictícios e não enviam mensagens.

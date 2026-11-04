@@ -827,6 +827,7 @@ async function telaCarro(id) {
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
   </div>
 
+  ${vendido ? '<div class="cartao" id="cartao-avaliacao"><h2>Avaliação no Google</h2><p class="suave pequeno">Carregando convite…</p></div>' : ''}
   ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? ['entrada_consignacao', 'devolucao_consignacao'].map(t => `<div class="cartao" id="cartao-nfe-${t}"><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('') : ''}
   ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
 
@@ -872,6 +873,7 @@ async function telaCarro(id) {
   </div>` : ''}`;
 
   const formGasto = document.getElementById('form-gasto');
+  if (vendido) cartaoAvaliacao(id);
   for (const tipo of Object.keys(TITULO_NFE)) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
   formGasto?.addEventListener('submit', e => {
     e.preventDefault();
@@ -915,6 +917,44 @@ async function telaCarro(id) {
       telaCarro(id);
     } catch (e) { aviso(e.message, true); }
   });
+}
+
+// O WhatsApp exige a confirmação humana do envio. O histórico abaixo é declarado pela equipe.
+async function cartaoAvaliacao(id) {
+  const caixa = document.getElementById('cartao-avaliacao');
+  try {
+    const d = await api('GET', `/veiculos/${id}/avaliacao`);
+    if (!caixa?.isConnected) return;
+    caixa.innerHTML = `<h2>Avaliação no Google</h2>
+      <p>Após a entrega, agradeça ao cliente e convide-o a contar como foi a experiência com a loja.</p>
+      ${d.confirmado_em ? `<p role="status"><strong>Envio confirmado pela equipe em ${esc(dataBR(d.confirmado_em.replace(' ', 'T')))}.</strong></p><p class="pequeno suave">O sistema não verifica se o cliente recebeu ou avaliou. Evite repetir o convite.</p>` : ''}
+      <div id="preparar-avaliacao" ${d.confirmado_em ? 'hidden' : ''}>
+        <label class="campo"><span>Mensagem para o cliente</span><textarea id="mensagem-avaliacao" rows="7" readonly>${esc(d.mensagem)}</textarea></label>
+        <p class="pequeno">Envie pela conta da loja: <strong>(14) 99887-0734</strong>. Confira a conta aberta no WhatsApp antes de enviar.</p>
+        ${d.url ? `<p class="pequeno">WhatsApp do comprador: ${esc(d.telefone)}</p>` : '<p class="pequeno">O comprador está sem um telefone válido com DDD. Atualize o cadastro para abrir a conversa.</p>'}
+        <div class="acoes">
+          ${d.url ? `<a class="botao-link" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Abrir convite no WhatsApp</a>` : `<a class="botao-link secundario" href="#/pessoas/${d.comprador_id}">Atualizar telefone do comprador</a>`}
+          ${d.confirmado_em ? '' : '<button type="button" id="confirmar-avaliacao" class="secundario">Já enviei o convite</button>'}
+        </div>
+        <p class="suave pequeno">Abrir a conversa não envia a mensagem. Depois de tocar em Enviar no WhatsApp, clique em “Já enviei o convite”.</p>
+      </div>
+      ${d.confirmado_em ? '<button type="button" id="reabrir-avaliacao" class="secundario mini">Preparar convite novamente</button>' : ''}`;
+    caixa.querySelector('#reabrir-avaliacao')?.addEventListener('click', e => {
+      caixa.querySelector('#preparar-avaliacao').hidden = false;
+      e.currentTarget.hidden = true;
+    });
+    caixa.querySelector('#confirmar-avaliacao')?.addEventListener('click', async e => {
+      const botao = e.currentTarget; botao.disabled = true;
+      try {
+        await api('POST', `/veiculos/${id}/avaliacao/enviado`, { venda_id: d.venda_id });
+        await cartaoAvaliacao(id);
+        aviso('Confirmação de envio registrada.');
+      } catch (erro) { aviso(erro.message, true); botao.disabled = false; }
+    });
+  } catch (erro) {
+    if (caixa?.isConnected) caixa.innerHTML = `<h2>Avaliação no Google</h2><p>${esc(erro.message)}</p><button type="button" id="tentar-avaliacao" class="secundario">Tentar novamente</button>`;
+    caixa?.querySelector('#tentar-avaliacao')?.addEventListener('click', () => cartaoAvaliacao(id));
+  }
 }
 
 // Gera o arquivo TXT da nota para importar no Emissor do Sebrae (Sistema → Importar arquivos).

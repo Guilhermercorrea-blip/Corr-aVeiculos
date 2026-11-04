@@ -19,6 +19,7 @@ const redesSociais = require('./redes-sociais');
 const redesMeta = require('./redes-meta');
 const galeriaLoja = require('./galeria-loja');
 const nfe = require('./nfe');
+const avaliacoes = require('./avaliacoes');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -180,6 +181,8 @@ rota('DELETE', '/api/gastos/:id', p => db.removerGasto(p.id));
 rota('POST', '/api/veiculos/:id/venda', (p, q, corpo) => db.registrarVenda(p.id, corpo));
 rota('PUT', '/api/veiculos/:id/venda', (p, q, corpo) => db.atualizarKmVenda(p.id, corpo));
 rota('DELETE', '/api/veiculos/:id/venda', p => db.desfazerVenda(p.id));
+rota('GET', '/api/veiculos/:id/avaliacao', p => avaliacoes.obter(p.id));
+rota('POST', '/api/veiculos/:id/avaliacao/enviado', (p, q, corpo) => avaliacoes.confirmar(p.id, corpo));
 rota('GET', '/api/pessoas', (p, q) => db.listarPessoas({ busca: q.get('busca'), cpf: q.get('cpf'), arquivadas: q.get('arquivadas') === '1' }));
 rota('GET', '/api/pessoas/:id', p => db.obterPessoa(p.id));
 rota('PUT', '/api/pessoas/:id', (p, q, corpo) => db.atualizarPessoa(p.id, corpo));
