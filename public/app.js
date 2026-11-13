@@ -822,6 +822,7 @@ async function telaCarro(id) {
         troca: 'consignação da troca (com adendo)',
       }[v.tipo_entrada]}</a>`}
       ${vendido ? `<a class="botao-link" href="/contrato/${id}/venda" target="_blank">Imprimir contrato de venda${d.venda.troca_veiculo_id ? ' (com cláusula de troca)' : ''}</a>` : ''}
+      <a class="botao-link secundario" href="/contrato/${id}/repasse" target="_blank">Imprimir contrato de repasse</a>
       ${d.venda?.troca_veiculo_id ? `<a class="botao-link secundario" href="/contrato/${d.venda.troca_veiculo_id}/entrada" target="_blank">Imprimir consignação do carro da troca</a>` : ''}
     </div>
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
@@ -1316,6 +1317,72 @@ function desenharQRCode(el, texto) {
   document.head.append(s);
 }
 
+// Aba Contratos: todos os modelos num lugar só. Escolhe o modelo, escolhe o carro e imprime.
+const MODELOS_CONTRATO = [
+  { tipo: 'compra', nome: 'Compra', texto: 'A loja compra o carro e ele vai para o nome dela.', vendido: false },
+  { tipo: 'consignacao', nome: 'Consignação', texto: 'O dono deixa o carro na loja e recebe quando vender. Entra o adendo de quitação nos carros de troca ou compra sem transferir.', vendido: false },
+  { tipo: 'venda', nome: 'Venda com garantia', texto: 'Venda ao cliente com garantia de motor e câmbio (dias ou km). Só sai depois de registrar a venda e o km na entrega.', vendido: true },
+  { tipo: 'repasse', nome: 'Repasse', texto: 'Venda de carro recebido na troca, pelo mesmo valor, sem garantia contratual extra. Com o carro em estoque, comprador e preço saem em branco.', vendido: false, branco: true },
+  { tipo: 'avaliacao', nome: 'Carta de avaliação', texto: 'Informa quanto a loja avalia o veículo, sem obrigar a comprar nem a vender. Os dados saem do cadastro do carro (feito pela foto ou PDF do documento); o valor você digita aqui. Em "Em branco" tudo sai em linhas para preencher à mão.', vendido: false, avaliacao: true, branco: true },
+];
+
+async function telaContratos() {
+  const [estoque, vendidos] = await Promise.all([api('GET', '/veiculos?status=estoque'), api('GET', '/veiculos?status=vendido')]);
+  const rotuloCarro = v => `${v.marca_modelo}${v.placa ? ' · ' + formatarPlaca(v.placa) : ''}`;
+  const opcoes = lista => lista.map(v => `<option value="${v.id}">${esc(rotuloCarro(v))}</option>`).join('');
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>Contratos</h1><div class="suave">Escolha o modelo e o carro. A janela de impressão abre sozinha.</div></div></div>
+  <div class="cartao">
+    <h2>Montar contrato</h2>
+    <div class="grade">
+      <div class="campo c6"><label for="contrato-modelo">Modelo</label>
+        <select id="contrato-modelo">${MODELOS_CONTRATO.map(m => `<option value="${m.tipo}">${esc(m.nome)}</option>`).join('')}</select></div>
+      <div class="campo c6"><label for="contrato-carro">Carro</label>
+        <select id="contrato-carro"></select></div>
+    </div>
+    <div class="grade" id="contrato-avaliacao" hidden>
+      <div class="campo c4"><label for="contrato-valor">Valor da avaliação</label>
+        <input id="contrato-valor" inputmode="decimal" data-dinheiro placeholder="R$ 0,00"></div>
+      <div class="campo c8"><label for="contrato-extras">Dados extras (opcional)</label>
+        <input id="contrato-extras" placeholder="Ex.: potência 1500W, fabricante Golden Bull"></div>
+    </div>
+    <p class="suave pequeno" id="contrato-descricao"></p>
+    <div class="acoes"><button type="button" id="contrato-gerar">Abrir para imprimir</button></div>
+  </div>
+  <div class="cartao">
+    <h2>Modelos disponíveis</h2>
+    <ul>${MODELOS_CONTRATO.map(m => `<li><strong>${esc(m.nome)}</strong> <span class="suave pequeno">· ${esc(m.texto)}</span></li>`).join('')}</ul>
+    <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão. Para trocar o texto de um modelo, é só pedir.</p>
+  </div>`;
+  const modelo = document.getElementById('contrato-modelo');
+  const carro = document.getElementById('contrato-carro');
+  const atualizar = () => {
+    const m = MODELOS_CONTRATO.find(x => x.tipo === modelo.value);
+    const emBranco = m.branco ? '<option value="0">Em branco (preencher à mão)</option>' : '';
+    carro.innerHTML = m.vendido
+      ? (vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : '<option value="">Nenhum carro vendido ainda</option>')
+      : `${emBranco}${estoque.length ? `<optgroup label="Em estoque">${opcoes(estoque)}</optgroup>` : ''}${vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : ''}` || '<option value="">Nenhum carro cadastrado</option>';
+    document.getElementById('contrato-descricao').textContent = m.texto;
+    document.getElementById('contrato-avaliacao').hidden = !m.avaliacao;
+  };
+  modelo.addEventListener('change', atualizar);
+  atualizar();
+  document.getElementById('contrato-gerar').addEventListener('click', () => {
+    if (!carro.value) return aviso('Escolha um carro para montar o contrato.', true);
+    let consulta = '';
+    if (modelo.value === 'avaliacao') {
+      let centavos = null;
+      try { centavos = paraCentavos(document.getElementById('contrato-valor').value); } catch { return aviso('Valor da avaliação inválido.', true); }
+      const q = new URLSearchParams();
+      if (centavos) q.set('valor', centavos);
+      const extras = document.getElementById('contrato-extras').value.trim();
+      if (extras) q.set('extras', extras);
+      consulta = q.toString() ? `?${q}` : '';
+    }
+    window.open(`/contrato/${carro.value}/${modelo.value}${consulta}`, '_blank');
+  });
+}
+
 async function telaConfiguracoes() {
   const [c, rede] = await Promise.all([api('GET', '/config'), api('GET', '/rede')]);
   const principal = rede.ips[0] || rede.nome;
@@ -1443,6 +1510,7 @@ async function navegar() {
     else if (pagina === 'estoque') await telaLista('estoque');
     else if (pagina === 'vendidos') await telaLista('vendido');
     else if (pagina === 'pessoas' || pagina === 'pessoa') { if (id) await telaPessoa(Number(id)); else await telaPessoas(); }
+    else if (pagina === 'contratos') await telaContratos();
     else if (pagina === 'configuracoes') await telaConfiguracoes();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();

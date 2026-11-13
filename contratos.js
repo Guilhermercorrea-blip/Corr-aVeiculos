@@ -327,6 +327,81 @@ function contratoVenda(d, c) {
   ${testemunhas()}`);
 }
 
+// Contrato de repasse: o carro foi recebido na troca e a loja o repassa pelo mesmo valor, sem margem.
+// Serve com o carro ainda no estoque (comprador e preço saem em branco para preencher à mão) ou já vendido.
+function contratoRepasse(d, c) {
+  const v = d.veiculo;
+  const vd = d.venda;
+  const comprador = d.comprador;
+  const dinheiro = vd?.valor_venda != null ? valor(vd.valor_venda) : `R$ ${celula(null, 180)}`;
+  const pagamento = vd?.forma_pagamento ? `<b>${esc(vd.descricao_pagamento || db.descreverPagamento(vd))}</b>` : celula(null, 320);
+
+  return pagina(`Contrato de repasse - ${placa(v.placa) || v.marca_modelo || 'em branco'}`, `
+  ${cabecalho(c)}
+  ${faixa('Contrato de compra e venda de veículo usado — repasse')}
+  ${secao(1, 'Qualificação das partes')}
+  ${quadro([{ titulo: 'Vendedora' }, ...linhasLoja(c), { titulo: 'Comprador' }, ...linhasPessoa(comprador, 'Nome'), ['E-mail', celula(comprador?.email)]])}
+  <p>A VENDEDORA vende ao COMPRADOR o veículo abaixo, nos termos deste contrato.</p>
+  ${secao(2, 'Dados do veículo')}
+  ${quadroPares(paresVeiculo(v, [['Km na Entrega', celula(km(vd?.km_saida), 120)], ['Data/Hora Entrega', celula(dataHora(vd?.vendido_em), 120)]]))}
+  ${secao(3, 'Preço e pagamento')}
+  ${quadro([['Valor total', dinheiro], ['Forma de pagamento', pagamento], ['Data da negociação', celula(vd?.vendido_em ? dataCurta(vd.vendido_em) : null, 130)]])}
+  ${clausula('3.1', 'Valor de repasse', 'O preço da venda é igual ao valor atribuído ao veículo quando a VENDEDORA o recebeu na troca, sem acréscimo de margem sobre esse valor.')}
+  ${secao(4, 'Vistoria e estado do veículo')}
+  ${clausula('4.1', '', 'O COMPRADOR declara que foi informado sobre o estado de conservação do veículo antes de fechar a compra e concordou com o preço de repasse considerando as condições apresentadas.')}
+  ${secao(5, 'Entrega e responsabilidades')}
+  ${clausula('5.1', 'Entrega', 'A data e o horário da entrega são os indicados no item 2.')}
+  ${clausula('5.2', 'Transferência', 'O COMPRADOR providencia a transferência para seu nome no prazo legal. As despesas de transferência ficam a cargo de <span class="linha" style="min-width:150px"></span>.')}
+  ${clausula('5.3', 'Comunicação de venda', 'A VENDEDORA providencia a comunicação de venda ao órgão de trânsito.')}
+  ${secao(6, 'Garantia e documentação')}
+  ${clausula('6.1', 'Garantia', 'A VENDEDORA não concede garantia contratual adicional para motor e câmbio. Permanecem preservados os direitos e as garantias previstos na legislação aplicável.')}
+  ${clausula('6.2', 'Documentação', 'A VENDEDORA se compromete a disponibilizar os documentos necessários à transferência até <span class="linha" style="min-width:110px"></span> e a regularizar as pendências documentais assumidas neste negócio, se houver, conforme indicado a seguir.')}
+  <p><span class="linha" style="min-width:300px"></span></p>
+  ${secao(7, 'Foro')}
+  ${clausula('7.1', '', 'Nas relações de consumo, fica assegurado ao COMPRADOR o foro de seu domicílio.')}
+  ${localData(c, vd?.vendido_em)}
+  ${assinaturas(assinaturaLoja(c), assinaturaPessoa('COMPRADOR', comprador))}
+  ${testemunhas()}`);
+}
+
+// Carta de avaliação: a loja informa quanto avalia o veículo, sem obrigação de compra ou venda.
+// Os dados do carro vêm do cadastro (feito por foto ou PDF do CRLV); o valor e os dados extras
+// (potência, fabricante etc.) são informados na hora, na aba Contratos.
+function cartaAvaliacao(d, c, op = {}) {
+  const v = d.veiculo;
+  const centavos = Number.isInteger(Number(op.valor)) && Number(op.valor) > 0 ? Number(op.valor) : null;
+  const extras = String(op.extras || '').trim();
+  const anos = v.ano_fab || v.ano_mod ? `${v.ano_fab || v.ano_mod}/${v.ano_mod || v.ano_fab}` : null;
+  // Sem carro escolhido (modelo em branco): tudo sai em linhas para preencher à mão
+  const semCarro = !v.marca_modelo && !v.chassi;
+  const dados = semCarro
+    ? `${campo(null, 170)}, ano ${campo(null, 70)}/${campo(null, 70)}, CHASSI ${campo(null, 150)}, cor ${campo(null, 90)}, ${campo(null, 200)}`
+    : [
+      `<b>${esc(v.marca_modelo || '')}</b>`,
+      anos && `ano <b>${esc(anos)}</b>`,
+      v.placa && `placa <b>${esc(placa(v.placa))}</b>`,
+      v.chassi ? `CHASSI <b>${esc(v.chassi)}</b>` : `CHASSI ${campo(null, 150)}`,
+      v.cor && `cor <b>${esc(v.cor)}</b>`,
+      extras && `<b>${esc(extras)}</b>`,
+    ].filter(Boolean).join(', ');
+  const preco = centavos
+    ? `<b>${reais(centavos)}</b> (${reaisPorExtenso(centavos).toUpperCase()})`
+    : `R$ ${campo(null, 110)} (${campo(null, 220)})`;
+
+  return pagina(`Carta de avaliação - ${placa(v.placa) || v.marca_modelo || 'em branco'}`, `
+  ${cabecalho(c)}
+  ${faixa('Carta de avaliação')}
+  <p style="margin-top:14px; font-size:10pt">A quem possa interessar,</p>
+  <p style="font-size:10pt">Prezado(s) Senhor(es):</p>
+  <p style="margin-top:14px; font-size:10pt; line-height:1.6">Informamos que o veículo ${dados}, pelo estado em que se encontra, conforme avaliação, no valor de ${preco}. Informamos ainda que esta avaliação não nos obriga a comprar ou a vender o veículo acima descrito.</p>
+  <p style="margin-top:10px; font-size:10pt; line-height:1.6">Sem mais para o momento e à disposição para quaisquer esclarecimentos complementares que se fizerem necessários, subscrevemo-nos.</p>
+  ${localData(c, op.data || null)}
+  <p style="margin-top:28px; font-size:10pt">Atenciosamente,</p>
+  <div style="width:260px; margin-top:44px; text-align:center">
+    <div class="traco"></div>${assinaturaLoja(c)}
+  </div>`);
+}
+
 // Modelo de consignação da loja. Com "quitado", entra o adendo de veículo já pago pela loja (troca ou compra sem transferir).
 function contratoConsignacao(d, c) {
   const v = d.veiculo;
@@ -406,9 +481,17 @@ function contratoConsignacao(d, c) {
 
 // tipo: 'entrada' (compra ou consignação, conforme o carro entrou), 'compra', 'consignacao' ou 'venda'.
 // Na compra sem transferir a loja imprime os dois: o de compra e a consignação com adendo.
-function gerarContrato(veiculoId, tipo) {
-  const d = db.obterVeiculo(veiculoId);
+function gerarContrato(veiculoId, tipo, opcoes = {}) {
   const c = db.obterConfig();
+  // Id 0 = modelo em branco (sem carro), só para os modelos que não dependem de dados do carro
+  if (Number(veiculoId) === 0) {
+    const vazio = { veiculo: {}, venda: null, comprador: null, fornecedor: null };
+    if (tipo === 'avaliacao') return cartaAvaliacao(vazio, c, opcoes);
+    if (tipo === 'repasse') return contratoRepasse(vazio, c);
+    throw db.erro('Este modelo precisa de um carro cadastrado', 400);
+  }
+  const d = db.obterVeiculo(veiculoId);
+  if (tipo === 'avaliacao') return cartaAvaliacao(d, c, opcoes);
   if (tipo === 'venda') {
     if (!d.venda) throw db.erro('Este carro ainda não foi vendido', 404);
     if (d.venda.km_saida == null) {
@@ -417,6 +500,7 @@ function gerarContrato(veiculoId, tipo) {
     d.trocaVeiculo = d.venda.troca_veiculo_id ? db.obterVeiculo(d.venda.troca_veiculo_id).veiculo : null;
     return contratoVenda(d, c);
   }
+  if (tipo === 'repasse') return contratoRepasse(d, c);
   if (tipo === 'compra') return contratoCompra(d, c);
   if (tipo === 'consignacao') return contratoConsignacao(d, c);
   if (tipo === 'entrada') return d.veiculo.tipo_entrada === 'compra' ? contratoCompra(d, c) : contratoConsignacao(d, c);

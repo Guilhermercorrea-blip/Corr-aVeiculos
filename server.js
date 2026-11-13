@@ -422,10 +422,10 @@ http.createServer((req, res) => {
 
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));
-  const contrato = url.pathname.match(/^\/contrato\/(\d+)\/(entrada|compra|consignacao|venda)$/);
+  const contrato = url.pathname.match(/^\/contrato\/(\d+)\/(entrada|compra|consignacao|venda|repasse|avaliacao)$/);
   if (contrato) {
     try {
-      const html = contratos.gerarContrato(Number(contrato[1]), contrato[2]);
+      const html = contratos.gerarContrato(Number(contrato[1]), contrato[2], Object.fromEntries(url.searchParams));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(html);
     } catch (e) {
