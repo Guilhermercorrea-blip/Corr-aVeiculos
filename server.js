@@ -147,6 +147,9 @@ rota('POST', '/api/site/redes/previa', (p, q, corpo) => redesSociais.montarPubli
 rota('GET', '/api/site/redes/conexao', () => redesMeta.conexao());
 rota('GET', '/api/site/publicacoes/:id/redes', p => redesMeta.situacao(p.id));
 rota('POST', '/api/site/publicacoes/:id/redes', (p, q, corpo) => redesMeta.postar(p.id, corpo));
+// Vendido: a tela manda a capa já com o selo; o servidor deixa só ela e apaga as outras fotos do anúncio
+rota('POST', '/api/site/publicacoes/:id/vendido', (p, q, corpo) => publicacoes.marcarVendido(p.id, corpo));
+rota('POST', '/api/site/publicacoes/:id/redes-vendido', p => redesMeta.postarVendido(p.id));
 rota('GET', '/api/site/estoque', () => publicacoes.estoque());
 rota('GET', '/api/site/estoque/:id', p => publicacoes.dadosEstoque(p.id));
 rota('POST', '/api/site/publicacoes/:id/celular', p => {
@@ -442,3 +445,11 @@ http.createServer((req, res) => {
   if (!auth.temUsuarios()) console.log('Primeiro acesso: abra http://localhost:' + PORTA + ' NESTE computador para criar o usuário.');
   console.log('Para fechar o sistema, feche esta janela.');
 });
+
+// Anúncios vendidos há mais de 15 dias saem do site e a foto é apagada (ao ligar e a cada 6 horas)
+function limparVendidos() {
+  try { const n = publicacoes.limparVendidos(); if (n) console.log(`${n} anúncio(s) vendido(s) há mais de ${publicacoes.DIAS_VENDIDO} dias excluído(s).`); }
+  catch (e) { console.error('Falha ao limpar anúncios vendidos:', e.message); }
+}
+limparVendidos();
+setInterval(limparVendidos, 6 * 60 * 60 * 1000).unref();

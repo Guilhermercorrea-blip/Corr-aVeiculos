@@ -155,4 +155,54 @@ async function postar(publicacaoId, { redes = [], repetir = false } = {}) {
   return resultado;
 }
 
-module.exports = { conexao, situacao, postar, lerChaves, ARQUIVO_CHAVES };
+// ---------- Post de "VENDIDO" (só a foto com o selo) ----------
+db.exec(`
+CREATE TABLE IF NOT EXISTS publicacoes_redes_vendido (
+  publicacao_id INTEGER NOT NULL REFERENCES publicacoes(id) ON DELETE CASCADE,
+  rede TEXT NOT NULL CHECK (rede IN ('facebook', 'instagram')),
+  status TEXT NOT NULL CHECK (status IN ('postado', 'erro')),
+  post_id TEXT,
+  erro TEXT,
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  PRIMARY KEY (publicacao_id, rede)
+);
+`);
+
+function textoVendido(anuncio) {
+  const { texto } = montarPublicacao({ titulo: anuncio.titulo, marca_modelo: anuncio.marca_modelo, versao: anuncio.versao, descricao: '', preco: null });
+  // Troca a linha do valor por uma mensagem de vendido e mantém o rodapé com endereço e contatos
+  const rodape = texto.split('\n\n').slice(2).join('\n\n');
+  return [`✅ VENDIDO!`, `${anuncio.titulo}`, 'Mais um cliente satisfeito! Obrigado pela confiança. 🙏🚗', 'Procurando o seu? Fale com a gente!', rodape].filter(Boolean).join('\n\n');
+}
+
+// Posta a foto do selo no Facebook e no Instagram (o que estiver conectado). Não repete onde já postou.
+async function postarVendido(publicacaoId) {
+  const chaves = lerChaves();
+  const conectado = conexao();
+  const redes = REDES.filter(r => conectado[r]);
+  if (!redes.length) return { conectado: false };
+  const base = process.env.ENDERECO_PUBLICO;
+  if (!base || !base.startsWith('https://')) throw erro('O endereço público do site (https) não está configurado no servidor');
+  const anuncio = publicacoes.publico(publicacaoId);
+  if (!anuncio.vendido || !anuncio.fotos.length) throw erro('Este anúncio não está marcado como vendido');
+  const url = new URL(anuncio.fotos[0].url, base).href;
+  const texto = textoVendido(anuncio);
+  const ja = Object.fromEntries(db.prepare('SELECT rede, status, post_id FROM publicacoes_redes_vendido WHERE publicacao_id = ?').all(publicacaoId).map(l => [l.rede, l]));
+  const resultado = { conectado: true };
+  for (const rede of redes) {
+    if (ja[rede]?.status === 'postado') { resultado[rede] = { ok: true, post_id: ja[rede].post_id, ja_postado: true }; continue; }
+    try {
+      const post_id = rede === 'facebook' ? await postarFacebook(chaves, [url], texto) : await postarInstagram(chaves, [url], texto);
+      resultado[rede] = { ok: true, post_id };
+    } catch (e) {
+      resultado[rede] = { ok: false, erro: e.message };
+    }
+    db.prepare(`INSERT INTO publicacoes_redes_vendido (publicacao_id, rede, status, post_id, erro) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(publicacao_id, rede) DO UPDATE SET status = excluded.status, post_id = excluded.post_id, erro = excluded.erro,
+      atualizado_em = datetime('now', 'localtime')`)
+      .run(publicacaoId, rede, resultado[rede].ok ? 'postado' : 'erro', resultado[rede].post_id || null, resultado[rede].erro || null);
+  }
+  return resultado;
+}
+
+module.exports = { conexao, situacao, postar, postarVendido, textoVendido, lerChaves, ARQUIVO_CHAVES };

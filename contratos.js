@@ -486,7 +486,17 @@ function gerarContrato(veiculoId, tipo, opcoes = {}) {
   // Id 0 = modelo em branco (sem carro), só para os modelos que não dependem de dados do carro
   if (Number(veiculoId) === 0) {
     const vazio = { veiculo: {}, venda: null, comprador: null, fornecedor: null };
-    if (tipo === 'avaliacao') return cartaAvaliacao(vazio, c, opcoes);
+    if (tipo === 'avaliacao') {
+      // Carro de fora (não cadastrado): os dados lidos do documento chegam pela consulta
+      const texto = (k, max) => String(opcoes[k] ?? '').trim().slice(0, max) || null;
+      const ano = k => (/^\d{4}$/.test(String(opcoes[k] ?? '')) ? Number(opcoes[k]) : null);
+      vazio.veiculo = {
+        marca_modelo: texto('marca_modelo', 80), placa: texto('placa', 10)?.toUpperCase() || null,
+        chassi: texto('chassi', 30)?.toUpperCase() || null, cor: texto('cor', 30),
+        ano_fab: ano('ano_fab'), ano_mod: ano('ano_mod'),
+      };
+      return cartaAvaliacao(vazio, c, opcoes);
+    }
     if (tipo === 'repasse') return contratoRepasse(vazio, c);
     throw db.erro('Este modelo precisa de um carro cadastrado', 400);
   }

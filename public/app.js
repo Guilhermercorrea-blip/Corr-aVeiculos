@@ -623,7 +623,8 @@ async function telaLista(status) {
 // Entrada de carro (nova) ou edição dos dados de um carro já cadastrado
 async function telaEntrada(id) {
   const atual = id ? await api('GET', `/veiculos/${id}`) : null;
-  const v = atual?.veiculo || { tipo_entrada: 'compra', entrada_em: agoraLocal() };
+  const pendente = id ? null : lerContratoPendente();
+  const v = atual?.veiculo || { tipo_entrada: pendente?.modelo === 'consignacao' ? 'consignacao' : 'compra', entrada_em: agoraLocal() };
   const ehTroca = v.tipo_entrada === 'troca';
   const opcao = (valor, titulo, texto) => `
     <label class="opcao"><input type="radio" name="veiculo.tipo_entrada" value="${valor}" ${v.tipo_entrada === valor ? 'checked' : ''}>
@@ -632,6 +633,7 @@ async function telaEntrada(id) {
   app.innerHTML = `
   <div class="cabecalho"><div><h1>${id ? 'Editar carro' : 'Entrada de carro'}</h1>
     <div class="suave">${id ? esc(v.marca_modelo) : 'Compra ou consignação'}</div></div></div>
+  ${avisoContratoPendente(pendente, 'entrada')}
   <form id="form" novalidate>
     ${blocoAnexos('CNH e CRLV')}
     ${ehTroca ? `<p class="suave">Este carro entrou como troca. O valor dele vem da venda.</p>` : `
@@ -658,7 +660,7 @@ async function telaEntrada(id) {
       </div>
     </fieldset>
     <div class="acoes-form">
-      <a class="botao-link secundario" href="${id ? `#/carro/${id}` : '#/estoque'}">Cancelar</a>
+      <a class="botao-link secundario" href="${id ? `#/carro/${id}` : pendente ? '#/contratos' : '#/estoque'}">Cancelar</a>
       <button type="submit">${id ? 'Salvar alterações' : 'Salvar entrada'}</button>
     </div>
   </form>`;
@@ -692,6 +694,10 @@ async function telaEntrada(id) {
       } else {
         const r = await api('POST', '/compras', { ...dados, anexos: form._anexos });
         aviso('Carro cadastrado no estoque');
+        // Veio da aba Contratos: segue para a venda (CNH do comprador) ou volta com o carro escolhido
+        const p = lerContratoPendente();
+        if (p && precisaComprador(p.modelo)) { gravarContratoPendente({ modelo: p.modelo, venda: r.id }); return ir(`#/carro/${r.id}/vender`); }
+        if (p) { gravarContratoPendente({ modelo: p.modelo, carro: r.id }); return ir('#/contratos'); }
         ir(`#/carro/${r.id}`);
       }
     });
@@ -1029,10 +1035,13 @@ async function telaVenda(id) {
   const d = await api('GET', `/veiculos/${id}`);
   const v = d.veiculo;
   if (v.status !== 'estoque') return ir(`#/carro/${id}`);
+  // Só vale o aviso/volta para Contratos se a venda é do carro que acabou de ser cadastrado lá
+  const pendenteVenda = lerContratoPendente()?.venda === id ? lerContratoPendente() : null;
 
   app.innerHTML = `
   <div class="cabecalho"><div><h1>Registrar venda</h1>
     <div class="suave">${esc(v.marca_modelo)} · <span class="placa">${esc(formatarPlaca(v.placa))}</span> · custo total ${reais(v.custo_total)}</div></div></div>
+  ${avisoContratoPendente(pendenteVenda, 'venda')}
   <form id="form" novalidate>
     ${blocoAnexos('CNH do comprador e CRLV da troca')}
     ${blocoPessoa('pessoa', 'Comprador')}
@@ -1082,7 +1091,7 @@ async function telaVenda(id) {
     <div class="conferencia" id="conferencia"></div>
     <label class="campo" style="margin-top:12px"><span>Observações</span><textarea name="venda.obs" rows="2"></textarea></label>
     <div class="acoes-form">
-      <a class="botao-link secundario" href="#/carro/${id}">Cancelar</a>
+      <a class="botao-link secundario" href="${pendenteVenda ? '#/contratos' : `#/carro/${id}`}">Cancelar</a>
       <button type="submit">Confirmar venda</button>
     </div>
   </form>`;
@@ -1164,6 +1173,7 @@ async function telaVenda(id) {
       };
       const r = await api('POST', `/veiculos/${id}/venda`, corpo);
       aviso(r.troca_veiculo_id ? 'Venda registrada. O carro da troca entrou no estoque.' : 'Venda registrada');
+      if (pendenteVenda) { gravarContratoPendente({ modelo: pendenteVenda.modelo, carro: id }); return ir('#/contratos'); }
       ir(`#/carro/${id}`);
     });
   });
@@ -1326,10 +1336,33 @@ const MODELOS_CONTRATO = [
   { tipo: 'avaliacao', nome: 'Carta de avaliação', texto: 'Informa quanto a loja avalia o veículo, sem obrigar a comprar nem a vender. Os dados saem do cadastro do carro (feito pela foto ou PDF do documento); o valor você digita aqui. Em "Em branco" tudo sai em linhas para preencher à mão.', vendido: false, avaliacao: true, branco: true },
 ];
 
+// "Adicionar novo veículo" na aba Contratos: guarda o modelo escolhido enquanto o carro é cadastrado
+// (entrada com CRLV + CNH do vendedor e, se o modelo pede comprador, a venda com CNH do comprador)
+const CONTRATO_PENDENTE = 'contratoPendente';
+function lerContratoPendente() {
+  try { return JSON.parse(sessionStorage.getItem(CONTRATO_PENDENTE) || 'null'); } catch { return null; }
+}
+function gravarContratoPendente(dados) {
+  try { dados ? sessionStorage.setItem(CONTRATO_PENDENTE, JSON.stringify(dados)) : sessionStorage.removeItem(CONTRATO_PENDENTE); } catch { /* sem armazenamento: só não volta sozinho */ }
+}
+const precisaComprador = modelo => modelo === 'venda' || modelo === 'repasse';
+function avisoContratoPendente(pendente, etapa) {
+  if (!pendente) return '';
+  const nome = MODELOS_CONTRATO.find(m => m.tipo === pendente.modelo)?.nome || 'contrato';
+  const texto = etapa === 'entrada'
+    ? `Cadastro para o contrato de <strong>${esc(nome)}</strong>. Anexe o documento do carro (CRLV) e a CNH ou RG do vendedor/dono: o sistema preenche sozinho. ${precisaComprador(pendente.modelo) ? 'Depois de salvar, abre a venda para anexar a CNH do comprador.' : 'Depois de salvar, volta para Contratos com o carro já escolhido.'}`
+    : `Venda para o contrato de <strong>${esc(nome)}</strong>. Anexe a CNH ou RG do comprador: o sistema preenche sozinho. Depois de confirmar, volta para Contratos com o carro já escolhido.`;
+  return `<div class="cartao" style="border-left:4px solid #17385f"><p style="margin:0">${texto}</p></div>`;
+}
+
 async function telaContratos() {
   const [estoque, vendidos] = await Promise.all([api('GET', '/veiculos?status=estoque'), api('GET', '/veiculos?status=vendido')]);
   const rotuloCarro = v => `${v.marca_modelo}${v.placa ? ' · ' + formatarPlaca(v.placa) : ''}`;
   const opcoes = lista => lista.map(v => `<option value="${v.id}">${esc(rotuloCarro(v))}</option>`).join('');
+  // Voltando do cadastro de um carro novo: já deixa o modelo e o carro escolhidos
+  const pendente = lerContratoPendente();
+  const pronto = pendente?.carro ? pendente : null;
+  if (pendente) gravarContratoPendente(null);
   app.innerHTML = `
   <div class="cabecalho"><div><h1>Contratos</h1><div class="suave">Escolha o modelo e o carro. A janela de impressão abre sozinha.</div></div></div>
   <div class="cartao">
@@ -1346,6 +1379,11 @@ async function telaContratos() {
       <div class="campo c8"><label for="contrato-extras">Dados extras (opcional)</label>
         <input id="contrato-extras" placeholder="Ex.: potência 1500W, fabricante Golden Bull"></div>
     </div>
+    <form id="form" novalidate hidden>
+      <p class="suave pequeno" style="margin:12px 0 0">Carro de fora: anexe a foto ou o PDF do documento (CRLV) e o sistema preenche os dados abaixo. Ele <strong>não</strong> entra no estoque.</p>
+      ${blocoAnexos('o documento do carro')}
+      ${blocoVeiculo('veiculo', 'Dados do carro avaliado')}
+    </form>
     <p class="suave pequeno" id="contrato-descricao"></p>
     <div class="acoes"><button type="button" id="contrato-gerar">Abrir para imprimir</button></div>
   </div>
@@ -1356,30 +1394,67 @@ async function telaContratos() {
   </div>`;
   const modelo = document.getElementById('contrato-modelo');
   const carro = document.getElementById('contrato-carro');
+  const form = document.getElementById('form');
+  const botaoGerar = document.getElementById('contrato-gerar');
+  ligarAnexos(form, 'entrada');
+  // Na avaliação de carro de fora só interessa o documento: esconde km do painel e fotos do carro
+  form.querySelectorAll('details.fotos-opcionais').forEach(d => (d.hidden = true));
+  if (pronto && MODELOS_CONTRATO.some(m => m.tipo === pronto.modelo)) modelo.value = pronto.modelo;
+  const novo = () => carro.value === 'novo';
+  const ajustarCarro = () => {
+    const avaliacaoDeFora = novo() && modelo.value === 'avaliacao';
+    form.hidden = !avaliacaoDeFora;
+    botaoGerar.textContent = novo() && !avaliacaoDeFora ? 'Cadastrar o carro e anexar documentos' : 'Abrir para imprimir';
+  };
   const atualizar = () => {
     const m = MODELOS_CONTRATO.find(x => x.tipo === modelo.value);
     const emBranco = m.branco ? '<option value="0">Em branco (preencher à mão)</option>' : '';
-    carro.innerHTML = m.vendido
-      ? (vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : '<option value="">Nenhum carro vendido ainda</option>')
-      : `${emBranco}${estoque.length ? `<optgroup label="Em estoque">${opcoes(estoque)}</optgroup>` : ''}${vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : ''}` || '<option value="">Nenhum carro cadastrado</option>';
+    const opcaoNovo = `<option value="novo">+ Adicionar novo veículo (foto do documento${m.avaliacao ? '' : ' e da CNH'})</option>`;
+    const lista = m.vendido
+      ? (vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : '')
+      : `${estoque.length ? `<optgroup label="Em estoque">${opcoes(estoque)}</optgroup>` : ''}${vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : ''}`;
+    carro.innerHTML = `${opcaoNovo}${emBranco}${lista}`;
+    // Por padrão continua no primeiro carro da lista (como antes); "novo" só quando a pessoa escolhe
+    const primeiro = carro.querySelector('optgroup option');
+    if (primeiro) carro.value = primeiro.value;
     document.getElementById('contrato-descricao').textContent = m.texto;
     document.getElementById('contrato-avaliacao').hidden = !m.avaliacao;
+    ajustarCarro();
   };
   modelo.addEventListener('change', atualizar);
+  carro.addEventListener('change', ajustarCarro);
   atualizar();
-  document.getElementById('contrato-gerar').addEventListener('click', () => {
+  if (pronto && carro.querySelector(`option[value="${Number(pronto.carro)}"]`)) {
+    carro.value = String(Number(pronto.carro));
+    ajustarCarro();
+    aviso('Carro cadastrado. Confira e clique em "Abrir para imprimir".');
+  }
+  botaoGerar.addEventListener('click', () => {
     if (!carro.value) return aviso('Escolha um carro para montar o contrato.', true);
+    // Carro novo (menos na avaliação): cadastra pela entrada de carro, que lê CRLV e CNH, e volta para cá
+    if (novo() && modelo.value !== 'avaliacao') {
+      gravarContratoPendente({ modelo: modelo.value });
+      return ir('#/nova-entrada');
+    }
     let consulta = '';
+    const q = new URLSearchParams();
     if (modelo.value === 'avaliacao') {
       let centavos = null;
       try { centavos = paraCentavos(document.getElementById('contrato-valor').value); } catch { return aviso('Valor da avaliação inválido.', true); }
-      const q = new URLSearchParams();
       if (centavos) q.set('valor', centavos);
       const extras = document.getElementById('contrato-extras').value.trim();
       if (extras) q.set('extras', extras);
-      consulta = q.toString() ? `?${q}` : '';
+      if (novo()) {
+        if (form._uploadsPendentes > 0 || form._celularPendente) return aviso('Aguarde a leitura do documento.', true);
+        const v = lerForm(form).veiculo || {};
+        if (!v.marca_modelo) { form.elements['veiculo.marca_modelo'].focus(); return aviso('Anexe o documento ou digite a marca/modelo do carro.', true); }
+        for (const k of ['marca_modelo', 'placa', 'ano_fab', 'ano_mod', 'cor', 'chassi']) {
+          if (v[k]) q.set(k, k === 'placa' || k === 'chassi' ? String(v[k]).toUpperCase().replace(/[^A-Z0-9]/g, '') : v[k]);
+        }
+      }
     }
-    window.open(`/contrato/${carro.value}/${modelo.value}${consulta}`, '_blank');
+    consulta = q.toString() ? `?${q}` : '';
+    window.open(`/contrato/${novo() ? 0 : carro.value}/${modelo.value}${consulta}`, '_blank');
   });
 }
 
@@ -1503,6 +1578,8 @@ async function telaConfiguracoes() {
 async function navegar() {
   const partes = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [pagina, id, acao] = partes;
+  // Saiu do caminho "Contratos > novo veículo" (entrada e venda): esquece o pedido para não voltar à toa
+  if (!['contratos', 'nova-entrada'].includes(pagina) && !(pagina === 'carro' && acao === 'vender')) gravarContratoPendente(null);
   document.querySelectorAll('[data-menu]').forEach(a => a.classList.toggle('ativo', a.dataset.menu === (pagina || 'painel')));
   window.scrollTo(0, 0);
   try {

@@ -22,13 +22,17 @@ function aviso(texto, erro = false) {
   $('status').querySelector('button').onclick = () => { $('status').hidden = true; };
   if (!erro) timerAviso = setTimeout(() => { $('status').hidden = true; }, 7000);
 }
+function fimVendido(p) {
+  if (!p.vendido_em) return '';
+  return new Date(Date.parse(p.vendido_em.replace(' ', 'T') + 'Z') + 15 * 86400000).toLocaleDateString('pt-BR');
+}
 function normal(texto) { return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
-function situacao(p) { return p.veiculo_id && p.estado_estoque !== 'estoque' ? 'Fora do estoque' : p.situacao === 'vendido' ? 'Vendido' : p.visivel ? 'No site' : 'Rascunho'; }
+function situacao(p) { return p.situacao === 'vendido' ? (p.visivel ? 'Vendido · no site até ' + fimVendido(p) : 'Vendido') : p.veiculo_id && p.estado_estoque !== 'estoque' ? 'Fora do estoque' : p.visivel ? 'No site' : 'Rascunho'; }
 function lista() {
-  $('resumo-anuncios').innerHTML = `<div><strong>${anuncios.filter(p => p.visivel).length}</strong><span>No site</span></div><div><strong>${anuncios.filter(p => p.situacao === 'rascunho').length}</strong><span>Rascunhos</span></div><div><strong>${anuncios.filter(p => p.situacao === 'vendido' || p.veiculo_id && p.estado_estoque !== 'estoque').length}</strong><span>Vendidos / fora do estoque</span></div>`;
+  $('resumo-anuncios').innerHTML = `<div><strong>${anuncios.filter(p => p.visivel && p.situacao !== 'vendido').length}</strong><span>No site</span></div><div><strong>${anuncios.filter(p => p.situacao === 'rascunho').length}</strong><span>Rascunhos</span></div><div><strong>${anuncios.filter(p => p.situacao === 'vendido' || p.veiculo_id && p.estado_estoque !== 'estoque').length}</strong><span>Vendidos / fora do estoque</span></div>`;
   const busca = normal($('busca-anuncio').value.trim()), filtro = $('filtro-anuncios').value;
   const visiveis = anuncios.filter(p => normal(p.titulo + ' ' + p.marca_modelo).includes(busca) &&
-    (filtro === 'todos' || filtro === 'publicados' && p.visivel || filtro === 'rascunhos' && p.situacao === 'rascunho' || filtro === 'vendidos' && (p.situacao === 'vendido' || p.veiculo_id && p.estado_estoque !== 'estoque')));
+    (filtro === 'todos' || filtro === 'publicados' && p.visivel && p.situacao !== 'vendido' || filtro === 'rascunhos' && p.situacao === 'rascunho' || filtro === 'vendidos' && (p.situacao === 'vendido' || p.veiculo_id && p.estado_estoque !== 'estoque')));
   $('lista').innerHTML = visiveis.length ? visiveis.map(p => `<button class="item-anuncio" type="button" data-anuncio="${p.id}" aria-pressed="${atual?.id === p.id}">${p.fotos[0] ? `<img src="${p.fotos[0].url}" alt="" loading="lazy">` : ''}<span><strong>${esc(p.titulo)}</strong><small>${esc([p.ano_fab, p.ano_mod].filter(Boolean).join('/'))} · ${reais(p.preco)}</small><br><span class="tag-anuncio ${p.visivel ? 'no-ar' : ''}">${situacao(p)}</span></span></button>`).join('') : '<p class="suave pequeno">Nenhum anúncio encontrado. Use Novo anúncio ou traga um carro do estoque.</p>';
   document.querySelectorAll('[data-anuncio]').forEach(b => { b.disabled = salvando; b.onclick = () => abrir(Number(b.dataset.anuncio)); });
 }
@@ -70,7 +74,7 @@ function editor(p) {
       <div class="compositor-topo"><div class="compositor-voltar"><button type="button" id="fechar-editor" class="secundario" aria-label="Voltar aos anúncios">←</button><a href="/" target="_blank" rel="noopener">Corrêa Veículos ↗</a></div><div class="compositor-titulo"><div><p class="suave pequeno">${p.veiculo_id ? 'Do estoque da loja' : 'Anúncio independente'}</p><h1>Veículo à venda</h1></div><button type="button" id="salvar-rascunho" class="secundario">${p.visivel || p.situacao === 'vendido' ? 'Salvar alterações' : 'Salvar rascunho'}</button></div><div class="alternar-previa" role="group" aria-label="Visualização"><button type="button" id="aba-editar" aria-pressed="true">Preencher</button><button type="button" id="aba-previa" class="secundario" aria-pressed="false">Ver prévia</button></div></div>
       <form id="form-anuncio"><fieldset id="campos-anuncio">
         <div class="compositor-rolagem">
-          ${bloqueado ? '<p class="aviso-publicacao">Este carro está fora do estoque e fica oculto no site.</p>' : p.visivel ? '<p class="aviso-publicacao">Anúncio no ar. Salvar alterações atualiza o site.</p>' : ''}
+          ${p.situacao === 'vendido' ? `<p class="aviso-publicacao">${p.visivel ? `Vendido: aparece no site só com a foto do selo até ${esc(fimVendido(p))}. Depois o anúncio é excluído sozinho.` : 'Vendido: não aparece no site.'}</p>` : bloqueado ? '<p class="aviso-publicacao">Este carro está fora do estoque e fica oculto no site.</p>' : p.visivel ? '<p class="aviso-publicacao">Anúncio no ar. Salvar alterações atualiza o site.</p>' : ''}
           <section data-etapa="1"><h2 class="titulo-etapa">Fotos e informações</h2>
             ${selecionar('tipo_veiculo', 'Tipo de veículo', TIPOS_VEICULO, p.tipo_veiculo || 'Carro/picape', 'required')}
             <section class="secao-fotos"><h3>Fotos <span id="contador-fotos" class="suave pequeno"></span></h3><p class="nota-editor">A primeira foto será a capa do anúncio.</p>
@@ -105,7 +109,7 @@ function editor(p) {
             <div id="resumo-publicacao" class="aviso-publicacao"></div>
             <div class="previa-redes"><h3>Facebook e Instagram</h3><p class="nota-editor">Confira o texto com valor, endereço e os contatos das publicações.</p><button type="button" id="previa-redes" class="secundario">Prévia para Facebook e Instagram</button><div id="redes-postar" class="redes-postar"><p class="nota-editor">Verificando a conexão com as redes…</p></div></div>
             ${p.veiculo_id ? `<p class="nota-editor">Vinculado ao estoque. As alterações aqui valem apenas para o anúncio. <a href="/sistema#/carro/${p.veiculo_id}" target="_blank" rel="noopener">Abrir no sistema ↗</a></p>` : '<p class="nota-editor">Este cadastro é só para divulgação. Não cria uma compra, venda ou contrato.</p>'}
-            ${p.id ? `<div class="acoes acoes-situacao">${p.visivel ? `<a class="botao-link secundario" href="/carro/${p.id}" target="_blank" rel="noopener">Ver no site ↗</a><button type="button" id="retirar" class="perigo">Retirar do site</button>` : ''}${!p.veiculo_id && p.situacao !== 'vendido' ? '<button type="button" id="marcar-vendido" class="secundario">Marcar como vendido</button>' : ''}${p.situacao === 'vendido' ? '<button type="button" id="voltar-rascunho" class="secundario">Voltar para rascunho</button>' : ''}</div>` : ''}
+            ${p.id ? `<div class="acoes acoes-situacao">${p.visivel ? `<a class="botao-link secundario" href="/carro/${p.id}" target="_blank" rel="noopener">Ver no site ↗</a><button type="button" id="retirar" class="perigo">Retirar do site</button>` : ''}${p.situacao !== 'vendido' ? '<button type="button" id="marcar-vendido" class="secundario">Marcar como vendido</button>' : ''}${p.situacao === 'vendido' ? '<button type="button" id="voltar-rascunho" class="secundario">Voltar para rascunho</button>' : ''}</div>` : ''}
           </section>
           <div id="progresso-fotos" role="status" hidden></div>
         </div>
@@ -143,7 +147,7 @@ function editor(p) {
   $('aba-editar').onclick = () => alternarPrevia(false);
   $('aba-previa').onclick = () => alternarPrevia(true);
   $('retirar')?.addEventListener('click', retirar);
-  $('marcar-vendido')?.addEventListener('click', async () => { if (await confirmarAcao('Marcar este anúncio como vendido e retirá-lo do site? Isso atualiza somente a divulgação, sem registrar uma venda financeira.', 'Marcar como vendido')) gravar('vendido'); });
+  $('marcar-vendido')?.addEventListener('click', marcarVendido);
   $('voltar-rascunho')?.addEventListener('click', () => gravar('rascunho'));
   alternarPrevia(false); mostrarEtapa(1); renderFotos();
 }
@@ -387,6 +391,46 @@ function confirmarAcao(texto, rotulo) {
     dialog.oncancel = () => fim(false); dialog.onclose = () => fim(false);
     dialog.showModal();
   });
+}
+// ---------- Vendido: capa com o selo no canto, só ela fica no site por 15 dias e vai para as redes ----------
+function carregarImagem(url) {
+  return new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não foi possível abrir a foto da capa.')); i.src = url; });
+}
+async function fotoVendido(urlCapa) {
+  const [foto, selo] = await Promise.all([carregarImagem(urlCapa), carregarImagem('/img/selo-vendido.png')]);
+  const escala = Math.min(1, 1600 / Math.max(foto.naturalWidth, foto.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(foto.naturalWidth * escala); c.height = Math.round(foto.naturalHeight * escala);
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(foto, 0, 0, c.width, c.height);
+  // Selo pequeno no canto de baixo à direita (cerca de 1/4 da largura; menor se a foto for em pé)
+  const larg = Math.min(c.width * 0.26, c.height * 0.3 * selo.naturalWidth / selo.naturalHeight), alt = larg * selo.naturalHeight / selo.naturalWidth, margem = c.width * 0.025;
+  g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = c.width * 0.012;
+  g.drawImage(selo, c.width - larg - margem, c.height - alt - margem, larg, alt);
+  return { tipo_mime: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.88).split(',')[1] };
+}
+async function marcarVendido() {
+  if (salvando) return;
+  if (alterado) return aviso('Salve as alterações do anúncio antes de marcar como vendido.', true);
+  const capa = fotos.find(f => f.id === ordem[0]);
+  if (!capa || capa.arquivo) return aviso('O anúncio precisa de uma foto de capa salva para colocar o selo de vendido.', true);
+  if (!await confirmarAcao(`Marcar ${atual.titulo} como vendido? A foto da capa ganha o selo VENDIDO e fica no site por 15 dias; depois o anúncio é excluído. As outras ${Math.max(0, ordem.length - 1)} foto(s) são apagadas agora, para liberar espaço (não dá para desfazer). A foto também é postada no Instagram e no Facebook.`, 'Marcar como vendido')) return;
+  bloquear(true);
+  try {
+    $('progresso-fotos').hidden = false; $('progresso-fotos').textContent = 'Colocando o selo de vendido na foto…';
+    const foto = await fotoVendido(capa.url);
+    $('progresso-fotos').textContent = 'Salvando… Não feche esta tela.';
+    const salvo = await api('POST', `/publicacoes/${atual.id}/vendido`, { revisao: atual.revisao, foto });
+    anuncios = anuncios.map(p => p.id === salvo.id ? salvo : p);
+    alterado = false; bloquear(false); editor(salvo);
+    aviso(`${salvo.titulo} marcado como vendido. Postando no Instagram e no Facebook…`);
+    try {
+      const r = await api('POST', `/publicacoes/${salvo.id}/redes-vendido`, {});
+      const redes = Object.keys(NOME_REDE).filter(rede => r[rede]);
+      aviso(!r.conectado ? `${salvo.titulo} marcado como vendido. As redes não estão conectadas, então não postou.`
+        : `${salvo.titulo} vendido. ` + redes.map(rede => `${NOME_REDE[rede]}: ${r[rede].ok ? 'postado ✓' : 'não postou (' + r[rede].erro + ')'}`).join(' · '), redes.some(rede => !r[rede].ok));
+    } catch (e) { aviso(`${salvo.titulo} marcado como vendido, mas não postou nas redes: ${e.message}`, true); }
+  } catch (e) { bloquear(false); $('progresso-fotos').hidden = true; aviso(e.message, true); }
 }
 async function retirar() {
   if (salvando || !await confirmarAcao(`Retirar este anúncio do site? O carro continua cadastrado.${alterado ? ' As alterações ainda não salvas serão descartadas.' : ''}`, 'Retirar do site')) return;

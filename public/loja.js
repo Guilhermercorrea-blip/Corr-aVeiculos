@@ -77,17 +77,20 @@ function renderizar() {
   if (ordem === 'menor') filtrados.sort((a, b) => (a.preco ?? Infinity) - (b.preco ?? Infinity));
   if (ordem === 'maior') filtrados.sort((a, b) => (b.preco ?? -1) - (a.preco ?? -1));
   if (ordem === 'ano') filtrados.sort((a, b) => (b.ano_mod || b.ano_fab || 0) - (a.ano_mod || a.ano_fab || 0));
-  el('contagem').textContent = `${filtrados.length} ${filtrados.length === 1 ? 'carro disponível' : 'carros disponíveis'}`;
-  el('carros').innerHTML = filtrados.length ? filtrados.map(c => `<a class="cartao-carro" href="/carro/${c.id}" aria-label="Ver ${esc(c.titulo)}">
-    <div class="foto-cartao">${imagem(c.fotos[0], c.titulo)}${c.destaque ? '<span class="tag">DESTAQUE</span>' : ''}</div>
-    <div class="info-cartao"><h3>${esc(c.titulo)}</h3><div class="especificacoes"><span>${esc([c.ano_fab, c.ano_mod].filter(Boolean).join('/'))}</span>${c.km !== null ? `<span>${numero(c.km)} km</span>` : ''}${c.combustivel ? `<span>${esc(c.combustivel)}</span>` : ''}</div><div class="preco-cartao"><strong>${dinheiro(c.preco)}</strong><span aria-hidden="true">↗</span></div></div></a>`).join('') : `<div class="vazio"><h3>${carros.length ? 'Nenhum carro com esses filtros' : 'Em breve, novos carros por aqui'}</h3><p>${carros.length ? 'Experimente buscar outro modelo ou ampliar a faixa de preço.' : 'Estamos preparando nossos anúncios. Fale com a equipe para consultar o estoque.'}</p>${carros.length ? '<button type="button" class="botao" id="limpar-filtros">Limpar filtros</button>' : contato(whatsapp('Olá! Gostaria de consultar os carros disponíveis.'), 'Consultar o estoque')}</div>`;
+  const aVenda = filtrados.filter(c => !c.vendido).length;
+  el('contagem').textContent = `${aVenda} ${aVenda === 1 ? 'carro disponível' : 'carros disponíveis'}`;
+  // Vendidos dos últimos 15 dias aparecem por último, com a foto do selo e sem preço
+  filtrados.sort((a, b) => Number(a.vendido) - Number(b.vendido));
+  el('carros').innerHTML = filtrados.length ? filtrados.map(c => `<a class="cartao-carro${c.vendido ? ' vendido' : ''}" href="/carro/${c.id}" aria-label="${c.vendido ? 'Vendido: ' : 'Ver '}${esc(c.titulo)}">
+    <div class="foto-cartao">${imagem(c.fotos[0], c.titulo)}${c.vendido ? '<span class="tag tag-vendido">VENDIDO</span>' : c.destaque ? '<span class="tag">DESTAQUE</span>' : ''}</div>
+    <div class="info-cartao"><h3>${esc(c.titulo)}</h3><div class="especificacoes"><span>${esc([c.ano_fab, c.ano_mod].filter(Boolean).join('/'))}</span>${c.km !== null ? `<span>${numero(c.km)} km</span>` : ''}${c.combustivel ? `<span>${esc(c.combustivel)}</span>` : ''}</div><div class="preco-cartao"><strong>${c.vendido ? 'Vendido' : dinheiro(c.preco)}</strong><span aria-hidden="true">↗</span></div></div></a>`).join('') : `<div class="vazio"><h3>${carros.length ? 'Nenhum carro com esses filtros' : 'Em breve, novos carros por aqui'}</h3><p>${carros.length ? 'Experimente buscar outro modelo ou ampliar a faixa de preço.' : 'Estamos preparando nossos anúncios. Fale com a equipe para consultar o estoque.'}</p>${carros.length ? '<button type="button" class="botao" id="limpar-filtros">Limpar filtros</button>' : contato(whatsapp('Olá! Gostaria de consultar os carros disponíveis.'), 'Consultar o estoque')}</div>`;
   el('limpar-filtros')?.addEventListener('click', () => { el('busca').value = ''; el('preco').value = ''; el('ordem').value = 'destaques'; renderizar(); });
 }
 function detalhe(carro) {
   el('inicio').hidden = true; el('detalhe').hidden = false;
   document.title = `${carro.titulo} | ${loja.nome}`;
   const atributos = [['Ano', [carro.ano_fab, carro.ano_mod].filter(Boolean).join('/') || 'Não informado'], ['Quilometragem', carro.km === null ? 'Não informada' : numero(carro.km) + ' km'], ['Combustível', carro.combustivel || 'Não informado'], ['Cor', carro.cor || 'Não informada'], ...(carro.versao ? [['Versão', carro.versao]] : []), ...(carro.cambio ? [['Câmbio', carro.cambio]] : []), ...(carro.portas ? [['Portas', carro.portas]] : [])];
-  el('detalhe').innerHTML = `<a class="voltar" href="/#estoque">← Voltar para os carros</a><div class="detalhe-grid"><div><div id="foto-principal">${imagem(carro.fotos[0], carro.titulo, 'foto-grande')}</div>${carro.fotos.length > 1 ? `<div class="miniaturas" aria-label="Fotos do carro">${carro.fotos.map((f, i) => `<button type="button" aria-label="Ver foto ${i + 1}" aria-pressed="${i === 0}" data-foto-indice="${i}">${imagem(f, `Foto ${i + 1} de ${carro.titulo}`)}</button>`).join('')}</div>` : ''}</div><div><p class="etiqueta">${esc(loja.nome.toUpperCase())}</p><h1>${esc(carro.titulo)}</h1><p class="preco-detalhe">${dinheiro(carro.preco)}</p><dl class="ficha">${atributos.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${contato(whatsapp(`Olá! Tenho interesse no ${carro.titulo}. ${location.origin}/carro/${carro.id}`), 'Tenho interesse neste carro')}<p class="descricao">${esc(carro.descricao)}</p><p class="nota">Consulte a equipe para confirmar disponibilidade, valores e condições.</p></div></div>`;
+  el('detalhe').innerHTML = `<a class="voltar" href="/#estoque">← Voltar para os carros</a><div class="detalhe-grid"><div><div id="foto-principal">${imagem(carro.fotos[0], carro.titulo, 'foto-grande')}</div>${carro.fotos.length > 1 ? `<div class="miniaturas" aria-label="Fotos do carro">${carro.fotos.map((f, i) => `<button type="button" aria-label="Ver foto ${i + 1}" aria-pressed="${i === 0}" data-foto-indice="${i}">${imagem(f, `Foto ${i + 1} de ${carro.titulo}`)}</button>`).join('')}</div>` : ''}</div><div><p class="etiqueta">${esc(loja.nome.toUpperCase())}</p><h1>${esc(carro.titulo)}</h1><p class="preco-detalhe">${carro.vendido ? '<span class="vendido-detalhe">VENDIDO</span>' : dinheiro(carro.preco)}</p><dl class="ficha">${atributos.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>${carro.vendido ? '<a class="botao" href="/#estoque">Ver os carros disponíveis <span aria-hidden="true">↗</span></a>' : contato(whatsapp(`Olá! Tenho interesse no ${carro.titulo}. ${location.origin}/carro/${carro.id}`), 'Tenho interesse neste carro')}<p class="descricao">${esc(carro.descricao)}</p><p class="nota">Consulte a equipe para confirmar disponibilidade, valores e condições.</p></div></div>`;
   if (carro.tipo_veiculo && carro.tipo_veiculo !== 'Carro/picape') {
     const item = document.createElement('div');
     item.innerHTML = `<dt>Tipo de veículo</dt><dd>${esc(carro.tipo_veiculo)}</dd>`;
@@ -104,6 +107,26 @@ function detalhe(carro) {
     el('detalhe').append(equipamentos);
   }
 }
+// Topo da página: passa a foto principal de cada carro à venda, trocando a cada 3 segundos
+let timerVitrine;
+function vitrineTopo(lista) {
+  if (!lista.length) return;
+  const caixa = el('hero-vitrine');
+  caixa.innerHTML = `<div class="hero-slides">${lista.map((c, i) => `<a class="hero-slide${i ? '' : ' ativo'}" href="/carro/${c.id}"${i ? ' tabindex="-1" aria-hidden="true"' : ''}>${imagem(c.fotos[0], c.titulo, 'hero-foto')}<div class="hero-carro"><small>NO NOSSO ESTOQUE</small><h2>${esc(c.titulo)}</h2><p>${dinheiro(c.preco)} <span aria-hidden="true">↗</span></p></div></a>`).join('')}</div>`;
+  const slides = [...caixa.querySelectorAll('.hero-slide')];
+  slides.forEach((s, i) => { if (i) s.querySelector('img')?.setAttribute('loading', 'lazy'); else s.querySelector('img')?.removeAttribute('loading'); });
+  clearInterval(timerVitrine);
+  if (slides.length < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let atual = 0, parado = false;
+  caixa.addEventListener('mouseenter', () => { parado = true; });
+  caixa.addEventListener('mouseleave', () => { parado = false; });
+  timerVitrine = setInterval(() => {
+    if (parado || document.hidden) return;
+    const antes = slides[atual]; atual = (atual + 1) % slides.length; const depois = slides[atual];
+    antes.classList.remove('ativo'); antes.setAttribute('aria-hidden', 'true'); antes.tabIndex = -1;
+    depois.classList.add('ativo'); depois.removeAttribute('aria-hidden'); depois.removeAttribute('tabindex');
+  }, 3000);
+}
 async function carregar() {
   const id = /^\/carro\/(\d+)$/.exec(location.pathname)?.[1];
   try {
@@ -115,8 +138,7 @@ async function carregar() {
     document.title = id ? document.title : `${loja.nome} | Encontre seu próximo carro`;
     if (id) return detalhe(dados.carro);
     carros = dados.carros; renderizar();
-    const destaque = carros.find(c => c.fotos.length);
-    if (destaque) el('hero-vitrine').innerHTML = `<a href="/carro/${destaque.id}">${imagem(destaque.fotos[0], destaque.titulo, 'hero-foto')}<div class="hero-carro"><small>NO NOSSO ESTOQUE</small><h2>${esc(destaque.titulo)}</h2><p>${dinheiro(destaque.preco)} <span aria-hidden="true">↗</span></p></div></a>`;
+    vitrineTopo(carros.filter(c => !c.vendido && c.fotos.length));
   } catch (erro) {
     el('mensagem').hidden = false; el('mensagem').textContent = erro.message;
     if (id) { el('inicio').hidden = true; el('detalhe').hidden = false; el('detalhe').innerHTML = '<a class="botao" href="/#estoque">Ver os carros da loja ↗</a>'; }

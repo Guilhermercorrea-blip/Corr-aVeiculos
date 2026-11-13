@@ -48,3 +48,8 @@
 .galeria-pontos button{width:9px;height:9px;border-radius:50%;border:0;padding:0;background:#ffffff80;cursor:pointer}
 .galeria-pontos button[aria-current=true]{background:#fff;width:22px;border-radius:5px}
 @media (max-width:800px){.chegar-grid{grid-template-columns:1fr}.mapa-caixa,.mapa-caixa iframe{min-height:300px}.galeria,.galeria-trilho img{min-height:280px}.galeria-seta{width:36px;height:36px;font-size:24px}}
+/* Topo: fotos dos carros à venda passando a cada 3 segundos */
+.hero-slides{position:absolute;inset:0}.hero-slide{position:absolute;inset:0;opacity:0;transition:opacity .9s ease;pointer-events:none}.hero-slide.ativo{opacity:1;pointer-events:auto;z-index:1}.hero-slide .hero-foto{height:100%;max-height:none;min-height:0}
+@media (prefers-reduced-motion:reduce){.hero-slide{transition:none}}
+/* Vendidos dos últimos 15 dias */
+.tag-vendido{background:var(--vermelho);color:#fff}.cartao-carro.vendido .preco-cartao strong{color:var(--vermelho);font-size:18px;letter-spacing:.06em}.vendido-detalhe{color:var(--vermelho);letter-spacing:.08em}

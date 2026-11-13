@@ -42,6 +42,9 @@ const colunas = new Set(db.prepare('PRAGMA table_info(publicacoes)').all().map(c
 for (const [nome, padrao] of [['tipo_veiculo', 'Carro/picape'], ['fabricante', ''], ['modelo', '']]) {
   if (!colunas.has(nome)) db.exec(`ALTER TABLE publicacoes ADD COLUMN ${nome} TEXT NOT NULL DEFAULT '${padrao}'`);
 }
+// Quando foi marcado como vendido: o anúncio fica no site com a foto "VENDIDO" por DIAS_VENDIDO e depois é excluído
+if (!colunas.has('vendido_em')) db.exec('ALTER TABLE publicacoes ADD COLUMN vendido_em TEXT');
+const DIAS_VENDIDO = 15;
 
 function transacao(fn) {
   db.exec('BEGIN');
@@ -124,7 +127,12 @@ function normalizar(dados, atual = {}) {
   p.opcionais = [...new Set(p.opcionais.map(v => texto(v, 'cada opcional', 80)).filter(Boolean))];
   return Object.fromEntries(CAMPOS.map(c => [c, p[c]]));
 }
-function visivel(p) { return p.situacao === 'publicado' && (p.veiculo_id === null || p.estado_estoque === 'estoque'); }
+// Vendido recente (com a foto do selo) continua no site até completar DIAS_VENDIDO
+function vendidoRecente(p) {
+  if (p.situacao !== 'vendido' || !p.vendido_em) return false;
+  return Date.now() - Date.parse(p.vendido_em.replace(' ', 'T') + 'Z') < DIAS_VENDIDO * 86400000;
+}
+function visivel(p) { return p.situacao === 'publicado' && (p.veiculo_id === null || p.estado_estoque === 'estoque') || vendidoRecente(p); }
 function fontesFotos(p) {
   return db.prepare(`SELECT x.id, CASE WHEN u.publicacao_id IS NOT NULL THEN 'anuncio' ELSE 'estoque' END AS origem
     FROM anexos x LEFT JOIN publicacao_uploads u ON u.anexo_id = x.id
@@ -195,9 +203,10 @@ function salvar(id, dados, { legado = false } = {}) {
   if ('veiculo_id' in dados && dados.veiculo_id !== atual.veiculo_id) throw erro('O vínculo com o estoque não pode ser trocado depois do cadastro');
   const p = normalizar(dados, { ...atual, opcionais: JSON.parse(atual.opcionais), destaque: Boolean(atual.destaque) });
   if (p.situacao === 'publicado' && atual.veiculo_id !== null && atual.estado_estoque !== 'estoque') throw erro('Este carro está fora do estoque e não pode ser publicado');
+  // Salvar como "vendido" por aqui só tira do site (sem selo). O selo e os 15 dias vêm de marcarVendido.
   return transacao(() => {
     const obj = params(p);
-    db.prepare(`UPDATE publicacoes SET ${Object.keys(obj).map(c => c + ' = @' + c).join(',')}, revisao = revisao + 1, atualizado_em = datetime('now') WHERE id = @id`).run({ ...obj, id: atual.id });
+    db.prepare(`UPDATE publicacoes SET ${Object.keys(obj).map(c => c + ' = @' + c).join(',')}, ${p.situacao === 'vendido' ? '' : 'vendido_em = NULL, '}revisao = revisao + 1, atualizado_em = datetime('now') WHERE id = @id`).run({ ...obj, id: atual.id });
     if ('fotos' in dados) gravarFotos(atual, dados.fotos);
     return obter(id);
   });
@@ -233,11 +242,73 @@ function adicionarFoto(id, dados) {
 }
 function dtoPublico(p) {
   const campos = ['id', 'titulo', 'marca_modelo', 'tipo_veiculo', 'fabricante', 'modelo', 'versao', 'descricao', 'preco', 'ano_fab', 'ano_mod', 'km', 'cor', 'combustivel', 'cambio', 'portas'];
-  return { ...Object.fromEntries(campos.map(c => [c, p[c]])), destaque: Boolean(p.destaque), opcionais: JSON.parse(p.opcionais), fotos: fotosSelecionadas(p, true) };
+  const vendido = p.situacao === 'vendido';
+  // Vendido: sem preço e sem destaque; só a foto com o selo
+  return { ...Object.fromEntries(campos.map(c => [c, p[c]])), ...(vendido ? { preco: null } : {}), vendido, destaque: !vendido && Boolean(p.destaque), opcionais: JSON.parse(p.opcionais), fotos: fotosSelecionadas(p, true) };
 }
 function listarPublicos() {
+  // À venda primeiro (destaques na frente); os vendidos dos últimos dias vão para o fim da lista
   return db.prepare(`SELECT p.*, v.status AS estado_estoque FROM publicacoes p LEFT JOIN veiculos v ON v.id = p.veiculo_id
-    WHERE p.situacao = 'publicado' AND (p.veiculo_id IS NULL OR v.status = 'estoque') ORDER BY p.destaque DESC, p.atualizado_em DESC, p.id DESC`).all().map(dtoPublico);
+    WHERE (p.situacao = 'publicado' AND (p.veiculo_id IS NULL OR v.status = 'estoque')) OR (p.situacao = 'vendido' AND p.vendido_em IS NOT NULL)
+    ORDER BY p.situacao = 'vendido', p.destaque DESC, p.atualizado_em DESC, p.id DESC`).all().filter(visivel).map(dtoPublico);
+}
+
+// Fotos que este anúncio enviou (não mexe em fotos do estoque nem em documentos)
+function fotosEnviadas(publicacaoId) {
+  return db.prepare(`SELECT x.id, x.arquivo FROM anexos x JOIN publicacao_uploads u ON u.anexo_id = x.id
+    WHERE u.publicacao_id = ? AND x.tipo = 'foto_anuncio'`).all(publicacaoId);
+}
+function apagarAnexos(lista) {
+  const caminhos = lista.map(a => obterAnexo(a.id).caminho);
+  const apagar = db.prepare('DELETE FROM anexos WHERE id = ?');
+  for (const a of lista) apagar.run(a.id);
+  return caminhos;
+}
+function removerArquivos(caminhos) {
+  for (const c of caminhos) { try { fs.rmSync(c, { force: true }); } catch { /* arquivo já não existe */ } }
+}
+
+// Marcar como vendido: a foto da capa com o selo (montada na tela) vira a única foto do anúncio.
+// As outras fotos enviadas para o anúncio são apagadas do servidor para liberar espaço.
+function marcarVendido(id, dados) {
+  objeto(dados);
+  const atual = linha(id);
+  confereRevisao(atual, dados.revisao);
+  if (atual.situacao === 'vendido') throw erro('Este anúncio já está marcado como vendido');
+  const foto = dados.foto;
+  if (!foto || foto.tipo_mime !== 'image/jpeg' || typeof foto.base64 !== 'string') throw erro('Falta a foto com o selo de vendido');
+  const novaFoto = adicionarFoto(atual.id, { tipoMime: 'image/jpeg', conteudo: Buffer.from(foto.base64, 'base64'), nomeOriginal: 'vendido.jpg' });
+  let caminhos = [];
+  try {
+    transacao(() => {
+      const antigas = fotosEnviadas(atual.id).filter(a => a.id !== novaFoto.id);
+      db.prepare(`UPDATE publicacoes SET situacao = 'vendido', vendido_em = datetime('now'), destaque = 0,
+        revisao = revisao + 1, atualizado_em = datetime('now') WHERE id = ?`).run(atual.id);
+      db.prepare('DELETE FROM publicacao_fotos WHERE publicacao_id = ?').run(atual.id);
+      db.prepare('INSERT INTO publicacao_fotos (publicacao_id, anexo_id, ordem) VALUES (?, ?, 0)').run(atual.id, novaFoto.id);
+      caminhos = apagarAnexos(antigas);
+    });
+  } catch (e) {
+    removerArquivos(apagarAnexos([{ id: novaFoto.id }]));
+    throw e;
+  }
+  removerArquivos(caminhos);
+  return obter(atual.id);
+}
+
+// Depois de DIAS_VENDIDO, o anúncio vendido sai do sistema junto com a foto (as postagens nas redes ficam)
+function limparVendidos() {
+  const vencidos = db.prepare(`SELECT id FROM publicacoes WHERE situacao = 'vendido' AND vendido_em IS NOT NULL
+    AND vendido_em <= datetime('now', ?)`).all(`-${DIAS_VENDIDO} days`);
+  let caminhos = [];
+  for (const { id } of vencidos) {
+    transacao(() => {
+      caminhos = caminhos.concat(apagarAnexos(fotosEnviadas(id)));
+      db.prepare('DELETE FROM publicacoes WHERE id = ?').run(id);
+    });
+  }
+  removerArquivos(caminhos);
+  return vencidos.length;
 }
 function publico(id) {
   const p = linha(id);
@@ -277,4 +348,4 @@ function retirarLegado(veiculoId) {
   if (p) salvar(p.id, { situacao: 'rascunho' }, { legado: true });
   return { ok: true };
 }
-module.exports = { criar, salvar, retirar, listar, obter, estoque, dadosEstoque, adicionarFoto, listarPublicos, publico, fotoPublica, listarLegado, salvarLegado, retirarLegado };
+module.exports = { marcarVendido, limparVendidos, DIAS_VENDIDO, criar, salvar, retirar, listar, obter, estoque, dadosEstoque, adicionarFoto, listarPublicos, publico, fotoPublica, listarLegado, salvarLegado, retirarLegado };
