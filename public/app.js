@@ -571,6 +571,7 @@ async function telaPainel() {
     <div class="numero"><div class="rotulo">Faturamento no mês</div><div class="valor">${reais(r.vendasMes.faturamento)}</div></div>
     <div class="numero"><div class="rotulo">Lucro no mês</div><div class="valor ${r.vendasMes.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(r.vendasMes.lucro)}</div></div>
   </div>
+  <div class="cartao" id="cartao-aniversarios" hidden></div>
   ${r.parados.length ? `
   <div class="cartao">
     <h2>Parados há mais de 60 dias</h2>
@@ -592,6 +593,39 @@ async function telaPainel() {
       </tbody>
     </table></div>` : '<div class="vazio">Nenhuma venda registrada ainda.</div>'}
   </div>`;
+  mostrarAniversarios();
+}
+
+// Aniversariantes (compradores e vendedores): hoje com botão de parabéns no WhatsApp; próximos 7 dias como aviso
+async function mostrarAniversarios(lista) {
+  const caixa = document.getElementById('cartao-aniversarios');
+  if (!caixa) return;
+  try { lista ??= await api('GET', '/aniversarios'); } catch { return; }
+  if (!document.body.contains(caixa)) return;
+  caixa.hidden = !lista.length;
+  if (!lista.length) return;
+  const hoje = lista.filter(a => a.faltam === 0), proximos = lista.filter(a => a.faltam > 0);
+  const quando = a => a.faltam === 1 ? 'amanhã' : `em ${a.faltam} dias`;
+  caixa.innerHTML = `
+    <h2>🎂 Aniversariantes</h2>
+    ${hoje.map(a => `
+      <div class="aniversario">
+        <div><strong>${esc(a.nome)}</strong> <span class="suave pequeno">faz ${a.idade} anos hoje (${esc(a.data)})</span>
+          ${a.enviado ? '<br><span class="positivo pequeno">✓ Parabéns enviado</span>' : ''}</div>
+        <div class="acoes">
+          ${a.url ? `<a class="botao-link${a.enviado ? ' secundario' : ''}" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Mandar parabéns no WhatsApp</a>`
+            : `<a class="botao-link secundario" href="#/pessoas/${a.pessoa_id}">Cadastrar o celular</a>`}
+          ${a.url && !a.enviado ? `<button type="button" class="secundario" data-aniversario-enviado="${a.pessoa_id}">Já enviei</button>` : ''}
+        </div>
+      </div>`).join('')}
+    ${hoje.length ? '<p class="suave pequeno">Abrir a conversa não envia a mensagem: confira o texto, toque em Enviar no WhatsApp e depois em “Já enviei”.</p>' : ''}
+    ${proximos.length ? `<p class="pequeno" style="margin-bottom:4px"><strong>Próximos dias</strong></p><ul class="pequeno" style="margin-top:0">${proximos.map(a => `<li><a href="#/pessoas/${a.pessoa_id}">${esc(a.nome)}</a> · ${esc(a.data)} (${quando(a)}, ${a.idade} anos)${a.url ? '' : ' · <span class="suave">sem celular</span>'}</li>`).join('')}</ul>` : ''}
+    ${hoje.length ? `<details class="pequeno"><summary>Ver a mensagem</summary><pre style="white-space:pre-wrap;font:inherit">${esc(hoje[0].mensagem)}</pre></details>` : ''}`;
+  caixa.querySelectorAll('[data-aniversario-enviado]').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { mostrarAniversarios(await api('POST', `/aniversarios/${b.dataset.aniversarioEnviado}/enviado`)); aviso('Parabéns marcado como enviado'); }
+    catch (e) { b.disabled = false; aviso(e.message, true); }
+  }));
 }
 
 async function telaLista(status) {

@@ -20,6 +20,7 @@ const redesMeta = require('./redes-meta');
 const galeriaLoja = require('./galeria-loja');
 const nfe = require('./nfe');
 const avaliacoes = require('./avaliacoes');
+const aniversarios = require('./aniversarios');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const PUBLICO = path.join(__dirname, 'public');
@@ -166,6 +167,9 @@ rota('POST', '/api/anuncios-celular/:codigo/fotos', (p, q, corpo) => enviosAnunc
 }));
 
 rota('GET', '/api/resumo', () => db.resumo());
+// Aniversariantes de hoje e dos próximos 7 dias, com a mensagem de parabéns pronta para o WhatsApp
+rota('GET', '/api/aniversarios', () => aniversarios.listar());
+rota('POST', '/api/aniversarios/:id/enviado', p => aniversarios.confirmar(p.id));
 rota('GET', '/api/veiculos', (p, q) => db.listarVeiculos(q.get('status')));
 rota('GET', '/api/veiculos/:id', p => db.obterVeiculo(p.id));
 rota('PUT', '/api/veiculos/:id', (p, q, corpo) => db.atualizarVeiculo(p.id, corpo));

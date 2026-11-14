@@ -220,3 +220,6 @@ button:disabled { opacity: .6; cursor: wait; }
 .acoes-pessoa .botao-link, .acoes-pessoa button { padding: 6px 10px; font-size: .85rem; white-space: nowrap; }
 .vinculos-pessoa { list-style: none; padding: 0; display: grid; gap: 10px; }
 .vinculos-pessoa li { display: grid; gap: 3px; }
+
+/* Aniversariantes no Painel */
+.aniversario { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borda, #dce2e7); }
