@@ -129,9 +129,10 @@ const ehMoto = v => sugerirNcm(v).startsWith('8711');
 // Tipos de nota. Os códigos seguem as notas que a loja já emite pelo Sebrae.
 const TIPOS_NOTA = {
   // Carro comprado pela loja (vai para o nome da loja): nota de entrada CFOP 1102.
-  // Impostos iguais aos da entrada de consignação (ICMS CST 20 com redução de 90%, PIS/COFINS 07); confirmar com o contador.
+  // Igual às notas 1034, 1038 e 1039 do Sebrae: natureza ENTRADA, ICMS CST 20 com redução de 95%, PIS/COFINS 07,
+  // destinatário contribuinte isento (2), frete por conta do destinatário (1) e pagamento em PIX com o valor da compra.
   entrada_compra: {
-    nome: 'entrada de compra', natOp: 'COMPRA', cfop: 1102, tpNF: 0,
+    nome: 'entrada de compra', natOp: 'ENTRADA', cfop: 1102, tpNF: 0, pRedBC: '95.0000', indIEDest: 2, modFrete: 1, pagamentoPix: true,
     pessoa: d => d.fornecedor, quem: 'vendedor',
     bloqueio: d => (d.veiculo.tipo_entrada === 'compra' ? null : 'A nota de entrada de compra (1102) é só para carro comprado que vai para o nome da loja. Carro em consignação, troca ou compra sem transferir usa a entrada de consignação (1917).'),
     valor: d => d.veiculo.valor_compra,
@@ -348,7 +349,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     `C|${EMITENTE.xNome}|${EMITENTE.xFant}|${EMITENTE.ie}||${EMITENTE.im}|${EMITENTE.cnae}|${EMITENTE.crt}||`,
     `C02|${EMITENTE.cnpj}|`,
     `C05|${EMITENTE.xLgr}|${EMITENTE.nro}||${EMITENTE.xBairro}|${EMITENTE.cMun}|${EMITENTE.xMun}|${EMITENTE.uf}|${EMITENTE.cep}|1058|BRASIL|${EMITENTE.fone}|`,
-    `E|${campoTxt(nomeDest)}|9|||||`,
+    `E|${campoTxt(nomeDest)}|${config.indIEDest || 9}|||||`,
     `${doc.length === 11 ? 'E03' : 'E02'}|${doc}|`,
     `E05|${campoTxt(p.endereco)}|${campoTxt(p.numero)}||${campoTxt(p.bairro)}|${cMun}|${campoTxt(p.cidade)}|${uf}|${digitos(p.cep)}|1058|BRASIL|${fone.length >= 6 && fone.length <= 14 ? fone : ''}|`,
     'H|1||',
@@ -356,7 +357,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     ...(venda ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
     'M||',
     'N|',
-    venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||` : 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||',
+    venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||` : `N04|0|20|3|${config.pRedBC || '90.00'}|0.00|18.0000|0.00|||||||`,
     'Q|',
     venda ? `Q02|01|${dinheiro(c.baseLucro)}|0.6500|${dinheiro(c.pis)}|` : 'Q04|07|',
     'S|',
@@ -368,9 +369,9 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     'W04c|0.00|',
     'W04e|0.00|',
     'W04g|0.00|',
-    `X|${venda ? 1 : 0}|`,
+    `X|${config.modFrete ?? (venda ? 1 : 0)}|`,
     'YA',
-    ...(venda ? pagamentos.map(pg => `YA01|${pg.indPag}|${pg.tPag}|${pg.xPag}|${dinheiro(pg.valor)}||||`) : ['YA01||90||0.00||||']),
+    ...(venda ? pagamentos.map(pg => `YA01|${pg.indPag}|${pg.tPag}|${pg.xPag}|${dinheiro(pg.valor)}||||`) : config.pagamentoPix ? [`YA01|0|17||${valorTxt}||||`] : ['YA01||90||0.00||||']),
   ];
   const conteudo = linhas.join('\r\n');
 

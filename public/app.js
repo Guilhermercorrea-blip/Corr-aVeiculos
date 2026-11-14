@@ -1047,7 +1047,7 @@ async function cartaoNfe(id, tipo) {
       <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
     </form>
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
-    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, impostos iguais aos da entrada de consignação: confirme com o contador na primeira nota.', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
+    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
     const form = document.getElementById(`form-nfe-${tipo}`);
     form.addEventListener('submit', e => {
       e.preventDefault();
