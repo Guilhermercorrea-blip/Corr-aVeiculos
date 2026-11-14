@@ -46,10 +46,14 @@
     .versao::before, .versao::after { content: ""; border-top: .8mm solid #000; }
     .versao span, .ano { font-family: "Archivo", Arial, sans-serif; font-weight: 900; text-transform: uppercase; text-align: center; white-space: nowrap; }
     .versao span { font-size: 15mm; line-height: 1.1; }
-    .ano { font-size: 15mm; line-height: 1.05; }
-    .destaque { background: #000; color: #fff; border-radius: 3mm; font-family: "Archivo", Arial, sans-serif; font-weight: 900; font-style: italic;
-      text-transform: uppercase; text-align: center; font-size: 15mm; line-height: 1.25; margin: 2mm 4mm 3mm; white-space: nowrap; overflow: hidden; }
-    .destaque.segunda { font-size: 10mm; margin: -1mm 10mm 3mm; }
+    /* Ano numa faixa preta, como nas placas da loja (Sandero 2009, Onix 2014) */
+    .ano { font-size: 16mm; line-height: 1.15; background: #000; color: #fff; border-radius: 2.5mm; margin: 2mm 30mm 1mm; padding: 0 4mm;
+      clip-path: polygon(1.5% 0, 100% 0, 98.5% 100%, 0 100%); overflow: hidden; }
+    /* Faixa de destaque com contorno e traços: "— COMPLETO —" */
+    .destaque { background: #fff; color: #000; border: .7mm solid #000; border-radius: 2.5mm; font-family: Anton, Impact, "Arial Narrow", sans-serif;
+      text-transform: uppercase; text-align: center; font-size: 15mm; line-height: 1.2; margin: 2mm 30mm 3mm; white-space: nowrap; overflow: hidden; }
+    .destaque::before { content: "— "; } .destaque::after { content: " —"; }
+    .destaque.segunda { font-size: 10mm; margin: -1mm 34mm 3mm; }
     /* Placa cheia (2ª faixa ou 5 opcionais): letras um pouco menores para tudo caber */
     .folha.cheia .preco .valor { font-size: 36mm; }
     .folha.cheia .preco .rs { font-size: 11mm; margin-top: 3mm; }
@@ -58,14 +62,14 @@
     .folha.cheia .destaque:not(.segunda) { font-size: 12mm; }
     .opc { padding: 2mm 0; }
     .preco { border: .6mm solid #000; border-radius: 3mm; display: flex; align-items: flex-end; justify-content: center; padding: 1mm 4mm 2mm;
-      font-family: Anton, Impact, sans-serif; font-style: italic; white-space: nowrap; }
+      font-family: Anton, Impact, sans-serif; white-space: nowrap; }
     .preco .rs { font-size: 14mm; align-self: flex-start; margin-top: 4mm; margin-right: 2mm; }
     .preco .valor { font-size: 40mm; line-height: 1; letter-spacing: -1mm; }
     .preco .cent { font-size: 13mm; margin-left: 1mm; margin-bottom: 3mm; }
     .preco.consulta .valor { font-size: 26mm; }
     .opc { flex: 1; display: flex; justify-content: center; align-items: center; min-height: 0; }
     .opc .item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2mm; font-family: "Archivo", Arial, sans-serif; font-weight: 900;
-      text-transform: uppercase; text-align: center; font-size: 5mm; line-height: 1.1; padding: 0 2mm; }
+      text-transform: uppercase; text-align: center; font-size: 4.6mm; line-height: 1.1; padding: 0 1.5mm; }
     .opc .item + .item { border-left: .5mm solid #000; }
     .opc svg { width: 18mm; height: 18mm; }
     .opc.muitos .item { font-size: 3.8mm; padding: 0 1mm; }

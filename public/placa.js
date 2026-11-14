@@ -66,10 +66,14 @@ function paraCentavos(texto) {
 // "GM/MONTANA LS" -> modelo MONTANA, versão LS; "Fiat Strada Hard Working" -> STRADA / HARD WORKING
 const MARCAS = ['GM', 'CHEVROLET', 'VW', 'VOLKSWAGEN', 'FIAT', 'FORD', 'RENAULT', 'HONDA', 'TOYOTA', 'HYUNDAI', 'NISSAN', 'PEUGEOT', 'CITROEN',
   'JEEP', 'MITSUBISHI', 'KIA', 'YAMAHA', 'SUZUKI', 'BMW', 'AUDI', 'MERCEDES', 'MERCEDES-BENZ', 'CAOA', 'CHERY', 'JAC', 'TROLLER', 'LAND', 'RAM'];
+// O CRLV de carro importado começa com "I/" (ex.: "I/FORD FOCUS HC FLEX"): o "I" não é o modelo.
+// Combustível (FLEX, GASOLINA...) não entra na versão da placa.
+const COMBUSTIVEL = ['FLEX', 'TOTALFLEX', 'TFLEX', 'GASOLINA', 'ALCOOL', 'ÁLCOOL', 'ETANOL', 'DIESEL', 'GNV'];
 function separarModelo(marcaModelo) {
   let partes = String(marcaModelo || '').toUpperCase().replace(/\//g, ' ').split(/\s+/).filter(Boolean);
+  if (partes.length > 1 && ['I', 'IMP'].includes(partes[0])) partes = partes.slice(1);
   if (partes.length > 1 && MARCAS.includes(partes[0])) partes = partes.slice(1);
-  return { modelo: partes[0] || '', versao: partes.slice(1).join(' ') };
+  return { modelo: partes[0] || '', versao: partes.slice(1).filter(p => !COMBUSTIVEL.includes(p)).join(' ') };
 }
 
 function ler() {
@@ -86,11 +90,11 @@ function ler() {
   };
 }
 
-// Diminui a letra até o texto caber na largura da folha
-function caber(el, max) {
+// Diminui a letra até o texto caber na largura da folha (ou na largura limite, em px, quando informada)
+function caber(el, max, limite) {
   let tamanho = max;
   el.style.fontSize = tamanho + 'mm';
-  while (el.scrollWidth > el.clientWidth && tamanho > 6) {
+  while ((limite ? el.offsetWidth > limite : el.scrollWidth > el.clientWidth) && tamanho > 6) {
     tamanho -= 1;
     el.style.fontSize = tamanho + 'mm';
   }
@@ -107,13 +111,13 @@ function desenhar() {
     <div class="linha"></div>
     <div class="modelo" id="t-modelo">${esc(d.modelo || 'MODELO')}</div>
     ${d.versao ? `<div class="versao"><span id="t-versao">${esc(d.versao)}</span></div>` : ''}
-    ${d.ano ? `<div class="ano">${esc(d.ano)}</div>` : ''}
+    ${d.ano ? `<div class="ano" id="t-ano">${esc(d.ano)}</div>` : ''}
     ${d.destaque ? `<div class="destaque" id="t-destaque">${esc(d.destaque)}</div>` : ''}
     ${d.destaque2 ? `<div class="destaque segunda" id="t-destaque2">${esc(d.destaque2)}</div>` : ''}
     <div class="preco ${d.preco === null ? 'consulta' : ''}">${d.preco === null
       ? '<span class="valor">CONSULTE</span>'
       : `<span class="rs">R$</span><span class="valor">${inteiro}</span><span class="cent">,${cent}</span>`}</div>
-    <div class="opc ${d.opcionais.length > 4 ? 'muitos' : ''}">${d.opcionais.map(o => `<div class="item">${icone(o)}<span>${esc(o)}</span></div>`).join('')}</div>
+    <div class="opc ${d.opcionais.length > 4 ? 'muitos' : ''}">${d.opcionais.map(o => `<div class="item">${icone(o)}<span>${esc(o).replace(/-/g, '‑')}</span></div>`).join('')}</div>
     <div class="linha"></div>
     <div class="contatos">
       <div class="contato">${TELEFONE}<span>${formatarFone(loja.telefone)}</span></div>
@@ -124,8 +128,10 @@ function desenhar() {
     <div class="endereco">${PINO}<span>${endereco.map(esc).join('<br>')}</span></div>`;
   const cheia = Boolean(d.destaque2) || d.opcionais.length > 4;
   $('folha').classList.toggle('cheia', cheia);
-  caber($('t-modelo'), cheia ? 52 : 60);
-  if ($('t-versao')) caber($('t-versao'), cheia ? 12 : 15);
+  caber($('t-modelo'), cheia ? 50 : 56);
+  // Versão: cabe entre os dois traços (no máximo uns 3/4 da folha)
+  if ($('t-versao')) caber($('t-versao'), cheia ? 12 : 15, $('folha').clientWidth * 0.6);
+  if ($('t-ano')) caber($('t-ano'), cheia ? 14 : 16);
   if ($('t-destaque')) caber($('t-destaque'), cheia ? 12 : 15);
   if ($('t-destaque2')) caber($('t-destaque2'), 10);
   ajustarEscala();
