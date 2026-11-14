@@ -1008,6 +1008,34 @@ const TITULO_NFE = {
   devolucao_consignacao: 'Nota fiscal de devolução (consignação)',
   venda: 'Nota fiscal de venda',
 };
+// Salva o arquivo da nota. No Chrome/Edge abre a janela "Salvar como" já na última pasta usada para as notas
+// (o navegador lembra a pasta pelo id 'notas-fiscais'); nos outros navegadores vai para Downloads como antes.
+// Devolve false se a pessoa cancelou a janela.
+async function salvarArquivoNota(r) {
+  const blob = new Blob([r.conteudo], { type: 'text/plain;charset=utf-8' });
+  if (window.showSaveFilePicker) {
+    try {
+      const arquivo = await window.showSaveFilePicker({
+        id: 'notas-fiscais', startIn: 'desktop', suggestedName: r.arquivo,
+        types: [{ description: 'Arquivo da nota (TXT)', accept: { 'text/plain': ['.txt'] } }],
+      });
+      const escrita = await arquivo.createWritable();
+      await escrita.write(blob);
+      await escrita.close();
+      return true;
+    } catch (e) {
+      if (e.name === 'AbortError') return false;
+      // Janela bloqueada (por exemplo, demorou para gerar): baixa do jeito antigo
+    }
+  }
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = r.arquivo;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+  return true;
+}
+
 async function cartaoNfe(id, tipo) {
   const el = document.getElementById(`cartao-nfe-${tipo}`);
   const titulo = TITULO_NFE[tipo];
@@ -1053,12 +1081,10 @@ async function cartaoNfe(id, tipo) {
       e.preventDefault();
       enviar(form, async dados => {
         const r = await api('POST', `/veiculos/${id}/nfe/${tipo}`, dados);
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'text/plain;charset=utf-8' }));
-        link.download = r.arquivo;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 5000);
-        aviso(`Nota nº ${r.numero} gerada. Agora importe o arquivo no Emissor do Sebrae.`);
+        const salvo = await salvarArquivoNota(r);
+        aviso(salvo === false
+          ? `Nota nº ${r.numero} gerada, mas o arquivo não foi salvo. Clique em "Baixar arquivo da nota" de novo (o número é o mesmo).`
+          : `Nota nº ${r.numero} gerada. Agora importe o arquivo no Emissor do Sebrae.`, salvo === false);
         cartaoNfe(id, tipo);
       });
     });
