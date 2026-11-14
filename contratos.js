@@ -255,8 +255,10 @@ function contratoCompra(d, c) {
   ${clausula('5.2', '', 'O veículo está livre de financiamento, alienação fiduciária, penhora, restrição judicial ou administrativa, exceto: <span class="linha" style="min-width:260px"></span>.')}
   ${clausula('5.3', '', 'Não há IPVA, licenciamento, seguro obrigatório ou multas em aberto até esta data, exceto: <span class="linha" style="min-width:260px"></span>. Os débitos que aparecerem depois, com fato anterior a esta data, serão pagos pelo VENDEDOR ou descontados do preço.')}
   ${clausula('5.4', '', 'O veículo não tem chassi, motor ou numerações adulterados, e não é objeto de furto, roubo ou sinistro com perda total.')}
-  ${secao(6, 'Documentação')}
+  ${secao(6, 'Documentação e garantia')}
   ${clausula('6.1', '', 'O VENDEDOR assina e reconhece a assinatura na ATPV-e (Autorização para Transferência de Propriedade do Veículo) em favor do COMPRADOR ou de quem ele indicar, e entrega o CRLV.')}
+  ${clausula('6.2', 'Garantia de documentação', 'O VENDEDOR garante a regularidade de toda a documentação do veículo até a conclusão da transferência. Multas, débitos, restrições ou bloqueios com fato anterior à data e hora da entrega, ainda que apareçam depois, são de responsabilidade do VENDEDOR. Se algum problema de documentação impedir a transferência, o VENDEDOR se obriga a resolvê-lo ou a devolver o valor recebido, além de ressarcir as despesas do COMPRADOR.')}
+  ${clausula('6.3', 'Estado do veículo', 'Não há garantia de motor e câmbio por parte do VENDEDOR: o veículo é recebido no estado em que se encontra, conforme vistoria feita pelo COMPRADOR.')}
   ${secao(7, 'Foro')}
   ${clausula('7.1', '', `Para dirimir controvérsias decorrentes deste contrato, fica eleito o foro da Comarca de ${esc(c.foro)}.`)}
   ${v.obs ? `<p><b>Observações:</b> ${esc(v.obs)}</p>` : ''}

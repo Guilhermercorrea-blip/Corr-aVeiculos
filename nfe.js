@@ -128,6 +128,14 @@ const ehMoto = v => sugerirNcm(v).startsWith('8711');
 
 // Tipos de nota. Os códigos seguem as notas que a loja já emite pelo Sebrae.
 const TIPOS_NOTA = {
+  // Carro comprado pela loja (vai para o nome da loja): nota de entrada CFOP 1102.
+  // Impostos iguais aos da entrada de consignação (ICMS CST 20 com redução de 90%, PIS/COFINS 07); confirmar com o contador.
+  entrada_compra: {
+    nome: 'entrada de compra', natOp: 'COMPRA', cfop: 1102, tpNF: 0,
+    pessoa: d => d.fornecedor, quem: 'vendedor',
+    bloqueio: d => (d.veiculo.tipo_entrada === 'compra' ? null : 'A nota de entrada de compra (1102) é só para carro comprado que vai para o nome da loja. Carro em consignação, troca ou compra sem transferir usa a entrada de consignação (1917).'),
+    valor: d => d.veiculo.valor_compra,
+  },
   entrada_consignacao: {
     nome: 'entrada de consignação', natOp: 'CONSIGNAÇÃO', cfop: 1917, tpNF: 0,
     pessoa: d => d.fornecedor, quem: 'dono',
@@ -373,7 +381,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     if (ficha) db.conexao.prepare('UPDATE veiculos SET ficha_nfe = ? WHERE id = ?').run(JSON.stringify({ ...ficha, chassi: undefined }), veiculoId);
   }
 
-  const sufixo = { venda: 'venda', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao' }[tipo];
+  const sufixo = { venda: 'venda', entrada_compra: 'entrada-compra', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao' }[tipo];
   return { conteudo, chave, numero, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
 }
 const gerarEntradaConsignacao = (id, dados) => gerarNota(id, 'entrada_consignacao', dados);

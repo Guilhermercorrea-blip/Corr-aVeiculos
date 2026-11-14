@@ -869,6 +869,7 @@ async function telaCarro(id) {
   </div>
 
   ${vendido ? '<div class="cartao" id="cartao-avaliacao"><h2>Avaliação no Google</h2><p class="suave pequeno">Carregando convite…</p></div>' : ''}
+  ${v.tipo_entrada === 'compra' ? `<div class="cartao" id="cartao-nfe-entrada_compra"><h2>${TITULO_NFE.entrada_compra}</h2><p class="suave pequeno">Carregando…</p></div>` : ''}
   ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? ['entrada_consignacao', 'devolucao_consignacao'].map(t => `<div class="cartao" id="cartao-nfe-${t}"><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('') : ''}
   ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
 
@@ -1002,6 +1003,7 @@ async function cartaoAvaliacao(id) {
 // tipo: 'entrada_consignacao' (CFOP 1917), 'devolucao_consignacao' (CFOP 1918, aponta a entrada)
 // ou 'venda' (CFOP 5102, com os dados do RENAVE).
 const TITULO_NFE = {
+  entrada_compra: 'Nota fiscal de entrada (compra · CFOP 1102)',
   entrada_consignacao: 'Nota fiscal de entrada (consignação)',
   devolucao_consignacao: 'Nota fiscal de devolução (consignação)',
   venda: 'Nota fiscal de venda',
@@ -1017,7 +1019,7 @@ async function cartaoNfe(id, tipo) {
     const c = s.calculo;
     el.innerHTML = `
     <h2>${titulo}</h2>
-    <p class="pequeno">Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
+    <p class="pequeno">Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : tipo === 'entrada_compra' ? 'vendedor' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
     ${s.ultima ? `<p class="pequeno">Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>` : ''}
     <form id="form-nfe-${tipo}" class="grade" novalidate>
       ${campo('Número da nota', 'numero', { valor: s.numero, obrig: true, largura: 'c3', extra: 'inputmode="numeric"' })}
@@ -1045,7 +1047,7 @@ async function cartaoNfe(id, tipo) {
       <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
     </form>
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
-    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
+    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, impostos iguais aos da entrada de consignação: confirme com o contador na primeira nota.', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
     const form = document.getElementById(`form-nfe-${tipo}`);
     form.addEventListener('submit', e => {
       e.preventDefault();
