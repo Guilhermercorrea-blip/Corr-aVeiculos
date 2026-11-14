@@ -71,7 +71,7 @@ function editor(p) {
   const automatico = [p.marca_modelo, p.versao].filter(Boolean).join(' ');
   $('editor').innerHTML = `<div class="compositor">
     <aside class="compositor-painel">
-      <div class="compositor-topo"><div class="compositor-voltar"><button type="button" id="fechar-editor" class="secundario" aria-label="Voltar aos anúncios">←</button><a href="/" target="_blank" rel="noopener">Corrêa Veículos ↗</a></div><div class="compositor-titulo"><div><p class="suave pequeno">${p.veiculo_id ? 'Do estoque da loja' : 'Anúncio independente'}</p><h1>Veículo à venda</h1></div><button type="button" id="salvar-rascunho" class="secundario">${p.visivel || p.situacao === 'vendido' ? 'Salvar alterações' : 'Salvar rascunho'}</button></div><div class="alternar-previa" role="group" aria-label="Visualização"><button type="button" id="aba-editar" aria-pressed="true">Preencher</button><button type="button" id="aba-previa" class="secundario" aria-pressed="false">Ver prévia</button></div></div>
+      <div class="compositor-topo"><div class="compositor-voltar"><button type="button" id="fechar-editor" class="secundario" aria-label="Voltar aos anúncios">←</button><a href="/" target="_blank" rel="noopener">Corrêa Veículos ↗</a></div><div class="compositor-titulo"><div><p class="suave pequeno">${p.veiculo_id ? 'Do estoque da loja' : 'Anúncio independente'}</p><h1>Veículo à venda</h1></div><button type="button" id="salvar-rascunho" class="secundario">${p.visivel || p.situacao === 'vendido' ? 'Salvar alterações' : 'Salvar rascunho'}</button></div>${p.id && p.situacao !== 'vendido' ? '<button type="button" id="vendido-topo" class="botao-vendido" title="Coloca o selo na capa, deixa só essa foto no site por 15 dias e posta no Instagram e no Facebook">VENDIDO!</button>' : ''}<div class="alternar-previa" role="group" aria-label="Visualização"><button type="button" id="aba-editar" aria-pressed="true">Preencher</button><button type="button" id="aba-previa" class="secundario" aria-pressed="false">Ver prévia</button></div></div>
       <form id="form-anuncio"><fieldset id="campos-anuncio">
         <div class="compositor-rolagem">
           ${p.situacao === 'vendido' ? `<p class="aviso-publicacao">${p.visivel ? `Vendido: aparece no site só com a foto do selo até ${esc(fimVendido(p))}. Depois o anúncio é excluído sozinho.` : 'Vendido: não aparece no site.'}</p>` : bloqueado ? '<p class="aviso-publicacao">Este carro está fora do estoque e fica oculto no site.</p>' : p.visivel ? '<p class="aviso-publicacao">Anúncio no ar. Salvar alterações atualiza o site.</p>' : ''}
@@ -148,6 +148,7 @@ function editor(p) {
   $('aba-previa').onclick = () => alternarPrevia(true);
   $('retirar')?.addEventListener('click', retirar);
   $('marcar-vendido')?.addEventListener('click', marcarVendido);
+  $('vendido-topo')?.addEventListener('click', marcarVendido);
   $('voltar-rascunho')?.addEventListener('click', () => gravar('rascunho'));
   alternarPrevia(false); mostrarEtapa(1); renderFotos();
 }
@@ -291,7 +292,7 @@ async function prepararFoto(arquivo) {
 }
 function bloquear(ativo) {
   salvando = ativo; if ($('campos-anuncio')) $('campos-anuncio').disabled = ativo;
-  for (const id of ['salvar-rascunho', 'fechar-editor']) if ($(id)) $(id).disabled = ativo;
+  for (const id of ['salvar-rascunho', 'fechar-editor', 'vendido-topo']) if ($(id)) $(id).disabled = ativo;
   for (const id of ['novo-anuncio', 'trazer-estoque', 'abrir-config']) $(id).disabled = ativo;
   lista();
 }
