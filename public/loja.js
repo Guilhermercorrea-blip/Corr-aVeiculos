@@ -147,6 +147,17 @@ async function carregar() {
 }
 document.addEventListener('error', e => { if (e.target.matches?.('img[data-foto]')) { const aviso = document.createElement('span'); aviso.className = 'falha-foto'; aviso.textContent = 'Foto indisponível'; e.target.replaceWith(aviso); } }, true);
 el('filtros').addEventListener('submit', e => e.preventDefault());
+// "Não achou o que procura?": monta a mensagem e abre o WhatsApp da loja (nada fica gravado no site)
+el('form-procura').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.elements, v = n => f[n].value.trim();
+  const partes = [`Olá! ${v('nome') ? 'Aqui é ' + v('nome') + '. ' : ''}Procurei no site e não achei o carro que eu quero. Vocês conseguem buscar pra mim?`, '', `Carro: ${v('modelo')}`];
+  if (v('ano')) partes.push(`Ano: ${v('ano')} pra cima`);
+  if (v('valor')) partes.push(`Até: ${v('valor')}`);
+  const url = whatsapp(partes.join('\n'));
+  if (url) window.open(url, '_blank', 'noopener');
+  else location.hash = '#contato';
+});
 ['busca', 'preco', 'ordem'].forEach(id => el(id).addEventListener(id === 'busca' ? 'input' : 'change', renderizar));
 el('ano').textContent = new Date().getFullYear();
 carregar();

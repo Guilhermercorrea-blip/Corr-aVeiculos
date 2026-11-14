@@ -30,6 +30,24 @@
         <form class="filtros" id="filtros" role="search"><label class="busca">Qual carro você procura?<input type="search" id="busca" placeholder="Digite marca ou modelo" autocomplete="off"></label><label>Até quanto?<select id="preco"><option value="">Todos os preços</option><option value="4000000">Até R$ 40 mil</option><option value="6000000">Até R$ 60 mil</option><option value="8000000">Até R$ 80 mil</option><option value="10000000">Até R$ 100 mil</option><option value="15000000">Até R$ 150 mil</option></select></label><label>Ordenar por<select id="ordem"><option value="destaques">Destaques primeiro</option><option value="menor">Menor preço</option><option value="maior">Maior preço</option><option value="ano">Mais novos</option></select></label></form>
         <div class="grade-carros" id="carros" aria-live="polite"></div>
       </section>
+      <section class="procura limite" id="procuramos" aria-labelledby="titulo-procura">
+        <div class="procura-texto">
+          <p class="etiqueta">CARRO SOB ENCOMENDA</p>
+          <h2 id="titulo-procura">Não achou o carro aqui?</h2>
+          <p>Fala com a gente. Se não estiver no nosso pátio, a gente procura pra você.</p>
+          <p>Diz o modelo, o ano e quanto quer gastar. A nossa equipe vai atrás, olha o carro pessoalmente e te passa o que encontrou. É assim que a Corrêa Veículos trabalha há mais de 20 anos.</p>
+        </div>
+        <form class="procura-form" id="form-procura">
+          <label>Que carro você quer?<input name="modelo" maxlength="80" placeholder="Ex.: Onix, HB20, Strada" required></label>
+          <div class="procura-linha">
+            <label>Ano (a partir de)<input name="ano" inputmode="numeric" maxlength="4" placeholder="Ex.: 2018"></label>
+            <label>Quanto quer gastar?<input name="valor" maxlength="20" placeholder="Ex.: 60 mil"></label>
+          </div>
+          <label>Seu nome<input name="nome" maxlength="60" autocomplete="given-name"></label>
+          <button class="botao" type="submit">Mandar no WhatsApp <span aria-hidden="true">↗</span></button>
+          <small>A mensagem já vai escrita, é só enviar.</small>
+        </form>
+      </section>
       <section class="sobre" id="a-loja"><div class="limite sobre-grid"><div><p class="etiqueta">PERTINHO DE VOCÊ</p><h2>Uma boa conversa.<br>O seu próximo carro.</h2></div><div><p id="sobre-texto">Conheça os veículos da Corrêa Veículos e fale com a nossa equipe para saber mais.</p><a class="texto-link" href="#contato">Venha conhecer a loja <span aria-hidden="true">↗</span></a></div></div></section>
     </div>
     <section class="limite detalhe" id="detalhe" hidden></section>
