@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#143f6b">
+  <meta name="description" content="Site e sistema para revenda de carros: estoque, anúncios que postam no Instagram e Facebook, contratos, notas e placa do vidro. Feito por Gui Corrêa.">
+  <title>Sistema para revenda de carros | Gui Corrêa</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Sistema para revenda de carros | Gui Corrêa">
+  <meta property="og:description" content="Site, estoque, anúncios, contratos e notas da revenda num lugar só. Funcionando de verdade na Corrêa Veículos.">
+  <meta property="og:image" content="/img/banner.jpg">
+  <link rel="icon" href="/img/icone.png">
+  <style>
+    :root { --azul: #143f6b; --azul-escuro: #102c49; --vermelho: #be302e; --verde: #1d7a46; --texto: #172b40; --suave: #617183; --borda: #dce2e7; --fundo: #f7f8f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: var(--texto); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    a { color: inherit; }
+    .limite { width: min(1080px, calc(100% - 32px)); margin-inline: auto; }
+    header { background: var(--azul-escuro); color: #fff; padding: 56px 0 48px; }
+    .etiqueta { font-size: 11px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; color: #b5c9dc; margin: 0 0 14px; }
+    h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.1; letter-spacing: -.04em; margin: 0 0 18px; font-weight: 650; }
+    h1 span { color: #ff8a80; }
+    header p.intro { max-width: 620px; color: #d5dfeb; font-size: 17px; margin: 0 0 28px; }
+    .botao { display: inline-flex; align-items: center; gap: 10px; background: #25d366; color: #0b3d1f; font-weight: 700; text-decoration: none; padding: 14px 22px; border-radius: 6px; font-size: 15px; }
+    .botao:hover { filter: brightness(.95); }
+    .botao.claro { background: #fff; color: var(--azul); border: 1px solid #fff; }
+    .botoes { display: flex; flex-wrap: wrap; gap: 14px; }
+    section { padding: 56px 0; border-bottom: 1px solid var(--borda); }
+    h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.035em; line-height: 1.2; margin: 0 0 10px; font-weight: 600; }
+    .sub { color: var(--suave); margin: 0 0 30px; max-width: 640px; }
+    .mapa { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .bloco { border: 1px solid var(--borda); border-radius: 8px; padding: 20px; background: #fff; }
+    .bloco h3 { margin: 0 0 4px; font-size: 18px; }
+    .bloco .onde { font-size: 12px; color: var(--azul); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 10px; }
+    .bloco ul { margin: 0; padding-left: 18px; color: var(--suave); font-size: 14.5px; }
+    .bloco li + li { margin-top: 5px; }
+    .fluxo { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; counter-reset: passo; }
+    .fluxo div { position: relative; padding: 18px 14px 0; border-top: 3px solid var(--azul); }
+    .fluxo div::before { counter-increment: passo; content: counter(passo); position: absolute; top: -15px; left: 14px; width: 26px; height: 26px; border-radius: 50%; background: var(--azul); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+    .fluxo strong { display: block; margin: 6px 0 4px; }
+    .fluxo span { color: var(--suave); font-size: 14px; }
+    .dois { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .lista { border-radius: 8px; padding: 22px 24px; }
+    .lista h3 { margin: 0 0 12px; font-size: 19px; }
+    .lista ul { list-style: none; margin: 0; padding: 0; }
+    .lista li { padding: 8px 0 8px 30px; position: relative; border-top: 1px solid #0000000f; font-size: 15px; }
+    .lista li:first-child { border-top: 0; }
+    .lista li::before { position: absolute; left: 0; top: 8px; font-weight: 800; }
+    .lista.sim { background: #eef8f1; border: 1px solid #bfe3cb; }
+    .lista.sim li::before { content: "✓"; color: var(--verde); }
+    .lista.nao { background: #fdf1f0; border: 1px solid #f1c4c0; }
+    .lista.nao li::before { content: "✕"; color: var(--vermelho); }
+    .lista small { display: block; color: var(--suave); font-size: 13px; }
+    .exemplo { background: var(--fundo); }
+    .exemplo .caixa { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+    .exemplo p { margin: 0; color: var(--suave); max-width: 600px; }
+    .final { background: var(--azul); color: #fff; text-align: center; border-bottom: 0; }
+    .final h2 { color: #fff; }
+    .final p { color: #d5dfeb; margin: 0 auto 26px; max-width: 560px; }
+    .final .botoes { justify-content: center; }
+    footer { padding: 22px 0; font-size: 12px; color: var(--suave); }
+    footer .limite { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    @media (max-width: 860px) {
+      .mapa { grid-template-columns: 1fr 1fr; }
+      .fluxo { grid-template-columns: 1fr; gap: 26px; }
+      .fluxo div { border-top: 0; border-left: 3px solid var(--azul); padding: 0 0 0 26px; }
+      .fluxo div::before { top: 0; left: -15px; }
+      .dois { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .mapa { grid-template-columns: 1fr; }
+      header { padding: 40px 0 36px; }
+      section { padding: 42px 0; }
+      .botao { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="limite">
+      <p class="etiqueta">Sistema para revenda de carros</p>
+      <h1>O site e o sistema da sua revenda<span>,</span> num lugar só.</h1>
+      <p class="intro">O carro entra na loja, você cadastra uma vez, e daí sai o anúncio no site, o post no Instagram e no Facebook, o contrato, o arquivo da nota e a placa do vidro. Tudo feito pensando no dia a dia de quem vende carro.</p>
+      <div class="botoes">
+        <a class="botao" id="whats-topo" href="#" target="_blank" rel="noopener">Quero um pra minha loja</a>
+        <a class="botao claro" href="/">Ver funcionando na Corrêa Veículos</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="limite">
+        <h2>Como funciona no dia a dia</h2>
+        <p class="sub">O caminho de um carro, da entrada até a venda.</p>
+        <div class="fluxo">
+          <div><strong>Entrada</strong><span>Tira foto do documento e do painel. O sistema lê placa, chassi e km sozinho.</span></div>
+          <div><strong>Contrato</strong><span>Contrato de compra ou consignação sai pronto para imprimir e assinar.</span></div>
+          <div><strong>Anúncio</strong><span>Fotos pelo celular, texto do anúncio escrito pela IA, e ele vai para o site, o Instagram e o Facebook.</span></div>
+          <div><strong>Venda</strong><span>Contrato de venda, arquivo da nota e controle de quanto o carro deu de lucro.</span></div>
+          <div><strong>Vendido!</strong><span>Um botão coloca o selo de VENDIDO na foto e posta nas redes.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="limite">
+        <h2>O mapa do sistema</h2>
+        <p class="sub">O que tem em cada parte, para o cliente e para a equipe da loja.</p>
+        <div class="mapa">
+          <div class="bloco">
+            <p class="onde">Para o cliente</p>
+            <h3>Site da loja</h3>
+            <ul>
+              <li>Estoque com fotos, preço, ano e km</li>
+              <li>Busca por modelo e filtro por preço</li>
+              <li>Página de cada carro com botão do WhatsApp</li>
+              <li>Fotos dos carros passando no topo</li>
+              <li>"Não achou o carro?": cliente pede o carro que procura</li>
+              <li>Mapa, telefone e redes sociais</li>
+              <li>Endereço próprio (www.suarevenda.com.br)</li>
+            </ul>
+          </div>
+          <div class="bloco">
+            <p class="onde">Para a equipe</p>
+            <h3>Anúncios e redes</h3>
+            <ul>
+              <li>Fotos mandadas direto do celular por QR Code</li>
+              <li>Texto do anúncio escrito pela IA</li>
+              <li>Posta sozinho no Instagram e no Facebook</li>
+              <li>Botão VENDIDO: selo na foto, post nas redes e sai do site depois de 15 dias</li>
+            </ul>
+          </div>
+          <div class="bloco">
+            <p class="onde">Para a equipe</p>
+            <h3>Estoque e consignados</h3>
+            <ul>
+              <li>Entrada de carro comprado ou consignado</li>
+              <li>Leitura do documento e do km pela foto</li>
+              <li>Gastos de cada carro e lucro na venda</li>
+              <li>Documentos do carro e do cliente guardados</li>
+              <li>Lista de vendidos</li>
+            </ul>
+          </div>
+          <div class="bloco">
+            <p class="onde">Para o escritório</p>
+            <h3>Contratos</h3>
+            <ul>
+              <li>Compra, consignação e venda</li>
+              <li>Repasse e carta de avaliação (também em branco)</li>
+              <li>Dados do carro e do cliente já preenchidos</li>
+            </ul>
+          </div>
+          <div class="bloco">
+            <p class="onde">Para o escritório</p>
+            <h3>Notas fiscais</h3>
+            <ul>
+              <li>Gera o arquivo para o Emissor de NF-e do Sebrae</li>
+              <li>Entrada de compra (1102), entrada e devolução de consignado (1917 / 1918) e venda (5102)</li>
+              <li>Impostos já calculados (base reduzida de veículo usado)</li>
+            </ul>
+          </div>
+          <div class="bloco">
+            <p class="onde">Para a loja</p>
+            <h3>Pátio e clientes</h3>
+            <ul>
+              <li>Placa do vidro em A4, pronta para imprimir</li>
+              <li>Cadastro de clientes</li>
+              <li>Aniversariantes da semana com parabéns pelo WhatsApp</li>
+              <li>Login para cada pessoa da equipe</li>
+              <li>Funciona no computador e no celular</li>
+              <li>Cópia de segurança automática todo dia</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="limite">
+        <h2>O que entrega e o que não entrega</h2>
+        <p class="sub">Para você saber exatamente o que está levando.</p>
+        <div class="dois">
+          <div class="lista sim">
+            <h3>Entrega</h3>
+            <ul>
+              <li>Site da loja com estoque sempre atualizado</li>
+              <li>Post automático no Instagram e no Facebook</li>
+              <li>Contratos prontos com os dados preenchidos</li>
+              <li>Arquivo da nota pronto para importar no emissor</li>
+              <li>Controle de estoque, consignados, gastos e lucro</li>
+              <li>Placa do vidro e parabéns de aniversário</li>
+              <li>Hospedagem, endereço próprio e cópia de segurança</li>
+            </ul>
+          </div>
+          <div class="lista nao">
+            <h3>Não entrega</h3>
+            <ul>
+              <li>Emitir a nota direto na Sefaz<small>Gera o arquivo; a nota é transmitida pelo emissor gratuito do Sebrae.</small></li>
+              <li>Simulação de financiamento automática nos bancos<small>Os bancos não liberam esse acesso para sistemas de fora.</small></li>
+              <li>Publicar na OLX, Webmotors ou iCarros</li>
+              <li>Aplicativo na loja do celular<small>Funciona pelo navegador do celular, sem instalar nada.</small></li>
+              <li>Contabilidade e contas a pagar da loja</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="exemplo">
+      <div class="limite caixa">
+        <div>
+          <h2>Funcionando de verdade</h2>
+          <p>A Corrêa Veículos, de Barra Bonita/SP, usa esse sistema todo dia: o site, os anúncios, os contratos e as notas saem dele.</p>
+        </div>
+        <a class="botao claro" style="border-color:var(--azul)" href="/">Abrir o site da Corrêa Veículos →</a>
+      </div>
+    </section>
+
+    <section class="final">
+      <div class="limite">
+        <h2>Quer um pra sua revenda?</h2>
+        <p>Me chama no WhatsApp. Eu mostro o sistema funcionando e a gente vê o que a sua loja precisa.</p>
+        <div class="botoes"><a class="botao" id="whats-final" href="#" target="_blank" rel="noopener">Falar com o Gui no WhatsApp</a></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="limite"><span>Site e sistema feitos por <strong>Gui Corrêa</strong></span><a href="/">← Voltar para a Corrêa Veículos</a></div></footer>
+
+  <script>
+    // Número do WhatsApp que recebe os interessados no sistema (troque aqui se for usar outro).
+    const WHATSAPP_GUI = '5514998870734';
+    const texto = 'Olá, Gui! Vi o site da Corrêa Veículos e quero saber do sistema para a minha revenda.';
+    const link = 'https://wa.me/' + WHATSAPP_GUI + '?text=' + encodeURIComponent(texto);
+    for (const id of ['whats-topo', 'whats-final']) document.getElementById(id).href = link;
+  </script>
+</body>
+</html>

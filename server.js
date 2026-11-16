@@ -37,7 +37,7 @@ const TIPOS = {
 };
 
 // Endereços que abrem sem login
-const PAGINAS_LIVRES = new Set(['/', '/loja.html', '/loja.css', '/loja.js', '/login.html', '/celular.html', '/fotos-anuncio.html', '/fotos-anuncio.js', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
+const PAGINAS_LIVRES = new Set(['/', '/sistema-para-revendas', '/robots.txt', '/sitemap.xml', '/loja.html', '/loja.css', '/loja.js', '/login.html', '/celular.html', '/fotos-anuncio.html', '/fotos-anuncio.js', '/redefinir.html', '/estilo.css', '/manifest.webmanifest']);
 const API_LIVRE = [
   ['GET', /^\/api\/publico\/catalogo$/],
   ['GET', /^\/api\/publico\/carros\/\d+$/],
@@ -357,11 +357,73 @@ async function api(req, res, url, ctx) {
   responder(res, 404, { erro: 'Rota não encontrada' });
 }
 
-function estatico(res, url) {
+// Endereço do site para o Google e para a prévia de link no WhatsApp/Facebook
+function enderecoSite(req) {
+  if (process.env.ENDERECO_PUBLICO) return process.env.ENDERECO_PUBLICO.replace(/\/+$/, '');
+  return `http://${req.headers.host || 'localhost:' + PORTA}`;
+}
+const escaparAttr = t => String(t ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function robots(req, res) {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+  res.end(`User-agent: *
+Disallow: /sistema$
+Disallow: /api/
+Disallow: /anexos/
+Disallow: /contrato/
+Allow: /
+
+Sitemap: ${enderecoSite(req)}/sitemap.xml
+`);
+}
+
+function sitemap(req, res) {
+  const base = enderecoSite(req);
+  let carros = [];
+  try { carros = anuncios.catalogo().carros.filter(c => !c.vendido); } catch (e) { console.error(e); }
+  const urls = ['/', '/sistema-para-revendas', ...carros.map(c => `/carro/${c.id}`)];
+  res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+  res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map(u => `  <url><loc>${escaparAttr(base + u)}</loc></url>`).join('\n')}
+</urlset>
+`);
+}
+
+// Página da loja com título, descrição e foto certos para a prévia do link (cada carro com a foto dele)
+function paginaLoja(req, res, url, conteudo) {
+  const base = enderecoSite(req);
+  let html = conteudo.toString('utf8');
+  const id = url.pathname.match(/^\/carro\/(\d+)$/)?.[1];
+  let titulo = null, descricao = null, imagem = '/img/banner.jpg';
+  if (id) {
+    try {
+      const c = anuncios.anuncioPublico(Number(id)).carro;
+      const ano = c.ano_fab && c.ano_mod && c.ano_fab !== c.ano_mod ? `${c.ano_fab}/${c.ano_mod}` : (c.ano_mod || c.ano_fab || '');
+      const preco = c.vendido ? 'Vendido' : c.preco ? (c.preco / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Consulte';
+      titulo = `${c.titulo}${ano ? ' ' + ano : ''} | Corrêa Veículos`;
+      descricao = [preco, c.km ? `${Number(c.km).toLocaleString('pt-BR')} km` : '', c.cambio, 'Corrêa Veículos, Barra Bonita/SP'].filter(Boolean).join(' · ');
+      if (c.fotos?.[0]?.url) imagem = c.fotos[0].url;
+    } catch { /* carro fora do site: fica a prévia da loja */ }
+  }
+  if (titulo) {
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${escaparAttr(titulo)}</title>`)
+      .replace(/(<meta property="og:title" content=")[^"]*/, `$1${escaparAttr(titulo)}`)
+      .replace(/(<meta property="og:description" content=")[^"]*/, `$1${escaparAttr(descricao)}`)
+      .replace(/(<meta name="description" content=")[^"]*/, `$1${escaparAttr(descricao)}`);
+  }
+  html = html.replace(/(<meta property="og:image" content=")[^"]*/, `$1${escaparAttr(base + imagem)}`)
+    .replace('<meta property="og:type"', `<meta property="og:url" content="${escaparAttr(base + url.pathname)}">
+  <meta property="og:type"`);
+  return html;
+}
+
+function estatico(res, url, req) {
   let relativo;
   try {
     relativo = url.pathname === '/' || /^\/carro\/\d+$/.test(url.pathname) ? 'loja.html'
-      : url.pathname === '/sistema' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+      : url.pathname === '/sistema' ? 'index.html' : url.pathname === '/sistema-para-revendas' ? 'revendas.html'
+      : decodeURIComponent(url.pathname).replace(/^\/+/, '');
   }
   catch { res.writeHead(400); return res.end('Endereço inválido'); }
   if (relativo.includes('\0')) { res.writeHead(400); return res.end('Endereço inválido'); }
@@ -369,6 +431,9 @@ function estatico(res, url) {
   if (arquivo !== PUBLICO && !arquivo.startsWith(PUBLICO + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(arquivo, (err, conteudo) => {
     if (err) { res.writeHead(404); return res.end('Não encontrado'); }
+    if (relativo === 'loja.html' || relativo === 'revendas.html') {
+      try { conteudo = paginaLoja(req, res, url, conteudo); } catch (e) { console.error(e); }
+    }
     res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arquivo)] || 'application/octet-stream', 'Cache-Control': url.pathname === '/fotos-anuncio.html' ? 'no-store' : 'no-cache' });
     res.end(conteudo);
   });
@@ -441,7 +506,9 @@ http.createServer((req, res) => {
     }
   }
   if (url.pathname.startsWith('/api/')) return api(req, res, url, ctx);
-  estatico(res, url);
+  if (url.pathname === '/robots.txt') return robots(req, res);
+  if (url.pathname === '/sitemap.xml') return sitemap(req, res);
+  estatico(res, url, req);
 }).listen(PORTA, () => {
   const rede = enderecosRede();
   console.log(`Corrêa Veículos rodando em http://localhost:${PORTA}`);
