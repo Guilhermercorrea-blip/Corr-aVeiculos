@@ -1395,7 +1395,7 @@ const MODELOS_CONTRATO = [
   { tipo: 'consignacao', nome: 'Consignação', texto: 'O dono deixa o carro na loja e recebe quando vender. Entra o adendo de quitação nos carros de troca ou compra sem transferir.', vendido: false },
   { tipo: 'venda', nome: 'Venda com garantia', texto: 'Venda ao cliente com garantia de motor e câmbio (dias ou km). Só sai depois de registrar a venda e o km na entrega.', vendido: true },
   { tipo: 'repasse', nome: 'Repasse', texto: 'Venda de carro recebido na troca, pelo mesmo valor, sem garantia contratual extra. Com o carro em estoque, comprador e preço saem em branco.', vendido: false, branco: true },
-  { tipo: 'avaliacao', nome: 'Carta de avaliação', texto: 'Informa quanto a loja avalia o veículo, sem obrigar a comprar nem a vender. Os dados saem do cadastro do carro (feito pela foto ou PDF do documento); o valor você digita aqui. Em "Em branco" tudo sai em linhas para preencher à mão.', vendido: false, avaliacao: true, branco: true },
+  { tipo: 'avaliacao', nome: 'Carta de avaliação', texto: 'Informa quanto a loja avalia o veículo, sem obrigar a comprar. Já abre em "Adicionar novo veículo" (carro de fora): anexe o documento e digite o valor. Também dá para escolher um carro do estoque. Em "Em branco" tudo sai em linhas para preencher à mão.', vendido: false, avaliacao: true, branco: true },
 ];
 
 // "Adicionar novo veículo" na aba Contratos: guarda o modelo escolhido enquanto o carro é cadastrado
@@ -1438,8 +1438,8 @@ async function telaContratos() {
     <div class="grade" id="contrato-avaliacao" hidden>
       <div class="campo c4"><label for="contrato-valor">Valor da avaliação</label>
         <input id="contrato-valor" inputmode="decimal" data-dinheiro placeholder="R$ 0,00"></div>
-      <div class="campo c8"><label for="contrato-extras">Dados extras (opcional)</label>
-        <input id="contrato-extras" placeholder="Ex.: potência 1500W, fabricante Golden Bull"></div>
+      <div class="campo c8"><label for="contrato-extras">Observação no fim dos dados (opcional)</label>
+        <input id="contrato-extras" placeholder="Ex.: ótimo estado de conservação"></div>
     </div>
     <form id="form" novalidate hidden>
       <p class="suave pequeno" style="margin:12px 0 0">Carro de fora: anexe a foto ou o PDF do documento (CRLV) e o sistema preenche os dados abaixo. Ele <strong>não</strong> entra no estoque.</p>
@@ -1476,9 +1476,10 @@ async function telaContratos() {
       ? (vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : '')
       : `${estoque.length ? `<optgroup label="Em estoque">${opcoes(estoque)}</optgroup>` : ''}${vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : ''}`;
     carro.innerHTML = `${opcaoNovo}${emBranco}${lista}`;
-    // Por padrão continua no primeiro carro da lista (como antes); "novo" só quando a pessoa escolhe
+    // Avaliação quase sempre é de carro de fora: já abre em "novo". Nos outros, o primeiro carro da lista.
     const primeiro = carro.querySelector('optgroup option');
-    if (primeiro) carro.value = primeiro.value;
+    if (m.avaliacao) carro.value = 'novo';
+    else if (primeiro) carro.value = primeiro.value;
     document.getElementById('contrato-descricao').textContent = m.texto;
     document.getElementById('contrato-avaliacao').hidden = !m.avaliacao;
     ajustarCarro();
@@ -1510,7 +1511,7 @@ async function telaContratos() {
         if (form._uploadsPendentes > 0 || form._celularPendente) return aviso('Aguarde a leitura do documento.', true);
         const v = lerForm(form).veiculo || {};
         if (!v.marca_modelo) { form.elements['veiculo.marca_modelo'].focus(); return aviso('Anexe o documento ou digite a marca/modelo do carro.', true); }
-        for (const k of ['marca_modelo', 'placa', 'ano_fab', 'ano_mod', 'cor', 'chassi']) {
+        for (const k of ['marca_modelo', 'placa', 'ano_fab', 'ano_mod', 'cor', 'chassi', 'renavam']) {
           if (v[k]) q.set(k, k === 'placa' || k === 'chassi' ? String(v[k]).toUpperCase().replace(/[^A-Z0-9]/g, '') : v[k]);
         }
       }

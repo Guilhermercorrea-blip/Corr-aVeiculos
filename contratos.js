@@ -81,6 +81,11 @@ function somarDias(iso, dias) {
   const data = new Date(Date.UTC(a, m - 1, d + dias));
   return data.toISOString().slice(0, 10);
 }
+// Data de hoje no fuso da loja (AAAA-MM-DD), para documentos que saem datados
+function hojeLoja() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.FUSO_LOJA || 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
 function dataPorExtenso(iso) {
   const [a, m, d] = iso.slice(0, 10).split('-').map(Number);
   return `${d} de ${MESES[m - 1]} de ${a}`;
@@ -377,13 +382,14 @@ function cartaAvaliacao(d, c, op = {}) {
   // Sem carro escolhido (modelo em branco): tudo sai em linhas para preencher à mão
   const semCarro = !v.marca_modelo && !v.chassi;
   const dados = semCarro
-    ? `${campo(null, 170)}, ano ${campo(null, 70)}/${campo(null, 70)}, CHASSI ${campo(null, 150)}, cor ${campo(null, 90)}, ${campo(null, 200)}`
+    ? `${campo(null, 200)}, ano ${campo(null, 60)}/${campo(null, 60)}, cor ${campo(null, 90)}, RENAVAM ${campo(null, 130)}, placa ${campo(null, 90)}, chassi ${campo(null, 170)}`
     : [
       `<b>${esc(v.marca_modelo || '')}</b>`,
       anos && `ano <b>${esc(anos)}</b>`,
-      v.placa && `placa <b>${esc(placa(v.placa))}</b>`,
-      v.chassi ? `CHASSI <b>${esc(v.chassi)}</b>` : `CHASSI ${campo(null, 150)}`,
       v.cor && `cor <b>${esc(v.cor)}</b>`,
+      v.renavam && `RENAVAM <b>${esc(v.renavam)}</b>`,
+      v.placa && `placa <b>${esc(placa(v.placa))}</b>`,
+      v.chassi && `chassi <b>${esc(v.chassi)}</b>`,
       extras && `<b>${esc(extras)}</b>`,
     ].filter(Boolean).join(', ');
   const preco = centavos
@@ -393,13 +399,11 @@ function cartaAvaliacao(d, c, op = {}) {
   return pagina(`Carta de avaliação - ${placa(v.placa) || v.marca_modelo || 'em branco'}`, `
   ${cabecalho(c)}
   ${faixa('Carta de avaliação')}
-  <p style="margin-top:14px; font-size:10pt">A quem possa interessar,</p>
-  <p style="font-size:10pt">Prezado(s) Senhor(es):</p>
-  <p style="margin-top:14px; font-size:10pt; line-height:1.6">Informamos que o veículo ${dados}, pelo estado em que se encontra, conforme avaliação, no valor de ${preco}. Informamos ainda que esta avaliação não nos obriga a comprar ou a vender o veículo acima descrito.</p>
-  <p style="margin-top:10px; font-size:10pt; line-height:1.6">Sem mais para o momento e à disposição para quaisquer esclarecimentos complementares que se fizerem necessários, subscrevemo-nos.</p>
-  ${localData(c, op.data || null)}
-  <p style="margin-top:28px; font-size:10pt">Atenciosamente,</p>
-  <div style="width:260px; margin-top:44px; text-align:center">
+  <p style="margin-top:22px; font-size:11pt; line-height:1.8; text-indent:2em; text-align:justify">Servimo-nos da presente para avaliar em ${preco} o seguinte veículo: ${dados}. No estado em que se encontra, conforme avaliação.</p>
+  <p style="margin-top:10px; font-size:11pt; line-height:1.8; text-indent:2em; text-align:justify">Outrossim, informamos que a presente declaração não nos onera na obrigação de compra, bem como não nos responsabilizamos pela procedência ou comercialização do referido veículo.</p>
+  <p style="margin-top:10px; font-size:11pt; line-height:1.8; text-indent:2em">Para maior clareza, firmamos a presente avaliação.</p>
+  ${localData(c, op.data || (semCarro ? null : hojeLoja()))}
+  <div style="width:260px; margin-top:70px; text-align:center">
     <div class="traco"></div>${assinaturaLoja(c)}
   </div>`);
 }
@@ -494,7 +498,7 @@ function gerarContrato(veiculoId, tipo, opcoes = {}) {
       const ano = k => (/^\d{4}$/.test(String(opcoes[k] ?? '')) ? Number(opcoes[k]) : null);
       vazio.veiculo = {
         marca_modelo: texto('marca_modelo', 80), placa: texto('placa', 10)?.toUpperCase() || null,
-        chassi: texto('chassi', 30)?.toUpperCase() || null, cor: texto('cor', 30),
+        chassi: texto('chassi', 30)?.toUpperCase() || null, cor: texto('cor', 30), renavam: texto('renavam', 20),
         ano_fab: ano('ano_fab'), ano_mod: ano('ano_mod'),
       };
       return cartaAvaliacao(vazio, c, opcoes);
