@@ -382,14 +382,13 @@ function cartaAvaliacao(d, c, op = {}) {
   // Sem carro escolhido (modelo em branco): tudo sai em linhas para preencher à mão
   const semCarro = !v.marca_modelo && !v.chassi;
   const dados = semCarro
-    ? `${campo(null, 200)}, ano ${campo(null, 60)}/${campo(null, 60)}, cor ${campo(null, 90)}, RENAVAM ${campo(null, 130)}, placa ${campo(null, 90)}, chassi ${campo(null, 170)}`
+    ? `${campo(null, 200)}, ano ${campo(null, 60)}/${campo(null, 60)}, cor ${campo(null, 90)}, RENAVAM ${campo(null, 130)}, placa ${campo(null, 120)}`
     : [
       `<b>${esc(v.marca_modelo || '')}</b>`,
       anos && `ano <b>${esc(anos)}</b>`,
       v.cor && `cor <b>${esc(v.cor)}</b>`,
       v.renavam && `RENAVAM <b>${esc(v.renavam)}</b>`,
       v.placa && `placa <b>${esc(placa(v.placa))}</b>`,
-      v.chassi && `chassi <b>${esc(v.chassi)}</b>`,
       extras && `<b>${esc(extras)}</b>`,
     ].filter(Boolean).join(', ');
   const preco = centavos
