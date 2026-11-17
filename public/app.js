@@ -1461,6 +1461,8 @@ async function telaContratos() {
   ligarAnexos(form, 'entrada');
   // Na avaliação de carro de fora só interessa o documento: esconde km do painel e fotos do carro
   form.querySelectorAll('details.fotos-opcionais').forEach(d => (d.hidden = true));
+  // A carta de avaliação não leva chassi nem km: esconde esses campos
+  for (const nome of ['veiculo.chassi', 'veiculo.km_entrada']) { const c = form.elements[nome]?.closest('.campo'); if (c) c.hidden = true; }
   if (pronto && MODELOS_CONTRATO.some(m => m.tipo === pronto.modelo)) modelo.value = pronto.modelo;
   const novo = () => carro.value === 'novo';
   const ajustarCarro = () => {
