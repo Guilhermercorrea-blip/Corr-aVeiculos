@@ -1463,7 +1463,8 @@ async function telaContratos() {
   form.querySelectorAll('details.fotos-opcionais').forEach(d => (d.hidden = true));
   // A carta de avaliação não leva chassi nem km: esconde esses campos
   for (const nome of ['veiculo.chassi', 'veiculo.km_entrada']) { const c = form.elements[nome]?.closest('.campo'); if (c) c.hidden = true; }
-  if (pronto && MODELOS_CONTRATO.some(m => m.tipo === pronto.modelo)) modelo.value = pronto.modelo;
+  // Abre sempre em Consignação (o mais usado), a não ser que esteja voltando do cadastro de um carro novo
+  modelo.value = pronto && MODELOS_CONTRATO.some(m => m.tipo === pronto.modelo) ? pronto.modelo : 'consignacao';
   const novo = () => carro.value === 'novo';
   const ajustarCarro = () => {
     const avaliacaoDeFora = novo() && modelo.value === 'avaliacao';
@@ -1478,10 +1479,8 @@ async function telaContratos() {
       ? (vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : '')
       : `${estoque.length ? `<optgroup label="Em estoque">${opcoes(estoque)}</optgroup>` : ''}${vendidos.length ? `<optgroup label="Vendidos">${opcoes(vendidos)}</optgroup>` : ''}`;
     carro.innerHTML = `${opcaoNovo}${emBranco}${lista}`;
-    // Avaliação quase sempre é de carro de fora: já abre em "novo". Nos outros, o primeiro carro da lista.
-    const primeiro = carro.querySelector('optgroup option');
-    if (m.avaliacao) carro.value = 'novo';
-    else if (primeiro) carro.value = primeiro.value;
+    // Todos os modelos abrem em "+ Adicionar novo veículo" (o mais usado); o carro do estoque é só escolher na lista
+    carro.value = 'novo';
     document.getElementById('contrato-descricao').textContent = m.texto;
     document.getElementById('contrato-avaliacao').hidden = !m.avaliacao;
     ajustarCarro();
