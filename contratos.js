@@ -411,6 +411,7 @@ function cartaAvaliacao(d, c, op = {}) {
 function contratoConsignacao(d, c) {
   const v = d.veiculo;
   const p = d.fornecedor;
+  const crv = d.proprietarioCrv; // CRV em nome de outra pessoa (o consignante age por procuração)
   const quitado = v.tipo_entrada === 'troca' || v.tipo_entrada === 'compra_sem_transferir';
   const origem = d.origemTroca;
   const compraSemTransferir = v.tipo_entrada === 'compra_sem_transferir';
@@ -423,13 +424,13 @@ function contratoConsignacao(d, c) {
   ${cabecalho(c)}
   ${faixa('Contrato de consignação de veículo e termo de responsabilidade')}
   ${secao(1, 'Qualificação das partes')}
-  ${quadro(linhasPessoa(p, 'Consignante / Proprietário').filter(l => l[0] !== 'RG'))}
+  ${quadro(linhasPessoa(p, crv ? 'Consignante' : 'Consignante / Proprietário').filter(l => l[0] !== 'RG'))}
   <p>A <b>CONSIGNATÁRIA</b> é ${esc(c.razao_social)}, CNPJ nº ${esc(c.cnpj)}, estabelecida no endereço indicado no cabeçalho. O CONSIGNANTE entrega o veículo abaixo, autorizando sua exposição, divulgação, intermediação e venda nos termos deste contrato.</p>
   ${secao(2, 'Dados do veículo')}
   ${quadroPares(paresVeiculo(v, [
     ['Km de Entrada', celula(km(v.km_entrada), 120)],
     ['Data/Hora Entrada', celula(dataHora(v.entrada_em), 120)],
-    ['Proprietário no CRV/ATPV-e', celula(p?.nome, 100)],
+    ['Proprietário no CRV/ATPV-e', crv ? `${celula(crv.nome, 100)}${crv.cpf ? ' · CPF ' + esc(cpf(crv.cpf)) : ''}` : celula(p?.nome, 100)],
   ]))}
   ${secao(3, 'Condições comerciais')}
   ${quadroPares([[rotuloValor, valorComercial != null ? reais(valorComercial) : 'R$ ' + celula(null, 120)], ['Comissão', comissao]])}
@@ -450,6 +451,7 @@ function contratoConsignacao(d, c) {
   ${clausula('6.1', '', 'O CONSIGNANTE declara ser legítimo proprietário do veículo ou possuir poderes suficientes para consigná-lo e comercializá-lo, responsabilizando-se pela veracidade das informações prestadas.')}
   ${clausula('6.2', '', 'O CONSIGNANTE responde pela procedência do veículo, evicção, vícios ocultos ou redibitórios preexistentes e por restrições ou débitos anteriores não informados à CONSIGNATÁRIA.')}
   ${clausula('6.3', '', 'Concretizada a venda, o CONSIGNANTE compromete-se a fornecer e assinar tempestivamente os documentos necessários à transferência de propriedade e aos procedimentos administrativos aplicáveis.')}
+  ${crv ? clausula('6.4', 'Procuração', `O veículo está registrado no CRV/ATPV-e em nome de <b>${esc(crv.nome)}</b>${crv.cpf ? ', CPF nº ' + esc(cpf(crv.cpf)) : ''}. O CONSIGNANTE declara possuir poderes para consigná-lo e vendê-lo, conforme procuração de <span class="linha" style="min-width:90px"></span> (data), lavrada no cartório <span class="linha" style="min-width:200px"></span>, cuja cópia fica arquivada com a CONSIGNATÁRIA, e responde pela validade e pela vigência desses poderes. Na venda, a ATPV-e será assinada pelo proprietário registrado ou por seu procurador.`) : ''}
   ${secao(7, 'Venda e documentação')}
   ${clausula('7.1', '', 'Concretizada a negociação, as partes comprometem-se a praticar, dentro dos prazos legais, os atos necessários à formalização da venda, transferência do veículo e demais comunicações exigidas pelos órgãos de trânsito.')}
   ${clausula('7.2', '', 'Este contrato de consignação não substitui os procedimentos e documentos exigidos pelo órgão de trânsito para formalização da transferência ou comunicação da venda.')}

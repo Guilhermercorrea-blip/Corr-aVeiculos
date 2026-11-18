@@ -680,6 +680,12 @@ async function telaEntrada(id) {
       </div>
     </fieldset>`}
     ${blocoPessoa('pessoa', ehTroca ? 'Dono anterior (comprador da venda)' : 'Vendedor / dono do carro', atual?.fornecedor || {})}
+    <details id="bloco-crv" class="cartao" ${atual?.proprietarioCrv ? 'open' : ''}>
+      <summary><strong>O documento (CRV) está no nome de outra pessoa? (procuração)</strong></summary>
+      <p class="suave pequeno">Preencha só se o dono do documento for diferente de quem entrega o carro. O contrato fica no nome de quem entrega, com o proprietário do CRV indicado; a nota fiscal sai no nome de quem está no CRV.</p>
+      <p><button type="button" class="secundario" id="copiar-end-crv">Copiar endereço e telefone de quem entrega o carro</button></p>
+      ${blocoPessoa('proprietario_crv', 'Proprietário no CRV', atual?.proprietarioCrv || {})}
+    </details>
     ${blocoVeiculo('veiculo', 'Dados do carro', v)}
     <fieldset>
       <legend>Valores</legend>
@@ -701,6 +707,12 @@ async function telaEntrada(id) {
 
   const form = document.getElementById('form');
   ligarPessoa(form, 'pessoa');
+  ligarPessoa(form, 'proprietario_crv');
+  document.getElementById('copiar-end-crv').addEventListener('click', () => {
+    for (const campo of ['cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf', 'telefone']) form.elements[`proprietario_crv.${campo}`].value = form.elements[`pessoa.${campo}`].value;
+    aviso('Endereço copiado. Confira o nome e o CPF do proprietário do CRV.');
+  });
+  form.querySelectorAll('[name^="proprietario_crv."]').forEach(i => { i.required = false; }); // opcional: só quando o CRV é de outra pessoa
   ligarAnexos(form, 'entrada');
   const ajustarTipo = () => {
     const tipo = form.querySelector('input[name="veiculo.tipo_entrada"]:checked')?.value;
@@ -892,6 +904,7 @@ async function telaCarro(id) {
   <div class="cartao">
     <h2>${v.tipo_entrada === 'troca' ? 'Veio na troca de' : v.tipo_entrada === 'consignacao' ? 'Dono (consignante)' : 'Comprado de'}</h2>
     ${dadosPessoa(d.fornecedor)}
+    ${d.proprietarioCrv ? `<p class="pequeno" style="margin-top:10px"><strong>Proprietário no CRV (outra pessoa, por procuração):</strong></p>${dadosPessoa(d.proprietarioCrv)}` : ''}
     ${d.origemTroca ? `<p class="pequeno">Entrou como parte do pagamento do <a href="#/carro/${d.origemTroca.id}">${esc(d.origemTroca.marca_modelo)} ${esc(formatarPlaca(d.origemTroca.placa))}</a> em ${dataBR(d.origemTroca.vendido_em)}.</p>` : ''}
   </div>
 

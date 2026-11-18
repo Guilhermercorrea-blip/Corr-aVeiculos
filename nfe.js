@@ -139,7 +139,8 @@ const TIPOS_NOTA = {
   },
   entrada_consignacao: {
     nome: 'entrada de consignação', natOp: 'CONSIGNAÇÃO', cfop: 1917, tpNF: 0,
-    pessoa: d => d.fornecedor, quem: 'dono',
+    // CRV no nome de outra pessoa (procuração): a nota sai no nome de quem está no CRV
+    pessoa: d => d.proprietarioCrv || d.fornecedor, quem: 'dono',
     bloqueio: d => (TIPOS_CONSIGNACAO.includes(d.veiculo.tipo_entrada) ? null : 'A nota de entrada de consignação é só para carro em consignação, troca ou compra sem transferir'),
     valor: d => (d.veiculo.tipo_entrada === 'compra_sem_transferir' ? d.veiculo.valor_consignacao : d.veiculo.valor_compra),
   },
@@ -147,7 +148,7 @@ const TIPOS_NOTA = {
   // Igual às notas 1067-1069: finalidade 4, CFOP 1918, aponta a chave da NF-e de entrada (BA02).
   devolucao_consignacao: {
     nome: 'devolução de consignação', natOp: 'DEVOLUÇÃO', cfop: 1918, tpNF: 0, finNFe: 4, referencia: true,
-    pessoa: d => d.fornecedor, quem: 'dono',
+    pessoa: d => d.proprietarioCrv || d.fornecedor, quem: 'dono',
     bloqueio: d => (TIPOS_CONSIGNACAO.includes(d.veiculo.tipo_entrada) ? null : 'A devolução de consignação é só para carro em consignação, troca ou compra sem transferir'),
     valor: d => (d.veiculo.tipo_entrada === 'compra_sem_transferir' ? d.veiculo.valor_consignacao : d.veiculo.valor_compra),
   },

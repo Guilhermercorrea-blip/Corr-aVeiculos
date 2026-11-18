@@ -162,6 +162,8 @@ for (const coluna of ['tomador_doc', 'tomador_nome']) {
 const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.name);
 if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');
 const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
+// Quando o CRV está no nome de outra pessoa (procuração): a nota e o campo "Proprietário no CRV" do contrato usam esta pessoa
+if (!colunasVeiculo.includes('proprietario_crv_id')) db.exec('ALTER TABLE veiculos ADD COLUMN proprietario_crv_id INTEGER REFERENCES pessoas(id)');
 if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos ADD COLUMN valor_consignacao INTEGER');
 // Dados técnicos do CRLV para a nota de venda (RENAVE): motor, potência, cilindradas, peso... (JSON)
 if (!colunasVeiculo.includes('ficha_nfe')) db.exec('ALTER TABLE veiculos ADD COLUMN ficha_nfe TEXT');
@@ -348,7 +350,7 @@ function vincularAnexos(ids, veiculoId) {
   for (const id of lista) sql.run(veiculoId, id);
 }
 
-function criarCompra({ pessoa, veiculo, anexos } = {}) {
+function criarCompra({ pessoa, veiculo, anexos, proprietario_crv } = {}) {
   const v = limpar(CAMPOS_VEICULO, veiculo);
   validarVeiculo(v);
   if (!v.tipo_entrada || v.tipo_entrada === 'troca') throw erro('Escolha se é compra ou consignação');
@@ -356,7 +358,8 @@ function criarCompra({ pessoa, veiculo, anexos } = {}) {
   v.entrada_em = v.entrada_em || agora();
   return transacao(() => {
     const fornecedor_id = salvarPessoa(pessoa);
-    const id = inserir('veiculos', { ...v, fornecedor_id, status: 'estoque' });
+    const proprietario_crv_id = proprietario_crv?.nome ? salvarPessoa(proprietario_crv) : null;
+    const id = inserir('veiculos', { ...v, fornecedor_id, proprietario_crv_id, status: 'estoque' });
     vincularAnexos(anexos, id);
     return { id };
   });
@@ -382,6 +385,7 @@ function obterVeiculo(id) {
   return {
     veiculo: comCalculos(v),
     fornecedor: pessoa(v.fornecedor_id),
+    proprietarioCrv: pessoa(db.prepare('SELECT proprietario_crv_id AS p FROM veiculos WHERE id = ?').get(id)?.p),
     gastos: db.prepare('SELECT * FROM gastos WHERE veiculo_id = ? ORDER BY data DESC, id DESC').all(id),
     anexos: db.prepare('SELECT id, tipo, nome_original, tipo_mime, criado_em FROM anexos WHERE veiculo_id = ? ORDER BY id').all(id),
     venda,
@@ -391,7 +395,7 @@ function obterVeiculo(id) {
   };
 }
 
-function atualizarVeiculo(id, { veiculo, pessoa, anexos } = {}) {
+function atualizarVeiculo(id, { veiculo, pessoa, anexos, proprietario_crv } = {}) {
   const atual = obterVeiculo(id).veiculo;
   const v = limpar(CAMPOS_VEICULO, veiculo);
   validarVeiculo({ ...atual, ...v });
@@ -400,6 +404,7 @@ function atualizarVeiculo(id, { veiculo, pessoa, anexos } = {}) {
   if ('valor_compra' in v && v.valor_compra == null) throw erro('Informe o valor do carro');
   transacao(() => {
     if (pessoa?.nome) v.fornecedor_id = salvarPessoa(pessoa, { reativar: false });
+    if (proprietario_crv?.nome) v.proprietario_crv_id = salvarPessoa(proprietario_crv, { reativar: false });
     atualizar('veiculos', id, v);
     vincularAnexos(anexos, id);
   });
