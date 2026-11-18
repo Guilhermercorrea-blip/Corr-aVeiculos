@@ -1638,6 +1638,132 @@ async function telaConfiguracoes() {
   });
 }
 
+// ---------- nota de serviço (comissão de banco) ----------
+
+async function baixarXmlNfse(id) {
+  const r = await api('GET', `/nfse/${id}/xml`);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+  link.download = r.arquivo;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+}
+
+const STATUS_NFSE = { emitida: 'Emitida', recusada: 'Recusada', incerta: 'Conferir no portal', enviando: 'Enviando…' };
+
+async function telaNotaServico() {
+  const d = await api('GET', '/nfse');
+  const real = d.ambiente === 'producao';
+  const nomeBanco = n => (n.tomador === 'pessoa-fisica' ? `${n.tomador_nome || ''} (CPF ${n.tomador_doc || ''})` : d.tomadores.find(t => t.id === n.tomador)?.nome || n.tomador);
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>Nota de serviço</h1><div class="suave">Comissão de banco (financiamento e seguros), emitida direto na Receita.</div></div></div>
+  <div class="cartao" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'}">
+    <strong>${real ? 'NOTA REAL: ela vale de verdade e não volta atrás.' : 'Ambiente de TESTES da Receita: a nota não vale.'}</strong>
+    <p class="suave pequeno">${d.habilitado ? `Certificado: ${esc(d.certificado)}. Próximo número de DPS: ${d.proximoNumero}.` : 'O certificado digital não está neste computador (ou você abriu o sistema por fora da loja). A emissão só funciona no PC da loja.'}</p>
+  </div>
+  <div class="cartao">
+    <h2>Nova nota</h2>
+    <form id="form-nfse" class="grade" novalidate>
+      <div class="campo c6"><label for="nfse-banco">Banco</label>
+        <select id="nfse-banco">${d.tomadores.map(t => `<option value="${t.id}" data-tipo="${t.tipo}">${esc(t.nome)} · código ${t.codigo.replace(/^(\d\d)(\d\d)(\d\d)$/, '$1.$2.$3')}</option>`).join('')}</select></div>
+      <div class="campo c3"><label for="nfse-valor">Valor da comissão</label>
+        <input id="nfse-valor" inputmode="decimal" data-dinheiro placeholder="R$ 0,00"></div>
+      <div class="campo c3"><label for="nfse-competencia">Data de competência</label>
+        <input id="nfse-competencia" type="date" value="${esc(d.hoje)}" max="${esc(d.hoje)}"></div>
+      <div class="campo c4" id="nfse-cpf-campo" hidden><label for="nfse-cpf">CPF do tomador</label>
+        <input id="nfse-cpf" inputmode="numeric" placeholder="000.000.000-00"></div>
+      <div class="campo c8" id="nfse-nome-campo" hidden><label for="nfse-nome">Nome completo do tomador</label>
+        <input id="nfse-nome"></div>
+      <div class="campo c4" id="nfse-ticket-campo" hidden><label for="nfse-ticket">Ticket do seguro</label>
+        <input id="nfse-ticket" inputmode="numeric" placeholder="só números"></div>
+      <div class="campo c12 suave pequeno">A competência tem que ser do mesmo mês da operação no banco. O Santander confere isso.</div>
+      <div class="campo c12"><button type="submit" ${d.habilitado ? '' : 'disabled'}>Ver resumo antes de emitir</button></div>
+    </form>
+    <div id="nfse-resumo"></div>
+  </div>
+  <div class="cartao">
+    <h2>Notas emitidas por aqui</h2>
+    ${d.notas.length ? `<table><thead><tr><th>Quando</th><th>Banco</th><th>Competência</th><th class="num">Valor</th><th>Nº NFS-e</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${d.notas.map(n => `<tr>
+        <td>${esc(n.criado_em.slice(0, 16))}${n.ambiente === 'teste' ? ' <span class="suave">(teste)</span>' : ''}</td>
+        <td>${esc(nomeBanco(n))}${n.ticket ? ' · ticket ' + esc(n.ticket) : ''}</td>
+        <td>${esc(n.competencia.split('-').reverse().join('/'))}</td>
+        <td class="num">${reais(n.valor)}</td>
+        <td>${esc(n.numero_nfse || '—')}</td>
+        <td title="${esc(n.mensagem || '')}">${esc(STATUS_NFSE[n.status] || n.status)}</td>
+        <td>${n.status === 'emitida' ? `<button type="button" class="secundario" data-xml="${n.id}">Baixar XML</button>` : ''}</td></tr>`).join('')}
+    </tbody></table>` : '<p class="suave">Nenhuma nota emitida por este sistema ainda. As anteriores continuam no portal da Receita.</p>'}
+  </div>`;
+
+  const form = document.getElementById('form-nfse');
+  const caixa = document.getElementById('nfse-resumo');
+  const selecionado = () => document.getElementById('nfse-banco').selectedOptions[0];
+  const ajustarTicket = () => {
+    const tipo = selecionado().dataset.tipo;
+    document.getElementById('nfse-ticket-campo').hidden = tipo !== 'seguros';
+    document.getElementById('nfse-cpf-campo').hidden = tipo !== 'pf';
+    document.getElementById('nfse-nome-campo').hidden = tipo !== 'pf';
+  };
+  document.getElementById('nfse-banco').addEventListener('change', () => { ajustarTicket(); caixa.innerHTML = ''; });
+  ajustarTicket();
+  app.querySelectorAll('[data-xml]').forEach(b => b.addEventListener('click', () => baixarXmlNfse(b.dataset.xml).catch(e => aviso(e.message, true))));
+
+  const pedido = () => ({
+    tomador: document.getElementById('nfse-banco').value,
+    valor: paraCentavos(document.getElementById('nfse-valor').value),
+    competencia: document.getElementById('nfse-competencia').value,
+    ticket: document.getElementById('nfse-ticket').value.trim() || null,
+    ...(document.getElementById('nfse-banco').value === 'pessoa-fisica' ? { cpf: document.getElementById('nfse-cpf').value, nome: document.getElementById('nfse-nome').value } : {}),
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    caixa.innerHTML = '';
+    try {
+      const dados = pedido();
+      if (!dados.valor) throw new Error('Informe o valor da comissão.');
+      const p = await api('POST', '/nfse/previa', dados);
+      caixa.innerHTML = `
+      <div class="conferencia" style="margin-top:12px">
+        <h3>Confira antes de emitir</h3>
+        <table><tbody>
+          <tr><td>Banco (tomador)</td><td>${esc(p.banco)}<br><span class="suave pequeno">${esc(p.documento)}</span></td></tr>
+          <tr><td>Serviço</td><td>${esc(p.descricao)}<br><span class="suave pequeno">Código ${esc(p.codigo)} · NBS ${esc(p.nbs)}</span></td></tr>
+          <tr><td>Competência</td><td>${esc(p.competencia.split('-').reverse().join('/'))}</td></tr>
+          <tr><td>Valor</td><td><strong>${reais(p.valor)}</strong></td></tr>
+          <tr><td>ISS (${p.aliquota}%)</td><td>${reais(p.iss)} · não retido</td></tr>
+          <tr><td>Número do DPS</td><td>${p.numeroDps}</td></tr>
+        </tbody></table>
+        <p class="${real ? '' : 'suave'} pequeno"><strong>${real ? 'Esta nota vale de verdade e não pode ser desfeita por aqui.' : 'Ambiente de testes: nada disso vale.'}</strong></p>
+        <label class="pequeno" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nfse-ok" style="width:auto;margin:0"> Conferi o banco, o valor e a competência${real ? ' e quero emitir a nota real' : ''}</label>
+        <div class="grade" style="margin-top:8px">
+          <div class="campo c4"><label for="nfse-senha">Senha do certificado digital</label>
+            <input id="nfse-senha" type="password" autocomplete="off" placeholder="não fica guardada"></div>
+          <div class="campo c4" style="align-self:end"><button type="button" id="nfse-emitir">Emitir nota</button></div>
+        </div>
+      </div>`;
+      document.getElementById('nfse-emitir').addEventListener('click', async ev => {
+        const botao = ev.currentTarget;
+        if (!document.getElementById('nfse-ok').checked) return aviso('Marque que você conferiu os dados.', true);
+        const senha = document.getElementById('nfse-senha').value;
+        if (!senha) return aviso('Digite a senha do certificado.', true);
+        botao.disabled = true;
+        botao.textContent = 'Enviando… não feche';
+        try {
+          const r = await api('POST', '/nfse/emitir', { ...dados, senha, confirmar: true, confirmarProducao: real });
+          document.getElementById('nfse-senha').value = '';
+          aviso(`Nota nº ${r.numero} emitida.`);
+          await telaNotaServico();
+        } catch (er) {
+          document.getElementById('nfse-senha').value = '';
+          aviso(er.message, true);
+          await telaNotaServico();
+        }
+      });
+    } catch (er) { aviso(er.message, true); }
+  });
+}
+
 // ---------- navegação ----------
 
 async function navegar() {
@@ -1653,6 +1779,7 @@ async function navegar() {
     else if (pagina === 'vendidos') await telaLista('vendido');
     else if (pagina === 'pessoas' || pagina === 'pessoa') { if (id) await telaPessoa(Number(id)); else await telaPessoas(); }
     else if (pagina === 'contratos') await telaContratos();
+    else if (pagina === 'nota-servico') await telaNotaServico();
     else if (pagina === 'configuracoes') await telaConfiguracoes();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();

@@ -19,6 +19,7 @@ const redesSociais = require('./redes-sociais');
 const redesMeta = require('./redes-meta');
 const galeriaLoja = require('./galeria-loja');
 const nfe = require('./nfe');
+const nfseServico = require('./nfse-servico');
 const avaliacoes = require('./avaliacoes');
 const aniversarios = require('./aniversarios');
 
@@ -176,6 +177,14 @@ rota('PUT', '/api/veiculos/:id', (p, q, corpo) => db.atualizarVeiculo(p.id, corp
 // Nota fiscal de entrada de consignação: XML para importar no Emissor do Sebrae
 rota('GET', '/api/veiculos/:id/nfe/:tipo', p => nfe.sugestao(p.id, p.tipo));
 rota('POST', '/api/veiculos/:id/nfe/:tipo', (p, q, corpo) => nfe.gerarNota(p.id, p.tipo, corpo));
+// Nota de serviço (comissão de banco) emitida direto na Receita. Só no computador da loja: pela internet nada disso funciona
+// Na nuvem, NFSE_REMOTO=1 libera a emissão para quem estiver logado (o certificado fica no servidor e a senha dele é digitada a cada nota)
+const emissaoLiberada = ctx => process.env.NFSE_REMOTO === '1' || pedidoLocal(ctx.req);
+const soNoComputadorDaLoja = ctx => { if (!emissaoLiberada(ctx)) throw db.erro('A nota de serviço só pode ser emitida no computador da loja.', 403); };
+rota('GET', '/api/nfse', (p, q, c, ctx) => { const d = nfseServico.listar(); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
+rota('POST', '/api/nfse/previa', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.previa(corpo); });
+rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.emitir(corpo); });
+rota('GET', '/api/nfse/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.xmlDaNota(Number(p.id)); });
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
 rota('POST', '/api/estoque-rapido', (p, q, corpo) => db.criarEstoqueRapido(corpo.carros));
 rota('DELETE', '/api/veiculos/:id', p => db.excluirVeiculo(p.id));

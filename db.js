@@ -121,6 +121,25 @@ CREATE TABLE IF NOT EXISTS nfe_notas (
   UNIQUE (serie, numero)
 );
 
+-- NFS-e de comissão de banco emitidas pela API da Receita (o número do DPS não pode repetir na série e no ambiente)
+CREATE TABLE IF NOT EXISTS nfse_notas (
+  id INTEGER PRIMARY KEY,
+  ambiente TEXT NOT NULL,
+  serie INTEGER NOT NULL DEFAULT 1,
+  n_dps INTEGER NOT NULL,
+  tomador TEXT NOT NULL,
+  competencia TEXT NOT NULL,
+  valor INTEGER NOT NULL,
+  ticket TEXT,
+  status TEXT NOT NULL,
+  chave TEXT,
+  numero_nfse TEXT,
+  mensagem TEXT,
+  xml_nfse TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE (ambiente, serie, n_dps)
+);
+
 CREATE INDEX IF NOT EXISTS idx_gastos_veiculo ON gastos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_anexos_veiculo ON anexos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_veiculos_status ON veiculos(status);
@@ -137,6 +156,9 @@ LEFT JOIN pessoas c ON c.id = vd.comprador_id;
 `);
 
 // Colunas novas em bancos criados antes delas existirem
+for (const coluna of ['tomador_doc', 'tomador_nome']) {
+  if (!db.prepare('PRAGMA table_info(nfse_notas)').all().some(c => c.name === coluna)) db.exec(`ALTER TABLE nfse_notas ADD COLUMN ${coluna} TEXT`);
+}
 const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.name);
 if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');
 const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
