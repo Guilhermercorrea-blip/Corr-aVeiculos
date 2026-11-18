@@ -32,7 +32,27 @@ function hojeISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// Carro consignado: o dono (consignante) é o tomador e o carro entra na descrição. Tudo vem do cadastro, não da tela.
+function dadosConsignado(veiculoId) {
+  const v = db.conexao.prepare('SELECT v.*, p.nome AS dono_nome, p.cpf AS dono_cpf FROM veiculos v LEFT JOIN pessoas p ON p.id = v.fornecedor_id WHERE v.id = ?').get(Number(veiculoId));
+  if (!v) throw db.erro('Escolha o carro consignado.', 400);
+  if (v.tipo_entrada !== 'consignacao') throw db.erro('Esse carro não é de consignação.', 400);
+  if (!nfse.cpfValido(v.dono_cpf)) throw db.erro('O dono desse carro não tem CPF válido no cadastro. Corrija em Pessoas e tente de novo.', 400);
+  const texto = [v.marca_modelo, v.ano_fab && v.ano_mod ? v.ano_fab + '/' + v.ano_mod : '', v.cor, v.placa ? 'PLACA ' + v.placa : ''].filter(Boolean).join(' ');
+  return { veiculo_id: v.id, cpf: String(v.dono_cpf).replace(/\D/g, ''), nome: v.dono_nome, veiculoTexto: texto };
+}
+
 function validarPedido(c) {
+  if (c.tomador === 'cliente-consignacao') {
+    const d = dadosConsignado(c.veiculo_id);
+    const valor = Number(c.valor);
+    if (!Number.isInteger(valor) || valor <= 0) throw db.erro('Informe o valor da comissão.', 400);
+    if (valor > 5000000) throw db.erro('Valor acima de R$ 50.000,00: confira se está certo.', 400);
+    const competencia = String(c.competencia || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(competencia)) throw db.erro('Informe a data de competência.', 400);
+    if (competencia > hojeISO()) throw db.erro('A competência não pode ser uma data futura.', 400);
+    return { tomador: c.tomador, valor, competencia, ticket: null, ...d };
+  }
   const pf = c.tomador === 'pessoa-fisica';
   const t = pf ? { tipo: 'pf' } : nfse.TOMADORES[c.tomador];
   if (!t) throw db.erro('Escolha o banco.', 400);
@@ -49,11 +69,11 @@ function validarPedido(c) {
   const ticket = c.ticket ? String(c.ticket).trim() : '';
   if (t.tipo === 'seguros' && !/^\d{1,20}$/.test(ticket)) throw db.erro('Nota de seguros precisa do número do ticket (só números).', 400);
   if (t.tipo !== 'seguros' && ticket) throw db.erro('Só nota de seguros leva ticket.', 400);
-  return { tomador: c.tomador, valor, competencia, ticket: ticket || null, ...(pf ? { cpf: String(c.cpf).replace(/D/g, ''), nome: String(c.nome).trim() } : {}) };
+  return { tomador: c.tomador, valor, competencia, ticket: ticket || null, ...(pf ? { cpf: String(c.cpf).replace(/\D/g, ''), nome: String(c.nome).trim() } : {}) };
 }
 
 function listar() {
-  const notas = db.conexao.prepare('SELECT id, ambiente, serie, n_dps, tomador, tomador_doc, tomador_nome, competencia, valor, ticket, status, chave, numero_nfse, mensagem, criado_em FROM nfse_notas ORDER BY id DESC LIMIT 100').all();
+  const notas = db.conexao.prepare('SELECT id, ambiente, serie, n_dps, tomador, tomador_doc, tomador_nome, veiculo_id, competencia, valor, ticket, status, chave, numero_nfse, mensagem, criado_em FROM nfse_notas ORDER BY id DESC LIMIT 100').all();
   const amb = ambienteAtual();
   return {
     habilitado: !!caminhoCertificado(),
@@ -61,9 +81,32 @@ function listar() {
     certificado: caminhoCertificado() ? path.basename(caminhoCertificado()) : null,
     proximoNumero: proximoNumero(amb),
     hoje: hojeISO(),
-    tomadores: [...Object.entries(nfse.TOMADORES).map(([id, t]) => ({ id, nome: t.nome, tipo: t.tipo, cnpj: t.cnpj, codigo: t.cTribNac })), { id: 'pessoa-fisica', nome: 'Pessoa física (nota de teste do sistema)', tipo: 'pf', codigo: '100501' }],
+    tomadores: [...Object.entries(nfse.TOMADORES).map(([id, t]) => ({ id, nome: t.nome, tipo: t.tipo, cnpj: t.cnpj, codigo: t.cTribNac })), { id: 'cliente-consignacao', nome: 'Cliente: dono de carro consignado (comissão da venda)', tipo: 'consig', codigo: '100501' }, { id: 'pessoa-fisica', nome: 'Pessoa física (nota de teste do sistema)', tipo: 'pf', codigo: '100501' }],
+    carrosConsignados: carrosConsignados(),
     notas,
   };
+}
+
+// Carros em consignação (vendidos primeiro): são os que dão nota de serviço ao dono quando a loja fica com a diferença
+function carrosConsignados() {
+  const linhas = db.conexao.prepare(`
+    SELECT v.id, v.marca_modelo, v.ano_fab, v.ano_mod, v.placa, v.status, v.valor_compra, vd.vendido_em, vd.valor_venda, p.nome AS dono_nome, p.cpf AS dono_cpf
+    FROM veiculos v LEFT JOIN vendas vd ON vd.veiculo_id = v.id LEFT JOIN pessoas p ON p.id = v.fornecedor_id
+    WHERE v.tipo_entrada = 'consignacao'
+    ORDER BY (vd.vendido_em IS NULL), vd.vendido_em DESC, v.id DESC LIMIT 60`).all();
+  const emitidas = new Map(db.conexao.prepare("SELECT veiculo_id, numero_nfse FROM nfse_notas WHERE status = 'emitida' AND veiculo_id IS NOT NULL").all().map(n => [n.veiculo_id, n.numero_nfse]));
+  return linhas.map(l => ({
+    id: l.id, rotulo: [l.marca_modelo, l.placa].filter(Boolean).join(' · '), dono: l.dono_nome, cpfOk: nfse.cpfValido(l.dono_cpf),
+    vendido: l.status === 'vendido', vendidoEm: l.vendido_em ? String(l.vendido_em).slice(0, 10) : null,
+    valorVenda: l.valor_venda ?? null, valorLiquido: l.valor_compra ?? null,
+    diferenca: l.valor_venda != null && l.valor_compra != null ? l.valor_venda - l.valor_compra : null,
+    notaEmitida: emitidas.get(l.id) || null,
+  }));
+}
+
+function avisosDoCarro(veiculoId) {
+  const ja = db.conexao.prepare("SELECT numero_nfse, criado_em FROM nfse_notas WHERE veiculo_id = ? AND status = 'emitida' ORDER BY id DESC").get(veiculoId);
+  return ja ? [`Já existe a nota nº ${ja.numero_nfse} emitida para este carro (${String(ja.criado_em).slice(0, 10).split('-').reverse().join('/')}). Só emita outra se for mesmo necessário.`] : [];
 }
 
 // Mostra o que será enviado, sem enviar nada
@@ -73,7 +116,8 @@ function previa(corpo) {
   const d = nfse.montarDps({ ...p, nDps: n, serie: SERIE, ambiente: ambienteAtual() });
   return {
     ambiente: ambienteAtual(),
-    banco: d.tomador.nome, documento: d.tomador.cpf ? 'CPF ' + d.tomador.cpf : 'CNPJ ' + d.tomador.cnpj, codigo: d.tomador.cTribNac, nbs: d.tomador.nbs,
+    banco: d.tomador.nome, documento: d.tomador.cpf ? 'CPF ' + d.tomador.cpf : 'CNPJ ' + d.tomador.cnpj,
+    avisos: p.veiculo_id ? avisosDoCarro(p.veiculo_id) : [], codigo: d.tomador.cTribNac, nbs: d.tomador.nbs,
     descricao: nfse.descricaoServico(d.tomador, p.competencia, p.ticket),
     competencia: p.competencia, valor: p.valor, iss: d.iss, aliquota: 3, numeroDps: n,
   };
@@ -92,8 +136,8 @@ async function emitir(corpo) {
   const nDps = proximoNumero(ambiente);
   const dps = nfse.montarDps({ ...p, nDps, serie: SERIE, ambiente });
   const info = db.conexao.prepare(
-    "INSERT INTO nfse_notas (ambiente, serie, n_dps, tomador, tomador_doc, tomador_nome, competencia, valor, ticket, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'enviando')"
-  ).run(ambiente, SERIE, nDps, p.tomador, p.cpf || null, p.nome || null, p.competencia, p.valor, p.ticket);
+    "INSERT INTO nfse_notas (ambiente, serie, n_dps, tomador, tomador_doc, tomador_nome, veiculo_id, competencia, valor, ticket, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'enviando')"
+  ).run(ambiente, SERIE, nDps, p.tomador, p.cpf || null, p.nome || null, p.veiculo_id || null, p.competencia, p.valor, p.ticket);
   const id = Number(info.lastInsertRowid);
   const atualizar = (status, extra = {}) => db.conexao.prepare(
     'UPDATE nfse_notas SET status = ?, chave = ?, numero_nfse = ?, mensagem = ?, xml_nfse = ? WHERE id = ?'

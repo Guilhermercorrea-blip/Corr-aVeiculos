@@ -156,8 +156,8 @@ LEFT JOIN pessoas c ON c.id = vd.comprador_id;
 `);
 
 // Colunas novas em bancos criados antes delas existirem
-for (const coluna of ['tomador_doc', 'tomador_nome']) {
-  if (!db.prepare('PRAGMA table_info(nfse_notas)').all().some(c => c.name === coluna)) db.exec(`ALTER TABLE nfse_notas ADD COLUMN ${coluna} TEXT`);
+for (const [coluna, tipo] of [['tomador_doc', 'TEXT'], ['tomador_nome', 'TEXT'], ['veiculo_id', 'INTEGER']]) {
+  if (!db.prepare('PRAGMA table_info(nfse_notas)').all().some(c => c.name === coluna)) db.exec(`ALTER TABLE nfse_notas ADD COLUMN ${coluna} ${tipo}`);
 }
 const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.name);
 if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');

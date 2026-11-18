@@ -96,3 +96,14 @@ test('todos os bancos cadastrados têm CNPJ válido (dígitos conferem)', () => 
   assert.match(d.infDps, /<CNPJ>59588111000103<\/CNPJ><xNome>BANCO VOTORANTIM S\.A\.<\/xNome>/);
   assert.match(d.infDps, /<cTribNac>100501<\/cTribNac>/);
 });
+
+test('cliente de carro consignado: dono como tomador e o carro na descrição', () => {
+  const d = nfse.montarDps({ ...base, tomador: 'cliente-consignacao', cpf: '529.982.247-25', nome: 'Fulano de Tal Corrêa', veiculoTexto: 'Chevrolet Classic LS 2011/2012 Preta PLACA EYH4910', valor: 50000, ambiente: 'producao' });
+  assert.match(d.infDps, /<toma><CPF>52998224725<\/CPF><xNome>FULANO DE TAL CORREA<\/xNome><\/toma>/);
+  assert.match(d.infDps, /INTERMEDIACAO NA VENDA DE VEICULO CONSIGNADO - CHEVROLET CLASSIC LS 2011\/2012 PRETA PLACA EYH4910 - COMISSAO REF\. 11\/2026</);
+  assert.match(d.infDps, /<cTribNac>100501<\/cTribNac>/);
+  assert.match(d.infDps, /<vServ>500\.00<\/vServ>/);
+  assert.match(d.infDps, /<vTotTribMun>15\.00<\/vTotTribMun>/);
+  assert.throws(() => nfse.montarDps({ ...base, tomador: 'cliente-consignacao', cpf: '123', nome: 'Fulano de Tal', veiculoTexto: 'X' }), /CPF/);
+  assert.throws(() => nfse.montarDps({ ...base, tomador: 'cliente-consignacao', cpf: '52998224725', nome: 'Fulano de Tal', veiculoTexto: '' }), /carro/);
+});

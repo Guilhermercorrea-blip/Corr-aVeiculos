@@ -98,3 +98,41 @@ test('sem certificado neste computador, a emissão fica desligada', () => {
   process.env.NFSE_PFX = path.join(pasta, 'nao-existe.pfx');
   try { assert.equal(servico.listar().habilitado, false); } finally { process.env.NFSE_PFX = guardado; }
 });
+
+const donoConsig = { nome: 'Dona Maria Consignante', cpf: '52998224725', endereco: 'Rua A', numero: '1', bairro: 'Centro', cidade: 'Barra Bonita', uf: 'SP', cep: '17340000' };
+const carroConsig = { marca_modelo: 'Fiat Uno Mille', ano_fab: 2010, ano_mod: 2010, cor: 'Branco', placa: 'UNO1A11', tipo_entrada: 'consignacao', valor_compra: 2000000 };
+
+test('nota ao dono de carro consignado: lista os carros, prévia com dono e carro, aviso de duplicidade', async t => {
+  const { id } = db.criarCompra({ pessoa: donoConsig, veiculo: carroConsig });
+  const lista = servico.listar().carrosConsignados;
+  const c = lista.find(x => x.id === id);
+  assert.equal(c.dono, 'Dona Maria Consignante');
+  assert.equal(c.cpfOk, true);
+  const p = servico.previa({ tomador: 'cliente-consignacao', veiculo_id: id, valor: 50000, competencia: '2026-11-05' });
+  assert.equal(p.banco, 'DONA MARIA CONSIGNANTE');
+  assert.equal(p.documento, 'CPF 52998224725');
+  assert.match(p.descricao, /VENDA DE VEICULO CONSIGNADO - FIAT UNO MILLE 2010\/2010 BRANCO PLACA UNO1A11 - COMISSAO REF\. 11\/2026/);
+  assert.equal(p.iss, 1500);
+  assert.deepEqual(p.avisos, []);
+  if (!temOpenssl) return;
+  const original = nfse.enviarDps;
+  nfse.enviarDps = async () => ({ status: 201, json: {}, nfseXml: '<NFSe/>', chaveAcesso: CHAVE });
+  try {
+    await servico.emitir({ tomador: 'cliente-consignacao', veiculo_id: id, valor: 50000, competencia: '2026-11-05', senha: 'abc123', confirmar: true });
+    const nota = servico.listar().notas[0];
+    assert.equal(nota.veiculo_id, id);
+    assert.equal(nota.tomador_nome, 'Dona Maria Consignante');
+    const de_novo = servico.previa({ tomador: 'cliente-consignacao', veiculo_id: id, valor: 50000, competencia: '2026-11-05' });
+    assert.match(de_novo.avisos[0], /Já existe a nota nº 5/);
+    assert.equal(servico.listar().carrosConsignados.find(x => x.id === id).notaEmitida, '5');
+  } finally { nfse.enviarDps = original; }
+});
+
+test('nota de consignado: recusa carro que não é consignado, sem CPF válido ou sem escolher', () => {
+  const compra = db.criarCompra({ pessoa: { ...donoConsig, cpf: '11144477735' }, veiculo: { ...carroConsig, placa: 'CMP1A11', tipo_entrada: 'compra' } });
+  assert.throws(() => servico.previa({ tomador: 'cliente-consignacao', veiculo_id: compra.id, valor: 1000, competencia: '2026-11-05' }), /não é de consignação/);
+  const semCpf = db.criarCompra({ pessoa: { nome: 'Sem Documento Algum' }, veiculo: { ...carroConsig, placa: 'SEM1A11' } });
+  assert.throws(() => servico.previa({ tomador: 'cliente-consignacao', veiculo_id: semCpf.id, valor: 1000, competencia: '2026-11-05' }), /CPF válido/);
+  assert.throws(() => servico.previa({ tomador: 'cliente-consignacao', valor: 1000, competencia: '2026-11-05' }), /Escolha o carro/);
+  assert.throws(() => servico.previa({ tomador: 'cliente-consignacao', veiculo_id: 999999, valor: 1000, competencia: '2026-11-05' }), /Escolha o carro/);
+});

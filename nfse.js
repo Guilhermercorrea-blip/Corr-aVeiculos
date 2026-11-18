@@ -36,7 +36,7 @@ function cpfValido(cpf) {
   }
   return true;
 }
-const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 .,&-]/g, '').replace(/\s+/g, ' ').trim();
+const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 .,&/-]/g, '').replace(/\s+/g, ' ').trim();
 
 const AMBIENTES = {
   teste: { tpAmb: 2, host: 'sefin.producaorestrita.nfse.gov.br', base: '/API/SefinNacional' },
@@ -52,6 +52,7 @@ function issEmCentavos(valor) { return Math.round((valor * ALIQUOTA_ISS) / 100);
 function descricaoServico(tomador, competencia, ticket) {
   const [ano, mes] = competencia.split('-');
   const ref = `${mes}/${ano}`;
+  if (tomador.tipo === 'consig') return `AGENCIAMENTO, CORRETAGEM OU INTERMEDIACAO NA VENDA DE VEICULO CONSIGNADO - ${tomador.veiculo} - COMISSAO REF. ${ref}`;
   if (tomador.tipo === 'pf') return 'AGENCIAMENTO, CORRETAGEM OU INTERMEDIACAO DE CONTRATOS DE FINANCIAMENTO DE VEICULOS - COMISSAO (TESTE DO SISTEMA)';
   if (tomador.tipo === 'seguros') {
     return `AGENCIAMENTO, CORRETAGEM OU INTERMEDIACAO DE SEGUROS - COMISSAO REF. ${ref}` + (ticket ? ` - TICKET ${ticket}` : '');
@@ -77,6 +78,15 @@ function montarDps(o) {
     const nome = semAcento(o.nome);
     if (nome.split(' ').length < 2) throw new Error('Informe o nome completo');
     tomador = { ...TOMADOR_PF, cpf: String(o.cpf).replace(/\D/g, ''), nome };
+  }
+  if (o.tomador === 'cliente-consignacao') {
+    // Dono de um carro consignado que a loja vendeu: o serviço é a intermediação da venda
+    if (!cpfValido(o.cpf)) throw new Error('CPF do dono inválido');
+    const nome = semAcento(o.nome);
+    if (nome.split(' ').length < 2) throw new Error('Informe o nome completo');
+    const veiculo = semAcento(o.veiculoTexto);
+    if (!veiculo) throw new Error('Informe o carro');
+    tomador = { ...TOMADOR_PF, tipo: 'consig', cpf: String(o.cpf).replace(/\D/g, ''), nome, veiculo };
   }
   if (!tomador) throw new Error('Tomador desconhecido: ' + o.tomador);
   if (!Number.isInteger(o.valor) || o.valor <= 0) throw new Error('Valor inválido (em centavos)');

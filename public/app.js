@@ -1666,7 +1666,7 @@ const STATUS_NFSE = { emitida: 'Emitida', recusada: 'Recusada', incerta: 'Confer
 async function telaNotaServico() {
   const d = await api('GET', '/nfse');
   const real = d.ambiente === 'producao';
-  const nomeBanco = n => (n.tomador === 'pessoa-fisica' ? `${n.tomador_nome || ''} (CPF ${n.tomador_doc || ''})` : d.tomadores.find(t => t.id === n.tomador)?.nome || n.tomador);
+  const nomeBanco = n => (['pessoa-fisica', 'cliente-consignacao'].includes(n.tomador) ? `${n.tomador_nome || ''} (CPF ${n.tomador_doc || ''})` : d.tomadores.find(t => t.id === n.tomador)?.nome || n.tomador);
   app.innerHTML = `
   <div class="cabecalho"><div><h1>Nota de serviço</h1><div class="suave">Comissão de banco (financiamento e seguros), emitida direto na Receita.</div></div></div>
   <div class="cartao" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'}">
@@ -1676,12 +1676,15 @@ async function telaNotaServico() {
   <div class="cartao">
     <h2>Nova nota</h2>
     <form id="form-nfse" class="grade" novalidate>
-      <div class="campo c6"><label for="nfse-banco">Banco</label>
+      <div class="campo c6"><label for="nfse-banco">Banco ou cliente</label>
         <select id="nfse-banco">${d.tomadores.map(t => `<option value="${t.id}" data-tipo="${t.tipo}">${esc(t.nome)} · código ${t.codigo.replace(/^(\d\d)(\d\d)(\d\d)$/, '$1.$2.$3')}</option>`).join('')}</select></div>
       <div class="campo c3"><label for="nfse-valor">Valor da comissão</label>
         <input id="nfse-valor" inputmode="decimal" data-dinheiro placeholder="R$ 0,00"></div>
       <div class="campo c3"><label for="nfse-competencia">Data de competência</label>
         <input id="nfse-competencia" type="date" value="${esc(d.hoje)}" max="${esc(d.hoje)}"></div>
+      <div class="campo c12" id="nfse-carro-campo" hidden><label for="nfse-carro">Carro consignado (o dono vira o cliente da nota)</label>
+        <select id="nfse-carro"><option value="">Escolha o carro…</option>${d.carrosConsignados.map(c => `<option value="${c.id}" ${c.cpfOk ? '' : 'disabled'}>${esc(c.rotulo)} — ${esc(c.dono || 'sem dono')}${c.vendido ? ' (vendido em ' + dataBR(c.vendidoEm) + ')' : ' (em estoque)'}${c.notaEmitida ? ' · já tem a nota nº ' + esc(c.notaEmitida) : ''}${c.cpfOk ? '' : ' · SEM CPF VÁLIDO no cadastro'}</option>`).join('')}</select>
+        <div class="suave pequeno" id="nfse-carro-info" style="margin-top:6px"></div></div>
       <div class="campo c4" id="nfse-cpf-campo" hidden><label for="nfse-cpf">CPF do tomador</label>
         <input id="nfse-cpf" inputmode="numeric" placeholder="000.000.000-00"></div>
       <div class="campo c8" id="nfse-nome-campo" hidden><label for="nfse-nome">Nome completo do tomador</label>
@@ -1713,10 +1716,20 @@ async function telaNotaServico() {
   const ajustarTicket = () => {
     const tipo = selecionado().dataset.tipo;
     document.getElementById('nfse-ticket-campo').hidden = tipo !== 'seguros';
+    document.getElementById('nfse-carro-campo').hidden = tipo !== 'consig';
     document.getElementById('nfse-cpf-campo').hidden = tipo !== 'pf';
     document.getElementById('nfse-nome-campo').hidden = tipo !== 'pf';
   };
   document.getElementById('nfse-banco').addEventListener('change', () => { ajustarTicket(); caixa.innerHTML = ''; });
+  // Escolheu o carro: mostra o dono, sugere a data da venda e a diferença (venda menos o líquido do dono) só como lembrete
+  document.getElementById('nfse-carro').addEventListener('change', e => {
+    caixa.innerHTML = '';
+    const c = d.carrosConsignados.find(x => String(x.id) === e.target.value);
+    const info = document.getElementById('nfse-carro-info');
+    if (!c) { info.textContent = ''; return; }
+    if (c.vendidoEm) document.getElementById('nfse-competencia').value = c.vendidoEm <= d.hoje ? c.vendidoEm : d.hoje;
+    info.innerHTML = `Cliente da nota: <strong>${esc(c.dono)}</strong>.` + (c.vendido && c.valorVenda != null ? ` Vendido por ${reais(c.valorVenda)}, líquido ao dono ${reais(c.valorLiquido)}${c.diferenca != null ? ' (diferença ' + reais(c.diferenca) + ')' : ''}. Digite o valor da nota abaixo.` : ' Esse carro ainda não foi vendido no sistema.');
+  });
   ajustarTicket();
   app.querySelectorAll('[data-xml]').forEach(b => b.addEventListener('click', () => baixarXmlNfse(b.dataset.xml).catch(e => aviso(e.message, true))));
 
@@ -1725,6 +1738,7 @@ async function telaNotaServico() {
     valor: paraCentavos(document.getElementById('nfse-valor').value),
     competencia: document.getElementById('nfse-competencia').value,
     ticket: document.getElementById('nfse-ticket').value.trim() || null,
+    ...(document.getElementById('nfse-banco').value === 'cliente-consignacao' ? { veiculo_id: Number(document.getElementById('nfse-carro').value) || null } : {}),
     ...(document.getElementById('nfse-banco').value === 'pessoa-fisica' ? { cpf: document.getElementById('nfse-cpf').value, nome: document.getElementById('nfse-nome').value } : {}),
   });
 
@@ -1739,13 +1753,14 @@ async function telaNotaServico() {
       <div class="conferencia" style="margin-top:12px">
         <h3>Confira antes de emitir</h3>
         <table><tbody>
-          <tr><td>Banco (tomador)</td><td>${esc(p.banco)}<br><span class="suave pequeno">${esc(p.documento)}</span></td></tr>
+          <tr><td>Cliente (tomador)</td><td>${esc(p.banco)}<br><span class="suave pequeno">${esc(p.documento)}</span></td></tr>
           <tr><td>Serviço</td><td>${esc(p.descricao)}<br><span class="suave pequeno">Código ${esc(p.codigo)} · NBS ${esc(p.nbs)}</span></td></tr>
           <tr><td>Competência</td><td>${esc(p.competencia.split('-').reverse().join('/'))}</td></tr>
           <tr><td>Valor</td><td><strong>${reais(p.valor)}</strong></td></tr>
           <tr><td>ISS (${p.aliquota}%)</td><td>${reais(p.iss)} · não retido</td></tr>
           <tr><td>Número do DPS</td><td>${p.numeroDps}</td></tr>
         </tbody></table>
+        ${(p.avisos || []).map(a => `<p class="pequeno" style="color:#b42318"><strong>Atenção:</strong> ${esc(a)}</p>`).join('')}
         <p class="${real ? '' : 'suave'} pequeno"><strong>${real ? 'Esta nota vale de verdade e não pode ser desfeita por aqui.' : 'Ambiente de testes: nada disso vale.'}</strong></p>
         <label class="pequeno" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nfse-ok" style="width:auto;margin:0"> Conferi o banco, o valor e a competência${real ? ' e quero emitir a nota real' : ''}</label>
         <div class="grade" style="margin-top:8px">
