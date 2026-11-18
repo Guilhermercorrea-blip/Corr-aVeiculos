@@ -21,6 +21,7 @@ const TOMADORES = {
   'santander-seguros': { cnpj: '04270778000171', nome: 'SANTANDER CORRETORA DE SEGUROS, INVESTIMENTOS E SERVICOS S.A.', cTribNac: '100102', nbs: '109061100', tipo: 'seguros' },
   'itau-financiamento': { cnpj: '60872504000123', nome: 'ITAU UNIBANCO HOLDING S.A.', cTribNac: '100501', nbs: '109013300', tipo: 'financiamento' },
   'c6-financiamento': { cnpj: '31872495000172', nome: 'BANCO C6 S.A.', cTribNac: '100501', nbs: '109013300', tipo: 'financiamento' },
+  'bv-financiamento': { cnpj: '59588111000103', nome: 'BANCO VOTORANTIM S.A.', cTribNac: '100501', nbs: '109013300', tipo: 'financiamento' },
 };
 
 // Pessoa física como tomador (nota de teste do sistema): o CPF e o nome vêm do pedido

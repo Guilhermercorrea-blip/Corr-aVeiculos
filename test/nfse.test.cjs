@@ -83,3 +83,16 @@ test('tomador pessoa física: CPF validado, nome sem acento, descrição de test
   assert.throws(() => nfse.montarDps({ ...base, tomador: 'pessoa-fisica', cpf: '123', nome: 'A B' }), /CPF/);
   assert.throws(() => nfse.montarDps({ ...base, tomador: 'pessoa-fisica', cpf: '52998224725', nome: 'Fulano' }), /nome completo/);
 });
+
+test('todos os bancos cadastrados têm CNPJ válido (dígitos conferem)', () => {
+  const valido = c => {
+    const d = c.split('').map(Number);
+    const dv = n => { let p = n - 7, s = 0; for (let i = 0; i < n; i++) { s += d[i] * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; };
+    return d.length === 14 && dv(12) === d[12] && dv(13) === d[13];
+  };
+  for (const [id, t] of Object.entries(nfse.TOMADORES)) assert.ok(valido(t.cnpj), id + ' com CNPJ inválido');
+  assert.equal(nfse.TOMADORES['bv-financiamento'].nome, 'BANCO VOTORANTIM S.A.');
+  const d = nfse.montarDps({ ...base, tomador: 'bv-financiamento', valor: 100000 });
+  assert.match(d.infDps, /<CNPJ>59588111000103<\/CNPJ><xNome>BANCO VOTORANTIM S\.A\.<\/xNome>/);
+  assert.match(d.infDps, /<cTribNac>100501<\/cTribNac>/);
+});
