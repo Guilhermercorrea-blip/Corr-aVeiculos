@@ -98,7 +98,9 @@ function montarInfNFe(n) {
     el('vFCPST', zero) + el('vFCPSTRet', zero) + el('vProd', valor) + el('vFrete', zero) + el('vSeg', zero) + el('vDesc', zero) + el('vII', zero) +
     el('vIPI', zero) + el('vIPIDevol', zero) + el('vPIS', tvPIS) + el('vCOFINS', tvCOFINS) + el('vOutro', zero) + el('vNF', valor) + '</ICMSTot>' + ibs.total + '</total>';
   const transp = `<transp>${el('modFrete', n.modFrete)}</transp>`;
-  const pag = n.pagamentoPix
+  const pag = n.pagamentoPix && n.deposito
+    ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '16')}${el('vPag', valor)}</detPag></pag>` // depósito bancário
+    : n.pagamentoPix
     // PIX (17) agora exige o grupo card (rejeição 391); tpIntegra 2 = pagamento não integrado à automação (sem maquininha)
     ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '17')}${el('vPag', valor)}<card>${el('tpIntegra', '2')}</card></detPag></pag>`
     : `<pag><detPag>${el('tPag', '90')}${el('vPag', zero)}</detPag></pag>`;

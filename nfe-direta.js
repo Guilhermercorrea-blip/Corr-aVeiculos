@@ -46,7 +46,7 @@ async function emitir(veiculoId, tipo, dados = {}) {
 
   // Em homologação usa um número alto e único, para não esbarrar em testes anteriores nem gastar a numeração real
   const numero = homologacao ? 800000000 + (Math.floor(Date.now() / 1000) % 100000000) : Number(dados.numero);
-  const g = await nfe.gerarNota(veiculoId, tipo, { numero, ncm: dados.ncm, valor: dados.valor, data: dados.data, referencia: dados.referencia, origemXml: dados.origemXml, ficha: dados.ficha, homologacao, xml: true });
+  const g = await nfe.gerarNota(veiculoId, tipo, { numero, ncm: dados.ncm, valor: dados.valor, data: dados.data, referencia: dados.referencia, pagamento: dados.pagamento, origemXml: dados.origemXml, ficha: dados.ficha, homologacao, xml: true });
   const id = Number(db.conexao.prepare("INSERT INTO nfe_envios (veiculo_id, tipo, ambiente, numero, chave, situacao) VALUES (?, ?, ?, ?, ?, 'enviando')")
     .run(Number(veiculoId), tipo, ambiente, numero, g.chave).lastInsertRowid);
   const atualizar = (situacao, extra = {}) => db.conexao.prepare('UPDATE nfe_envios SET situacao = ?, cstat = ?, motivo = ?, protocolo = ?, xml = ? WHERE id = ?')

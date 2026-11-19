@@ -415,7 +415,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     'W04g|0.00|',
     `X|${config.modFrete ?? (venda ? 1 : 0)}|`,
     'YA',
-    ...(venda ? pagamentos.map(pg => `YA01|${pg.indPag}|${pg.tPag}|${pg.xPag}|${dinheiro(pg.valor)}||||`) : config.pagamentoPix ? [`YA01|0|17||${valorTxt}||||`] : ['YA01||90||0.00||||']),
+    ...(venda ? pagamentos.map(pg => `YA01|${pg.indPag}|${pg.tPag}|${pg.xPag}|${dinheiro(pg.valor)}||||`) : config.pagamentoPix ? [`YA01|0|${dados.pagamento === 'deposito' ? 16 : 17}||${valorTxt}||||`] : ['YA01||90||0.00||||']),
   ];
   const conteudo = linhas.join('\r\n');
   // XML para enviar direto à SEFAZ (sem o Emissor do Sebrae), com os mesmos valores do TXT acima
@@ -423,7 +423,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     chave, cNF, cDV, numero, dhEmi, uf, homologacao, indFinal, referencia, nomeDest, doc, cMun, veiculoId, ncm, valor, vUn, venda,
     natOp: config.natOp, tpNF: config.tpNF, finNFe: config.finNFe, cfop, pRedBC: config.pRedBC, indIEDest, ieDest, icmsNota,
     espelho: origem ? { icms: origem.icms } : null,
-    modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix,
+    modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix, deposito: dados.pagamento === 'deposito',
     emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
     xProd: campoTxt(descricaoVeiculo(v), 120),
     ficha, xCor: campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40), anoMod: v.ano_mod, anoFab: v.ano_fab,

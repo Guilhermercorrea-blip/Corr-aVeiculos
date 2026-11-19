@@ -1135,6 +1135,7 @@ async function cartaoNfe(id, tipo) {
       ${selecao('Tipo do veículo (NCM)', 'ncm', Object.fromEntries(Object.entries(o.ncms).map(([k, t]) => [k, `${t} · ${k}`])), s.ncm, 'c5')}
       ${campo('Valor da nota', 'valor', { valor: paraTexto(s.valor), dinheiro: true, obrig: true, largura: 'c4' })}
       ${campo('Data e hora', 'data', { valor: agoraLocal().slice(0, 16), tipo: 'datetime-local', obrig: true, largura: 'c4' })}
+      ${tipo === 'entrada_compra' ? selecao('Forma de pagamento', 'pagamento', { pix: 'PIX', deposito: 'Depósito bancário / TED' }, 'pix', 'c4') : ''}
       ${s.referencia !== null ? `
       ${campo(tipo === 'devolucao_compra' ? 'Chave da nota de venda da loja (ou da sua entrada)' : 'Chave da nota de entrada', 'referencia', { valor: s.referencia, obrig: true, largura: 'c12', extra: 'inputmode="numeric" maxlength="54" placeholder="44 números da DANFE da entrada"' })}
       <div class="campo c12"><small class="suave">${s.entrada ? `Já preenchida com a nota de entrada nº ${s.entrada.numero}, gerada pelo sistema.` : 'Se a entrada foi feita direto no Sebrae, copie a chave de acesso dela (está na DANFE).'} ${tipo === 'devolucao_compra' ? 'Use quando o carro comprado volta para quem vendeu. Se a loja emitiu nota de venda, a devolução aponta a nota dela.' : 'Use quando o carro volta para o dono ou quando o dono transfere direto para o comprador.'}</small></div>` : ''}

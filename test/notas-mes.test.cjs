@@ -61,3 +61,16 @@ test('ZIP do mês: arquivos XML e PDF de cada nota, resumo e cabeçalhos confere
   assert.equal(r.quantidade, 2);
   assert.throws(() => notas.zipDoMes('2026-09'), /Não há notas/);
 });
+
+test('entrada de compra: PIX sai com tPag 17 e grupo card; depósito sai com tPag 16', async () => {
+  const { id } = db.criarCompra({
+    pessoa: { nome: 'Fulano Vendedor', cpf: '86924249868', endereco: 'Rua A', numero: '1', bairro: 'Centro', cidade: 'Americana', uf: 'SP', cep: '13478540' },
+    veiculo: { marca_modelo: 'VW Fox 1.6 Plus', ano_fab: 2008, ano_mod: 2009, cor: 'Prata', placa: 'PAG1A23', chassi: '9BWAB05Z394087944', tipo_entrada: 'compra', valor_compra: 2200000 },
+  });
+  const pix = await nfe.gerarNota(id, 'entrada_compra', { ficha: FICHA, numero: 3001, ncm: '87032210', valor: 2200000, data: '2026-11-19T10:00', xml: true });
+  assert.match(pix.xml, /<tPag>17<\/tPag><vPag>22000.00<\/vPag><card><tpIntegra>2<\/tpIntegra><\/card>/);
+  assert.match(pix.xml, /<indIEDest>9<\/indIEDest>/);
+  const dep = await nfe.gerarNota(id, 'entrada_compra', { ficha: FICHA, numero: 3001, ncm: '87032210', valor: 2200000, data: '2026-11-19T10:00', xml: true, pagamento: 'deposito' });
+  assert.match(dep.xml, /<tPag>16<\/tPag><vPag>22000.00<\/vPag><\/detPag>/);
+  assert.ok(dep.conteudo.includes('YA01|0|16|'));
+});
