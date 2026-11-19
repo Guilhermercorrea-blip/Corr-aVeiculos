@@ -1059,21 +1059,23 @@ async function blocoNfeDireta(id, tipo, form) {
   try { s = await api('GET', `/veiculos/${id}/nfe/${tipo}/direta`); } catch (e) { caixa.innerHTML = `<p class="suave pequeno">${esc(e.message)}</p>`; return; }
   if (!s.suportado) { caixa.remove(); return; }
   const real = s.ambiente === 'producao';
-  const lista = s.envios.length ? `<table class="pequeno" style="margin-top:8px"><thead><tr><th>Quando</th><th>Ambiente</th><th>Nº</th><th>Situação</th><th>Protocolo / motivo</th><th></th></tr></thead><tbody>${s.envios.map(e => `<tr>
+  const envios = s.jaAutorizada ? s.envios.filter(e => e.situacao === 'autorizada' && e.ambiente === 'producao') : s.envios;
+  const lista = envios.length ? `<table class="pequeno" style="margin-top:8px"><thead><tr><th>Quando</th><th>Ambiente</th><th>Nº</th><th>Situação</th><th>Protocolo / motivo</th><th></th></tr></thead><tbody>${envios.map(e => `<tr>
       <td>${esc(e.criado_em.slice(0, 16))}</td><td>${e.ambiente === 'producao' ? 'Real' : 'Teste'}</td><td>${e.numero}</td>
       <td>${esc(SITUACAO_NFE[e.situacao] || e.situacao)}</td><td>${esc(e.protocolo || e.motivo || '')}</td>
       <td>${e.situacao === 'autorizada' ? `<a class="botao-link" href="/danfe/${e.id}.pdf" download>Baixar PDF</a> <button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button> <a class="botao-link secundario" href="/danfe/${e.id}" target="_blank" rel="noopener">Imprimir</a>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
   caixa.innerHTML = `
-    <h3 style="margin:0 0 6px">Emitir direto na SEFAZ <span class="suave pequeno">(sem o Emissor do Sebrae)</span></h3>
-    <p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>
-    ${s.jaAutorizada ? `<p class="pequeno"><strong>Já autorizada:</strong> nota nº ${s.jaAutorizada.numero}, protocolo ${esc(s.jaAutorizada.protocolo)}.</p>` : s.habilitado ? `
+    <h3 style="margin:0 0 6px">${s.jaAutorizada ? 'Nota autorizada' : 'Emitir nota'}</h3>
+    ${s.jaAutorizada ? '' : `<p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>`}
+    ${s.jaAutorizada ? `<p class="pequeno"><strong>Autorizada:</strong> nota nº ${s.jaAutorizada.numero}, protocolo ${esc(s.jaAutorizada.protocolo)}.</p>` : s.habilitado ? `
     <p class="suave pequeno">Usa os dados do formulário acima (número, tipo, valor, data${tipo === 'devolucao_consignacao' ? ' e chave da entrada' : ''}). Confira antes.</p>
     <label class="pequeno" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nfe-ok-${tipo}" style="width:auto;margin:0"> Conferi os dados${real ? ' e quero emitir a nota real' : ''}</label>
     <div class="grade" style="margin-top:6px">
       <div class="campo c4"><label for="nfe-senha-${tipo}">Senha do certificado digital</label><input id="nfe-senha-${tipo}" type="password" autocomplete="off" placeholder="não fica guardada"></div>
-      <div class="campo c4" style="align-self:end"><button type="button" id="nfe-emitir-${tipo}">Emitir direto na SEFAZ</button></div>
+      <div class="campo c4" style="align-self:end"><button type="button" id="nfe-emitir-${tipo}">Emitir nota</button></div>
     </div>` : '<p class="suave pequeno">O certificado digital não está disponível aqui. A emissão direta só funciona onde o certificado está instalado.</p>'}
     ${lista}`;
+  if (s.jaAutorizada) document.getElementById(`cartao-nfe-${tipo}`).querySelectorAll('[data-some-autorizada]').forEach(x => { x.style.display = 'none'; });
   caixa.querySelectorAll('[data-xml-nfe]').forEach(b => b.addEventListener('click', async () => {
     try {
       const r = await api('GET', `/nfe-envios/${b.dataset.xmlNfe}/xml`);
@@ -1117,9 +1119,9 @@ async function cartaoNfe(id, tipo) {
     const c = s.calculo;
     el.innerHTML = `
     <h2>${titulo}</h2>
-    <p class="pequeno">Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : tipo === 'entrada_compra' ? 'vendedor' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
-    ${s.ultima ? `<p class="pequeno">Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>
-    <div class="pequeno" style="margin:6px 0 10px;padding:8px;border:1px solid #c9d1dc;border-radius:6px">
+    <p class="pequeno" data-some-autorizada>Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : tipo === 'entrada_compra' ? 'vendedor' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
+    ${s.ultima ? `<p class="pequeno" data-some-autorizada>Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>
+    <div class="pequeno" data-some-autorizada style="margin:6px 0 10px;padding:8px;border:1px solid #c9d1dc;border-radius:6px">
       ${s.ultima.temXml
         ? `<strong>Autorizada</strong> · protocolo ${esc(s.ultima.protocolo)} &nbsp;
            <a class="botao-link" href="/danfe-nota/${s.ultima.id}.pdf" download>Baixar PDF</a>
@@ -1128,7 +1130,7 @@ async function cartaoNfe(id, tipo) {
            <span class="suave"> · trocar o XML: <input type="file" accept=".xml,text/xml" data-anexar-xml></span>`
         : `<span class="suave">Depois que o Emissor transmitir e a SEFAZ autorizar, anexe aqui o <b>XML autorizado</b> (pasta Notas, o arquivo que termina em <b>-procNfe.xml</b>) para liberar <b>Baixar PDF</b> e <b>Baixar XML</b>:</span> <input type="file" accept=".xml,text/xml" data-anexar-xml>`}
     </div>` : ''}
-    <form id="form-nfe-${tipo}" class="grade" novalidate>
+    <form id="form-nfe-${tipo}" class="grade" data-some-autorizada novalidate>
       ${campo('Número da nota', 'numero', { valor: s.numero, obrig: true, largura: 'c3', extra: 'inputmode="numeric"' })}
       ${selecao('Tipo do veículo (NCM)', 'ncm', Object.fromEntries(Object.entries(o.ncms).map(([k, t]) => [k, `${t} · ${k}`])), s.ncm, 'c5')}
       ${campo('Valor da nota', 'valor', { valor: paraTexto(s.valor), dinheiro: true, obrig: true, largura: 'c4' })}
@@ -1155,11 +1157,13 @@ async function cartaoNfe(id, tipo) {
       ${selecao('Cor (DENATRAN)', 'ficha.cor', o.cores, f.cor, 'c4')}
       ${selecao('Pintura', 'ficha.pintura', o.pinturas, f.pintura, 'c4')}
       ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}`}
-      <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
+      ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo)
+        ? '<div class="campo c12"><details><summary class="suave pequeno">Alternativa: gerar o arquivo para importar no Emissor do Sebrae</summary><div style="margin-top:8px"><button type="submit" class="secundario">Baixar arquivo da nota</button></div></details></div>'
+        : '<div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>'}
     </form>
     ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
-    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
+    <p class="suave pequeno" data-some-autorizada>Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
     // Nota feita pelo Emissor: anexar o XML autorizado libera "Baixar nota" (DANFE) e "Baixar XML"
     el.querySelectorAll('[data-anexar-xml]').forEach(inp => inp.addEventListener('change', async () => {
       const arq = inp.files[0];
