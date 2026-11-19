@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const FICHA = { motor: 'ABC123456', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '10', pintura: 'S', marca_modelo: '1' };
 const { execFileSync } = require('node:child_process');
 process.env.PASTA_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'correa-nfedireta-test-'));
 delete process.env.NFE_AMBIENTE;
@@ -23,7 +24,7 @@ const direta = require('../nfe-direta');
 
 const pessoa = { nome: 'Fulana de Teste', cpf: '52998224725', endereco: 'Rua das Flores', numero: '10', bairro: 'Centro', cidade: 'Barra Bonita', uf: 'SP', cep: '17340000' };
 const carro = { marca_modelo: 'GM Meriva Joy 1.4', ano_fab: 2011, ano_mod: 2011, cor: 'Prata', placa: 'AAA1B23', renavam: '00123456789', chassi: '9BGXL75XBC0000000', tipo_entrada: 'consignacao', valor_compra: 3400000 };
-const pedido = { numero: 1090, ncm: '87032210', valor: 3400000, senha: 'abc123', confirmar: true };
+const pedido = { ficha: FICHA, numero: 1090, ncm: '87032210', valor: 3400000, senha: 'abc123', confirmar: true };
 const comSefaz = async (resposta, fn) => {
   const original = sefaz.autorizar;
   sefaz.autorizar = typeof resposta === 'function' ? resposta : async () => resposta;

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const FICHA = { motor: 'ABC123456', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '10', pintura: 'S', marca_modelo: '1' };
 process.env.PASTA_DADOS = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'correa-nfe-test-'));
 const db = require('../db');
 const nfe = require('../nfe');
@@ -31,7 +32,7 @@ test('gera a entrada de consignação no padrão das notas do Sebrae', async () 
   assert.equal(s.ncm, '87032210');
   assert.equal(s.valor, 3400000);
 
-  const r = await nfe.gerarEntradaConsignacao(id, { numero: 1080, ncm: '87032100', valor: 3400000, data: '2026-11-03T10:15' });
+  const r = await nfe.gerarEntradaConsignacao(id, { ficha: FICHA, numero: 1080, ncm: '87032100', valor: 3400000, data: '2026-11-03T10:15' });
   assert.match(r.chave, /^35261107793106000139550010000010801\d{9}$/);
   assert.equal(Number(r.chave.slice(-1)), nfe.digitoChave(r.chave.slice(0, 43)));
   assert.match(r.arquivo, /\.txt$/);
@@ -49,29 +50,29 @@ test('gera a entrada de consignação no padrão das notas do Sebrae', async () 
     'E05|Rua das Flores|10||Centro|3505302|Barra Bonita|SP|17340000|1058|BRASIL||',
     'H|1||',
     `I|S${id}|||GM MERIVA JOY 1.4 2011/2011 PRATA PLACA AAA1B23 RENAVAM 00123456789 CHASSI 9BGXL75XBC0000000|87032100|||1917|UN|1.0000|34000.0000000000|34000.00|||UN|1.0000|34000.0000000000|||||1||||||`,
-    'M||', 'N|', 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||', 'Q|', 'Q04|07|', 'S|', 'S04|07|', 'W|',
+    'J|3|9BGXL75XBC0000000|10|PRATA|80|1400|1.5000|1.5000|1|16|ABC123456|1.9000|2|2011|2011|S|06|1|N|1|1|10|5|0|', 'M||', 'N|', 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||', 'Q|', 'Q04|07|', 'S|', 'S04|07|', 'W|',
     'W02|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|34000.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|34000.00|0.00|',
     'W04c|0.00|', 'W04e|0.00|', 'W04g|0.00|', 'X|0|', 'YA', 'YA01||90||0.00||||',
   ]);
-  const teste = await nfe.gerarEntradaConsignacao(id, { numero: 1080, ncm: '87032100', valor: 3400000, homologacao: true });
+  const teste = await nfe.gerarEntradaConsignacao(id, { ficha: FICHA, numero: 1080, ncm: '87032100', valor: 3400000, homologacao: true });
   assert.match(teste.conteudo, /\|2\|1\|\|\|0\|0\|/);
   assert.match(teste.conteudo, /E\|NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL\|/);
 
   // próximo número avança; mesmo número em outro carro é recusado
   const outro = db.criarCompra({ pessoa: { ...dono, cpf: '11144477735' }, veiculo: { ...carro, placa: 'BBB2C34' } }).id;
   assert.equal(nfe.sugestaoEntrada(outro).numero, 1081);
-  await assert.rejects(nfe.gerarEntradaConsignacao(outro, { numero: 1080, ncm: '87032100', valor: 100 }), { status: 409 });
+  await assert.rejects(nfe.gerarEntradaConsignacao(outro, { ficha: FICHA, numero: 1080, ncm: '87032100', valor: 100 }), { status: 409 });
   // regerar o mesmo carro com o mesmo número é permitido
-  await nfe.gerarEntradaConsignacao(id, { numero: 1080, ncm: '87032100', valor: 3500000, data: '2026-11-03T10:20' });
+  await nfe.gerarEntradaConsignacao(id, { ficha: FICHA, numero: 1080, ncm: '87032100', valor: 3500000, data: '2026-11-03T10:20' });
   assert.equal(nfe.sugestaoEntrada(id).valor, 3500000);
 });
 
 test('avisa o que falta no cadastro e recusa compra comum', async () => {
   const semEndereco = db.criarCompra({ pessoa: { nome: 'Sem Endereço', cpf: '12345678909' }, veiculo: { ...carro, placa: 'CCC3D45' } }).id;
-  await assert.rejects(nfe.gerarEntradaConsignacao(semEndereco, { numero: 1090, ncm: '87032100', valor: 100 }), /rua, número da casa, bairro, cidade, UF, CEP/);
+  await assert.rejects(nfe.gerarEntradaConsignacao(semEndereco, { ficha: FICHA, numero: 1090, ncm: '87032100', valor: 100 }), /rua, número da casa, bairro, cidade, UF, CEP/);
   const compra = db.criarCompra({ pessoa: { ...dono, cpf: '98765432100' }, veiculo: { ...carro, placa: 'DDD4E56', tipo_entrada: 'compra' } }).id;
   assert.equal(nfe.sugestaoEntrada(compra).permitido, false);
-  await assert.rejects(nfe.gerarEntradaConsignacao(compra, { numero: 1091, ncm: '87032100', valor: 100 }), { status: 400 });
+  await assert.rejects(nfe.gerarEntradaConsignacao(compra, { ficha: FICHA, numero: 1091, ncm: '87032100', valor: 100 }), { status: 400 });
 });
 
 test('gera a nota de venda no padrão da nota 1054 (com RENAVE)', async () => {
@@ -89,7 +90,7 @@ test('gera a nota de venda no padrão da nota 1054 (com RENAVE)', async () => {
   await assert.rejects(nfe.gerarNota(id, 'venda', { numero: 1100, ncm: '87032100', valor: 2050000 }), /motor/);
 
   const ficha = { motor: 'CCN018448', potencia: '75', cilindrada: '999', peso: '1,48', lotacao: '5', combustivel: '16', tipo: '06', especie: '1', cor: '10', pintura: 'M' };
-  const r = await nfe.gerarNota(id, 'venda', { numero: 1100, ncm: '87032210', valor: 2050000, data: '2026-11-04T09:00', ficha });
+  const r = await nfe.gerarNota(id, 'venda', { ficha: FICHA, numero: 1100, ncm: '87032210', valor: 2050000, data: '2026-11-04T09:00', ficha });
   const l = r.conteudo.split('\r\n');
   assert.equal(l[2], `B|35|${r.chave.slice(35, 43)}|SAIDA|55|1|1100|2026-11-04T09:00:00-03:00|2026-11-04T09:00:00-03:00||1|1|3505302||1|1|${r.chave.slice(43)}|1|1|||1|0|||3|4.01_sebrae_b057|||`);
   assert.equal(l[6], 'E|COMPRADOR TESTE|9|||||');
@@ -116,28 +117,28 @@ test('devolução de consignação no padrão das notas 1067-1069 (aponta a chav
   const id = db.criarCompra({ pessoa: { ...dono, cpf: '39053344705' }, veiculo: { ...carro, placa: 'FFF6G78' } }).id;
   const sem = nfe.sugestao(id, 'devolucao_consignacao');
   assert.equal(sem.referencia, '');
-  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 100 }), /chave de acesso/);
+  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { ficha: FICHA, numero: 1200, ncm: '87032100', valor: 100 }), /chave de acesso/);
 
-  const entrada = await nfe.gerarNota(id, 'entrada_consignacao', { numero: 1199, ncm: '87032100', valor: 3000000, data: '2026-11-01T09:00' });
+  const entrada = await nfe.gerarNota(id, 'entrada_consignacao', { ficha: FICHA, numero: 1199, ncm: '87032100', valor: 3000000, data: '2026-11-01T09:00' });
   const s = nfe.sugestao(id, 'devolucao_consignacao');
   assert.equal(s.referencia, entrada.chave);
   assert.equal(s.entrada.numero, 1199);
   assert.equal(s.valor, 3000000);
   assert.equal(s.numero, 1200);
 
-  const r = await nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, data: '2026-11-04T15:00', referencia: s.referencia });
+  const r = await nfe.gerarNota(id, 'devolucao_consignacao', { ficha: FICHA, numero: 1200, ncm: '87032100', valor: 3000000, data: '2026-11-04T15:00', referencia: s.referencia });
   const l = r.conteudo.split('\r\n');
   assert.equal(l[2], `B|35|${r.chave.slice(35, 43)}|DEVOLUÇÃO|55|1|1200|2026-11-04T15:00:00-03:00|2026-11-04T15:00:00-03:00||0|1|3505302||1|1|${r.chave.slice(43)}|1|4|||0|0|||3|4.01_sebrae_b057|||`);
   assert.equal(l[3], 'BA|');
   assert.equal(l[4], `BA02|${entrada.chave}|`);
   assert.match(l[12], /\|87032100\|\|\|1918\|UN\|/);
-  assert.deepEqual(l.slice(13), ['M||', 'N|', 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||', 'Q|', 'Q04|07|', 'S|', 'S04|07|', 'W|',
+  assert.deepEqual(l.slice(13), ['J|3|9BGXL75XBC0000000|10|PRATA|80|1400|1.5000|1.5000|1|16|ABC123456|1.9000|2|2011|2011|S|06|1|N|1|1|10|5|0|', 'M||', 'N|', 'N04|0|20|3|90.00|0.00|18.0000|0.00|||||||', 'Q|', 'Q04|07|', 'S|', 'S04|07|', 'W|',
     'W02|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|30000.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|30000.00|0.00|',
     'W04c|0.00|', 'W04e|0.00|', 'W04g|0.00|', 'X|0|', 'YA', 'YA01||90||0.00||||']);
   assert.match(r.arquivo, /devolucao-consignacao/);
   // chave colada à mão (entrada feita no Sebrae) também vale, desde que o dígito confira
   const outra = '35261007793106000139550010000010791540730549';
-  const r2 = await nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.replace(/(\d{4})/g, '$1 ') });
+  const r2 = await nfe.gerarNota(id, 'devolucao_consignacao', { ficha: FICHA, numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.replace(/(\d{4})/g, '$1 ') });
   assert.ok(r2.conteudo.includes(`BA02|${outra}|`));
-  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.slice(0, 43) + '0' }), /chave de acesso/);
+  await assert.rejects(nfe.gerarNota(id, 'devolucao_consignacao', { ficha: FICHA, numero: 1200, ncm: '87032100', valor: 3000000, referencia: outra.slice(0, 43) + '0' }), /chave de acesso/);
 });

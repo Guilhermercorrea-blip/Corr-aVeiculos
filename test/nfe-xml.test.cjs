@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const FICHA = { motor: 'ABC123456', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '10', pintura: 'S', marca_modelo: '1' };
 const { execFileSync } = require('node:child_process');
 process.env.PASTA_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'correa-nfexml-test-'));
 const db = require('../db');
@@ -17,7 +18,7 @@ const carro = { marca_modelo: 'GM Meriva Joy 1.4', ano_fab: 2011, ano_mod: 2011,
 
 test('XML da entrada de consignação tem os mesmos valores do TXT e passa na assinatura', async t => {
   const { id } = db.criarCompra({ pessoa, veiculo: carro });
-  const g = await nfe.gerarNota(id, 'entrada_consignacao', { numero: 801, ncm: '87032210', valor: 3400000, data: '2026-11-19T10:00', homologacao: true, xml: true });
+  const g = await nfe.gerarNota(id, 'entrada_consignacao', { ficha: FICHA, numero: 801, ncm: '87032210', valor: 3400000, data: '2026-11-19T10:00', homologacao: true, xml: true });
   const x = g.xml;
   assert.ok(x.startsWith(`<infNFe Id="NFe${g.chave}" versao="4.00"><ide><cUF>35</cUF>`));
   for (const trecho of ['<nNF>801</nNF>', '<tpNF>0</tpNF>', '<tpAmb>2</tpAmb>', '<CFOP>1917</CFOP>', '<NCM>87032210</NCM>', '<vProd>34000.00</vProd>', '<vNF>34000.00</vNF>',

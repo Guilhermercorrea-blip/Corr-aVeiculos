@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const FICHA = { motor: 'ABC123456', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '10', pintura: 'S', marca_modelo: '1' };
 process.env.PASTA_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'correa-danfe-test-'));
 const db = require('../db');
 const nfe = require('../nfe');
@@ -29,9 +30,9 @@ test('Code-128C: START C, pares de dígitos, dígito de controle módulo 103 e S
 test('DANFE a partir do XML autorizado: chave, protocolo, destinatário, valores e marca de teste', async () => {
   const { id } = db.criarCompra({
     pessoa: { nome: 'Fulana de Teste', cpf: '52998224725', endereco: 'Rua das Flores', numero: '10', bairro: 'Centro', cidade: 'Barra Bonita', uf: 'SP', cep: '17340000' },
-    veiculo: { marca_modelo: 'GM Meriva Joy 1.4', ano_fab: 2011, ano_mod: 2011, cor: 'Prata', placa: 'AAA1B23', tipo_entrada: 'consignacao', valor_compra: 3400000 },
+    veiculo: { marca_modelo: 'GM Meriva Joy 1.4', ano_fab: 2011, ano_mod: 2011, cor: 'Prata', placa: 'AAA1B23', chassi: '9BGXL75XBC0000000', tipo_entrada: 'consignacao', valor_compra: 3400000 },
   });
-  const g = await nfe.gerarNota(id, 'entrada_consignacao', { numero: 1090, ncm: '87032210', valor: 3400000, data: '2026-11-19T10:00', homologacao: true, xml: true });
+  const g = await nfe.gerarNota(id, 'entrada_consignacao', { ficha: FICHA, numero: 1090, ncm: '87032210', valor: 3400000, data: '2026-11-19T10:00', homologacao: true, xml: true });
   const prot = `<protNFe versao="4.00"><infProt><tpAmb>2</tpAmb><chNFe>${g.chave}</chNFe><dhRecbto>2026-11-19T10:01:02-03:00</dhRecbto><nProt>135260000000009</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe>`;
   const xml = `<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe xmlns="http://www.portalfiscal.inf.br/nfe">${g.xml}</NFe>${prot}</nfeProc>`;
   const html = danfe.gerarDanfe(xml);

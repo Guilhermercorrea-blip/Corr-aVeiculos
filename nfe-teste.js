@@ -7,6 +7,7 @@ const path = require('node:path');
 const nfse = require('./nfse');
 const sefaz = require('./nfe-sefaz');
 
+const FICHA_TESTE = { motor: 'TESTE12345', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '11', pintura: 'S', marca_modelo: '1' };
 const PFX = process.env.NFSE_PFX || 'D:/Formatar/CertificadoCorrea.pfx';
 
 function pedirSenha(texto) {
@@ -50,7 +51,7 @@ function pedirSenha(texto) {
     const veiculo = { marca_modelo: 'CARRO DE TESTE', ano_fab: 2011, ano_mod: 2012, cor: 'Preta', placa: 'TST1A23', renavam: '12345678901', chassi: '9BGSU19F0CB000001', tipo_entrada: 'consignacao', valor_compra: 3300000 };
     const { id } = db.criarCompra({ pessoa, veiculo });
     const numero = 800000000 + (Math.floor(Date.now() / 1000) % 100000000);
-    const g = await nfe.gerarNota(id, 'entrada_consignacao', { numero, ncm: '87032100', valor: 3300000, homologacao: true, xml: true });
+    const g = await nfe.gerarNota(id, 'entrada_consignacao', { numero, ncm: '87032100', valor: 3300000, ficha: FICHA_TESTE, homologacao: true, xml: true });
     const assinada = sefaz.assinarNfe(g.xml, g.chave, cert);
     console.log('Nota de teste nº', numero, '| chave', g.chave);
     const r = await sefaz.autorizar('homologacao', assinada, cert);
@@ -92,7 +93,7 @@ function pedirSenha(texto) {
     const { id } = db.criarCompra({ pessoa: { nome: 'JAVEP VEICULOS PECAS E SERVICOS LTDA', cpf: '50752211000230', endereco: 'AV COMENDADOR ALFREDO MAFFEI', numero: '200', bairro: 'JD GIBERTONI', cidade: 'Sao Carlos', uf: 'SP', cep: '13561270' },
       veiculo: { marca_modelo: 'CARRO DE TESTE FOX', ano_fab: 2012, ano_mod: 2012, cor: 'Prata', placa: 'TST1A23', chassi: '9BWAA05Z0C4000001', tipo_entrada: 'compra', valor_compra: 2550000 } });
     const numero = 800000000 + (Math.floor(Date.now() / 1000) % 100000000);
-    const g = await nfe.gerarNota(id, 'devolucao_compra', { numero, ncm: '87032210', valor: 2550000, homologacao: true, xml: true, origemXml });
+    const g = await nfe.gerarNota(id, 'devolucao_compra', { numero, ncm: '87032210', valor: 2550000, ficha: FICHA_TESTE, homologacao: true, xml: true, origemXml });
     console.log('Devolução de TESTE nº', numero, '| espelho:', JSON.stringify(g.espelho));
     const r = await sefaz.autorizar('homologacao', sefaz.assinarNfe(g.xml, g.chave, cert), cert);
     console.log('Lote: cStat', r.cStatLote, '|', r.xMotivoLote);

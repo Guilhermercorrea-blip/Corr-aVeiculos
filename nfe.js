@@ -250,7 +250,7 @@ function sugestao(veiculoId, tipo) {
     numero: anterior?.numero || proximoNumero(),
     ncm: anterior?.ncm || sugerirNcm(d.veiculo),
     valor,
-    ficha: tipo === 'venda' ? sugerirFicha(d.veiculo, lerFicha(veiculoId)) : null,
+    ficha: sugerirFicha(d.veiculo, lerFicha(veiculoId)),
     calculo: tipo === 'venda' && valor ? calcularVenda(valor, d.veiculo.valor_compra) : null,
     ultima: anterior ? { id: anterior.id, numero: anterior.numero, criado_em: anterior.criado_em, temXml: !!anterior.xml_autorizado, protocolo: anterior.protocolo || null } : null,
     opcoes: opcoesTela(),
@@ -343,7 +343,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   if (faltando.length) throw db.erro(`Para a nota, falta no cadastro: ${faltando.join(', ')}. Complete e tente de novo.`);
   const uf = p.uf.toUpperCase();
   if (!C_UF[uf]) throw db.erro(`UF do ${config.quem} inválida`);
-  const ficha = tipo === 'venda' ? validarFicha({ ...lerFicha(veiculoId), ...(dados.ficha || {}) }, v) : null;
+  // Dados do CRLV (aba "Veículo Novo" do Emissor): agora em todas as notas, não só na venda. Ficam guardados no carro.
+  const ficha = validarFicha({ ...lerFicha(veiculoId), ...(dados.ficha || {}) }, v);
   let referencia = null;
   if (config.referencia) {
     referencia = digitos(origem ? origem.chave : dados.referencia);
@@ -394,7 +395,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     `E05|${campoTxt(p.endereco)}|${campoTxt(p.numero)}||${campoTxt(p.bairro)}|${cMun}|${campoTxt(p.cidade)}|${uf}|${digitos(p.cep)}|1058|BRASIL|${fone.length >= 6 && fone.length <= 14 ? fone : ''}|`,
     'H|1||',
     `I|S${veiculoId}|||${campoTxt(descricaoVeiculo(v), 120)}|${ncm}|||${cfop}|UN|1.0000|${vUn}|${valorTxt}|||UN|1.0000|${vUn}|||||1|||||${venda ? 'SP020110' : ''}|`,
-    ...(venda ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
+    ...(ficha ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
     'M||',
     'N|',
     espelho ? espelho.N : venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||`
@@ -425,6 +426,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix,
     emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
     xProd: campoTxt(descricaoVeiculo(v), 120),
+    ficha, xCor: campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40), anoMod: v.ano_mod, anoFab: v.ano_fab,
   }) : null;
 
   if (!homologacao) {

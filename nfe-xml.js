@@ -42,6 +42,16 @@ function impostosEspelho(e) {
   return icms + pc(null, 'PIS') + pc(null, 'COFINS');
 }
 
+// Grupo do veículo (aba "Veículo Novo"): mesmos valores da linha J do arquivo do Emissor
+function veicProd(f, xCor, anoMod, anoFab) {
+  if (!f) return '';
+  const q4 = x => Number(x).toFixed(4);
+  return '<veicProd>' + el('tpOp', '3') + el('chassi', f.chassi) + el('cCor', f.cor) + el('xCor', xCor) + el('pot', f.potencia) + el('cilin', f.cilindrada) +
+    el('pesoL', q4(f.peso)) + el('pesoB', q4(f.peso)) + el('nSerie', '1') + el('tpComb', f.combustivel) + el('nMotor', f.motor) + el('CMT', q4(f.cmt)) +
+    el('dist', f.eixos) + el('anoMod', anoMod) + el('anoFab', anoFab) + el('tpPint', f.pintura) + el('tpVeic', f.tipo) + el('espVeic', f.especie) +
+    el('VIN', 'N') + el('condVeic', '1') + el('cMod', f.marca_modelo) + el('cCorDENATRAN', f.cor) + el('lota', f.lotacao) + el('tpRest', '0') + '</veicProd>';
+}
+
 // n = valores calculados em nfe.gerarNota (mesmos do TXT)
 function montarInfNFe(n) {
   if (n.venda) throw new Error('A nota de venda ainda não sai direto pela SEFAZ: use o Emissor do Sebrae por enquanto.');
@@ -80,7 +90,7 @@ function montarInfNFe(n) {
     '<det nItem="1"><prod>' +
     el('cProd', 'S' + n.veiculoId) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + el('CFOP', n.cfop) +
     el('uCom', 'UN') + el('qCom', '1.0000') + el('vUnCom', n.vUn) + el('vProd', valor) + el('cEANTrib', 'SEM GTIN') +
-    el('uTrib', 'UN') + el('qTrib', '1.0000') + el('vUnTrib', n.vUn) + el('indTot', '1') + '</prod>' +
+    el('uTrib', 'UN') + el('qTrib', '1.0000') + el('vUnTrib', n.vUn) + el('indTot', '1') + veicProd(n.ficha, n.xCor, n.anoMod, n.anoFab) + '</prod>' +
     '<imposto>' + impostoItem + ibs.item + '</imposto></det>';
   const zero = '0.00';
   const total =

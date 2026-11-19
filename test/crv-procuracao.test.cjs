@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const FICHA = { motor: 'ABC123456', potencia: 80, cilindrada: 1400, peso: '1.5', cmt: '1.9', eixos: 2, combustivel: '16', tipo: '06', especie: '1', lotacao: 5, cor: '10', pintura: 'S', marca_modelo: '1' };
 process.env.PASTA_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'correa-crv-test-'));
 const db = require('../db');
 const nfe = require('../nfe');
@@ -18,7 +19,7 @@ test('CRV em nome de outra pessoa: guarda as duas e a nota sai no nome de quem e
   const d = db.obterVeiculo(id);
   assert.equal(d.fornecedor.nome, 'Fulano Entrega Silva');
   assert.equal(d.proprietarioCrv.nome, 'Beltrano Dono Documento');
-  const r = await nfe.gerarEntradaConsignacao(id, { numero: 1085, ncm: '87032100', valor: 3300000, data: '2026-11-18T17:23' });
+  const r = await nfe.gerarEntradaConsignacao(id, { ficha: FICHA, numero: 1085, ncm: '87032100', valor: 3300000, data: '2026-11-18T17:23' });
   assert.match(r.conteudo, /\r\nE\|BELTRANO DONO DOCUMENTO\|/);
   assert.match(r.conteudo, /\r\nE03\|11144477735\|/);
   assert.ok(!/FULANO ENTREGA/.test(r.conteudo));
@@ -40,7 +41,7 @@ test('contrato de consignação: consignante é quem entrega, CRV mostra o outro
 test('sem procuração, nada muda: nota e contrato seguem o dono do cadastro', async () => {
   const { id } = db.criarCompra({ pessoa: { ...entrega, cpf: '16899535009' }, veiculo: { ...carro, placa: 'XYZ9K88', renavam: '22222222222', chassi: '9BGSU19F0CB200000' } });
   assert.equal(db.obterVeiculo(id).proprietarioCrv, null);
-  const r = await nfe.gerarEntradaConsignacao(id, { numero: 1090, ncm: '87032100', valor: 3300000, data: '2026-11-18T17:23' });
+  const r = await nfe.gerarEntradaConsignacao(id, { ficha: FICHA, numero: 1090, ncm: '87032100', valor: 3300000, data: '2026-11-18T17:23' });
   assert.match(r.conteudo, /\r\nE\|FULANO ENTREGA SILVA\|/);
   const texto = String(contratos.gerarContrato(id, 'consignacao').html || contratos.gerarContrato(id, 'consignacao'));
   assert.ok(!/Procuração/.test(texto));
