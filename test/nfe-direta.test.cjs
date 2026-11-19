@@ -34,14 +34,15 @@ const comSefaz = async (resposta, fn) => {
 test('estado: só as notas que o XML cobre, em homologação por padrão', () => {
   const { id } = db.criarCompra({ pessoa, veiculo: carro });
   assert.equal(direta.estado(id, 'entrada_consignacao').suportado, true);
-  assert.equal(direta.estado(id, 'venda').suportado, false);
+  assert.equal(direta.estado(id, 'venda').suportado, true);
+  assert.equal(direta.estado(id, 'devolucao_qualquer').suportado, false);
   assert.equal(direta.estado(id, 'entrada_consignacao').ambiente, 'homologacao');
 });
 
 test('sem confirmar ou com nota que não é suportada: não envia', async () => {
   const { id } = db.criarCompra({ pessoa: { ...pessoa, cpf: '11144477735' }, veiculo: { ...carro, placa: 'BBB1B23' } });
   await assert.rejects(direta.emitir(id, 'entrada_consignacao', { ...pedido, confirmar: false }), /Confirme/);
-  await assert.rejects(direta.emitir(id, 'venda', pedido), /ainda não sai direto/);
+  await assert.rejects(direta.emitir(id, 'tipo_que_nao_existe', pedido), /ainda não sai direto/);
 });
 
 test('homologação: número de teste, autorização registrada e XML para baixar, sem gastar a numeração real', async t => {

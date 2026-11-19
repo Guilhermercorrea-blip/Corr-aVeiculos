@@ -931,6 +931,7 @@ async function telaCarro(id) {
   const formGasto = document.getElementById('form-gasto');
   if (vendido) cartaoAvaliacao(id);
   for (const tipo of Object.keys(TITULO_NFE)) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
+  if (location.hash.endsWith('/nota')) setTimeout(() => document.getElementById('cartao-nfe-venda')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 600);
   formGasto?.addEventListener('submit', e => {
     e.preventDefault();
     enviar(formGasto, async dados => {
@@ -1164,7 +1165,7 @@ async function cartaoNfe(id, tipo) {
         ? '<div class="campo c12"><details><summary class="suave pequeno">Alternativa: gerar o arquivo para importar no Emissor do Sebrae</summary><div style="margin-top:8px"><button type="submit" class="secundario">Baixar arquivo da nota</button></div></details></div>'
         : '<div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>'}
     </form>
-    ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
+    ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra', 'venda'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
     <p class="suave pequeno" data-some-autorizada>Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
     // Nota feita pelo Emissor: anexar o XML autorizado libera "Baixar nota" (DANFE) e "Baixar XML"
@@ -1368,7 +1369,8 @@ async function telaVenda(id) {
       const r = await api('POST', `/veiculos/${id}/venda`, corpo);
       aviso(r.troca_veiculo_id ? 'Venda registrada. O carro da troca entrou no estoque.' : 'Venda registrada');
       if (pendenteVenda) { gravarContratoPendente({ modelo: pendenteVenda.modelo, carro: id }); return ir('#/contratos'); }
-      ir(`#/carro/${id}`);
+      // Carro da loja: já abre a página do carro no cartão da nota de venda, com o comprador e os pagamentos preenchidos
+      ir(v.tipo_entrada === 'compra' ? `#/carro/${id}/nota` : `#/carro/${id}`);
     });
   });
 }

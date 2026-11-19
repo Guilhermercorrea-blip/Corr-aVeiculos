@@ -10,9 +10,13 @@ const sefaz = require('./nfe-sefaz');
 const nfseServico = require('./nfse-servico');
 
 // Por enquanto só as notas que o XML direto já cobre (a venda tem o grupo do veículo e continua pelo Emissor)
-const TIPOS_DIRETOS = ['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'];
+const TIPOS_DIRETOS = ['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra', 'venda'];
 
-function ambienteAtual() { return process.env.NFE_AMBIENTE === 'producao' ? 'producao' : 'homologacao'; }
+function ambienteAtual(tipo) {
+  // A nota de venda fica em homologação (teste) até a loja liberar: NFE_VENDA_AMBIENTE=producao
+  if (tipo === 'venda' && process.env.NFE_VENDA_AMBIENTE !== 'producao') return 'homologacao';
+  return process.env.NFE_AMBIENTE === 'producao' ? 'producao' : 'homologacao';
+}
 
 function envios(veiculoId, tipo) {
   return db.conexao.prepare('SELECT id, ambiente, numero, chave, situacao, motivo, protocolo, criado_em FROM nfe_envios WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC LIMIT 10').all(Number(veiculoId), tipo);
@@ -26,7 +30,7 @@ function estado(veiculoId, tipo) {
   return {
     suportado: TIPOS_DIRETOS.includes(tipo),
     habilitado: !!nfseServico.caminhoCertificado(),
-    ambiente: ambienteAtual(),
+    ambiente: ambienteAtual(tipo),
     jaAutorizada: autorizadaEmProducao(veiculoId, tipo),
     envios: envios(veiculoId, tipo),
   };
@@ -68,7 +72,7 @@ async function emitirUmaVez(veiculoId, tipo, dados) {
   const caminho = nfseServico.caminhoCertificado();
   if (!caminho) throw db.erro('O certificado digital não está neste computador.', 400);
   if (dados.confirmar !== true) throw db.erro('Confirme a emissão na tela antes de enviar.', 400);
-  const ambiente = ambienteAtual();
+  const ambiente = ambienteAtual(tipo);
   const homologacao = ambiente === 'homologacao';
   if (!homologacao && dados.confirmarProducao !== true) throw db.erro('Esta nota vale de verdade. Marque a confirmação de nota real.', 400);
   const ja = !homologacao && autorizadaEmProducao(veiculoId, tipo);

@@ -2,7 +2,7 @@
 // XML da NF-e 4.00 (modelo 55) com os MESMOS valores que vão no TXT do Emissor Sebrae (nfe.js),
 // para enviar direto à SEFAZ-SP. Escrito já na forma canônica (C14N): sem espaços, atributos em ordem,
 // sem tags vazias, para a assinatura conferir sem precisar de biblioteca de XML.
-// Por enquanto cobre as notas de entrada e devolução de consignação e a entrada de compra (sem o grupo de veículo novo).
+// Cobre entrada e devolução (consignação e compra) e a venda (venda: por enquanto só em homologação, ver nfe-direta.js).
 
 const NS = 'http://www.portalfiscal.inf.br/nfe';
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r/g, '&#xD;');
@@ -54,7 +54,6 @@ function veicProd(f, xCor, anoMod, anoFab) {
 
 // n = valores calculados em nfe.gerarNota (mesmos do TXT)
 function montarInfNFe(n) {
-  if (n.venda) throw new Error('A nota de venda ainda não sai direto pela SEFAZ: use o Emissor do Sebrae por enquanto.');
   const e = n.emitente;
   const ibs = n.homologacao ? grupoIbsCbsTeste(n.valor) : { item: '', total: '' };
   const valor = dinheiro(n.valor);
@@ -78,17 +77,23 @@ function montarInfNFe(n) {
     el('UF', n.uf) + el('CEP', n.cep) + el('cPais', '1058') + el('xPais', 'BRASIL') + el('fone', n.fone) + '</enderDest>' +
     el('indIEDest', n.indIEDest || 9) + el('IE', n.ieDest) + '</dest>';
   // Impostos do item: espelho da nota da loja (devolução de compra) ou o padrão das notas da loja
-  const impostoItem = n.espelho ? impostosEspelho(n.espelho) : ('<ICMS><ICMS20>' + el('orig', '0') + el('CST', '20') + el('modBC', '3') + el('pRedBC', n.pRedBC || '90.00') +
+  // Venda: ICMS 18% sobre 10% do valor (redução de 90%, benefício SP020110) e PIS/COFINS sobre o lucro, iguais ao TXT
+  const cv = n.venda ? n.calculoVenda : null;
+  const impostoVenda = cv ? ('<ICMS><ICMS20>' + el('orig', '0') + el('CST', '20') + el('modBC', '3') + el('pRedBC', '90.0000') + el('vBC', dinheiro(cv.baseIcms)) +
+    el('pICMS', '18.0000') + el('vICMS', dinheiro(cv.icms)) + '</ICMS20></ICMS>' +
+    '<PIS><PISAliq>' + el('CST', '01') + el('vBC', dinheiro(cv.baseLucro)) + el('pPIS', '0.6500') + el('vPIS', dinheiro(cv.pis)) + '</PISAliq></PIS>' +
+    '<COFINS><COFINSAliq>' + el('CST', '01') + el('vBC', dinheiro(cv.baseLucro)) + el('pCOFINS', '3.0000') + el('vCOFINS', dinheiro(cv.cofins)) + '</COFINSAliq></COFINS>') : null;
+  const impostoItem = impostoVenda || (n.espelho ? impostosEspelho(n.espelho) : ('<ICMS><ICMS20>' + el('orig', '0') + el('CST', '20') + el('modBC', '3') + el('pRedBC', n.pRedBC || '90.00') +
     el('vBC', n.icmsNota ? dinheiro(n.icmsNota.base) : '0.00') + el('pICMS', '18.0000') + el('vICMS', n.icmsNota ? dinheiro(n.icmsNota.valor) : '0.00') + '</ICMS20></ICMS>' +
-    '<PIS><PISNT>' + el('CST', '07') + '</PISNT></PIS><COFINS><COFINSNT>' + el('CST', '07') + '</COFINSNT></COFINS>');
+    '<PIS><PISNT>' + el('CST', '07') + '</PISNT></PIS><COFINS><COFINSNT>' + el('CST', '07') + '</COFINSNT></COFINS>'));
   const ed = n.espelho;
-  const tvBC = ed ? dinheiro(ed.icms.vBC || 0) : n.icmsNota ? dinheiro(n.icmsNota.base) : '0.00';
-  const tvICMS = ed ? dinheiro(ed.icms.vICMS || 0) : n.icmsNota ? dinheiro(n.icmsNota.valor) : '0.00';
-  const tvPIS = '0.00';
-  const tvCOFINS = '0.00';
+  const tvBC = cv ? dinheiro(cv.baseIcms) : ed ? dinheiro(ed.icms.vBC || 0) : n.icmsNota ? dinheiro(n.icmsNota.base) : '0.00';
+  const tvICMS = cv ? dinheiro(cv.icms) : ed ? dinheiro(ed.icms.vICMS || 0) : n.icmsNota ? dinheiro(n.icmsNota.valor) : '0.00';
+  const tvPIS = cv ? dinheiro(cv.pis) : '0.00';
+  const tvCOFINS = cv ? dinheiro(cv.cofins) : '0.00';
   const det =
     '<det nItem="1"><prod>' +
-    el('cProd', 'S' + n.veiculoId) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + el('CFOP', n.cfop) +
+    el('cProd', 'S' + n.veiculoId) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + (n.venda ? el('cBenef', 'SP020110') : '') + el('CFOP', n.cfop) +
     el('uCom', 'UN') + el('qCom', '1.0000') + el('vUnCom', n.vUn) + el('vProd', valor) + el('cEANTrib', 'SEM GTIN') +
     el('uTrib', 'UN') + el('qTrib', '1.0000') + el('vUnTrib', n.vUn) + el('indTot', '1') + veicProd(n.ficha, n.xCor, n.anoMod, n.anoFab) + '</prod>' +
     '<imposto>' + impostoItem + ibs.item + '</imposto></det>';
@@ -98,7 +103,13 @@ function montarInfNFe(n) {
     el('vFCPST', zero) + el('vFCPSTRet', zero) + el('vProd', valor) + el('vFrete', zero) + el('vSeg', zero) + el('vDesc', zero) + el('vII', zero) +
     el('vIPI', zero) + el('vIPIDevol', zero) + el('vPIS', tvPIS) + el('vCOFINS', tvCOFINS) + el('vOutro', zero) + el('vNF', valor) + '</ICMSTot>' + ibs.total + '</total>';
   const transp = `<transp>${el('modFrete', n.modFrete)}</transp>`;
-  const pag = n.pagamentoPix && n.deposito
+  // Venda: uma forma de pagamento por linha (PIX, depósito, dinheiro, financiamento, troca, saldo...), igual ao TXT.
+  // PIX (17) e cartão (03/04) levam o grupo card com tpIntegra 2 (rejeição 391); "outros" (99) precisa da descrição.
+  const detPag = pg => '<detPag>' + el('indPag', String(pg.indPag)) + el('tPag', pg.tPag) + (pg.tPag === '99' ? el('xPag', pg.xPag || 'Outros') : '') +
+    el('vPag', dinheiro(pg.valor)) + (['03', '04', '17'].includes(pg.tPag) ? '<card>' + el('tpIntegra', '2') + '</card>' : '') + '</detPag>';
+  const pag = n.venda && n.pagamentos?.length
+    ? '<pag>' + n.pagamentos.map(detPag).join('') + '</pag>'
+    : n.pagamentoPix && n.deposito
     ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '16')}${el('vPag', valor)}</detPag></pag>` // depósito bancário
     : n.pagamentoPix
     // PIX (17) agora exige o grupo card (rejeição 391); tpIntegra 2 = pagamento não integrado à automação (sem maquininha)

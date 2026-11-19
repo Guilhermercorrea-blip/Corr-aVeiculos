@@ -163,7 +163,7 @@ const TIPOS_NOTA = {
     valor: d => d.veiculo.valor_compra,
   },
   venda: {
-    nome: 'venda', natOp: 'SAIDA', cfop: 5102, tpNF: 1,
+    nome: 'venda', natOp: 'SAIDA', cfop: 5102, cfopFora: 6102, tpNF: 1,
     pessoa: d => d.comprador, quem: 'comprador',
     bloqueio: d => (!d.venda ? 'Registre a venda antes de gerar a nota de venda'
       : d.veiculo.tipo_entrada !== 'compra' ? 'Por enquanto a nota de venda é só para carro comprado pela loja. Para carro consignado ou de troca, confirme com o contador qual nota emitir.'
@@ -438,6 +438,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     natOp: config.natOp, tpNF: config.tpNF, finNFe: config.finNFe, cfop, pRedBC: config.pRedBC, indIEDest, ieDest, icmsNota,
     espelho: origem ? { icms: origem.icms } : null,
     modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix, deposito: dados.pagamento === 'deposito',
+    calculoVenda: c, pagamentos,
     emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
     xProd: campoTxt(descricaoVeiculo(v), 120),
     ficha, xCor: campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40), anoMod: v.ano_mod, anoFab: v.ano_fab,

@@ -44,10 +44,6 @@ test('XML da entrada de consignação tem os mesmos valores do TXT e passa na as
   assert.ok(nfeXml.includes(`<Reference URI="#NFe${g.chave}">`));
 });
 
-test('nota de venda ainda não sai direto pela SEFAZ (fica no Emissor por enquanto)', () => {
-  assert.throws(() => require('../nfe-xml').montarInfNFe({ venda: true }), /venda ainda não sai/);
-});
-
 test('Ciência da Operação (210210): evento montado e assinado no padrão da SEFAZ', t => {
   try { execFileSync('openssl', ['version'], { stdio: 'pipe' }); } catch { return t.skip('sem openssl'); }
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'evt-cert-'));
