@@ -1062,7 +1062,7 @@ async function blocoNfeDireta(id, tipo, form) {
   const lista = s.envios.length ? `<table class="pequeno" style="margin-top:8px"><thead><tr><th>Quando</th><th>Ambiente</th><th>Nº</th><th>Situação</th><th>Protocolo / motivo</th><th></th></tr></thead><tbody>${s.envios.map(e => `<tr>
       <td>${esc(e.criado_em.slice(0, 16))}</td><td>${e.ambiente === 'producao' ? 'Real' : 'Teste'}</td><td>${e.numero}</td>
       <td>${esc(SITUACAO_NFE[e.situacao] || e.situacao)}</td><td>${esc(e.protocolo || e.motivo || '')}</td>
-      <td>${e.situacao === 'autorizada' ? `<a class="botao-link secundario" href="/danfe/${e.id}" target="_blank" rel="noopener">DANFE</a> <button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
+      <td>${e.situacao === 'autorizada' ? `<a class="botao-link" href="/danfe/${e.id}.pdf" download>Baixar PDF</a> <button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button> <a class="botao-link secundario" href="/danfe/${e.id}" target="_blank" rel="noopener">Imprimir</a>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
   caixa.innerHTML = `
     <h3 style="margin:0 0 6px">Emitir direto na SEFAZ <span class="suave pequeno">(sem o Emissor do Sebrae)</span></h3>
     <p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>
@@ -1122,10 +1122,11 @@ async function cartaoNfe(id, tipo) {
     <div class="pequeno" style="margin:6px 0 10px;padding:8px;border:1px solid #c9d1dc;border-radius:6px">
       ${s.ultima.temXml
         ? `<strong>Autorizada</strong> · protocolo ${esc(s.ultima.protocolo)} &nbsp;
-           <a class="botao-link" href="/danfe-nota/${s.ultima.id}" target="_blank" rel="noopener">Baixar nota (DANFE)</a>
+           <a class="botao-link" href="/danfe-nota/${s.ultima.id}.pdf" download>Baixar PDF</a>
            <button type="button" class="secundario" data-baixar-xml="${s.ultima.id}">Baixar XML</button>
+           <a class="botao-link secundario" href="/danfe-nota/${s.ultima.id}" target="_blank" rel="noopener">Imprimir</a>
            <span class="suave"> · trocar o XML: <input type="file" accept=".xml,text/xml" data-anexar-xml></span>`
-        : `<span class="suave">Depois que o Emissor transmitir e a SEFAZ autorizar, anexe aqui o <b>XML autorizado</b> (pasta Notas, o arquivo que termina em <b>-procNfe.xml</b>) para liberar <b>Baixar nota</b> e <b>Baixar XML</b>:</span> <input type="file" accept=".xml,text/xml" data-anexar-xml>`}
+        : `<span class="suave">Depois que o Emissor transmitir e a SEFAZ autorizar, anexe aqui o <b>XML autorizado</b> (pasta Notas, o arquivo que termina em <b>-procNfe.xml</b>) para liberar <b>Baixar PDF</b> e <b>Baixar XML</b>:</span> <input type="file" accept=".xml,text/xml" data-anexar-xml>`}
     </div>` : ''}
     <form id="form-nfe-${tipo}" class="grade" novalidate>
       ${campo('Número da nota', 'numero', { valor: s.numero, obrig: true, largura: 'c3', extra: 'inputmode="numeric"' })}
@@ -1165,7 +1166,7 @@ async function cartaoNfe(id, tipo) {
       if (!arq) return;
       try {
         const r = await api('POST', `/veiculos/${id}/nfe/${tipo}/xml`, { xml: await arq.text() });
-        aviso(`XML da nota nº ${r.numero} anexado. Já dá para baixar a nota e o XML.`);
+        aviso(`XML da nota nº ${r.numero} anexado. Já dá para baixar o PDF e o XML.`);
         cartaoNfe(id, tipo);
       } catch (e) { aviso(e.message, true); inp.value = ''; }
     }));

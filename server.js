@@ -511,6 +511,19 @@ http.createServer((req, res) => {
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));
   // DANFE da NF-e emitida direto pelo sistema (página para imprimir / salvar PDF), a partir do XML autorizado
+  // "Baixar PDF": o DANFE como arquivo PDF, gerado do XML autorizado (só logado)
+  const danfePdf = url.pathname.match(/^\/danfe(-nota)?\/(\d+)\.pdf$/);
+  if (danfePdf) {
+    try {
+      const origem = danfePdf[1] ? nfeDireta.xmlDaNotaRegistrada(Number(danfePdf[2])) : nfeDireta.xmlDoEnvio(Number(danfePdf[2]));
+      const r = require('./danfe-pdf').gerarDanfePdf(origem.conteudo);
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="DANFE-' + r.numero + '-' + r.chave + '.pdf"', 'Cache-Control': 'no-store' });
+      return res.end(r.pdf);
+    } catch (e) {
+      if (!e.status) console.error(e);
+      return paginaAviso(res, e.status || 500, e.message);
+    }
+  }
   // DANFE de uma nota feita pelo Emissor, a partir do XML autorizado anexado ao carro
   const danfeNota = url.pathname.match(/^\/danfe-nota\/(\d+)$/);
   if (danfeNota) {
