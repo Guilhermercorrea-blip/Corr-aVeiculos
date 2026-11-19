@@ -130,9 +130,9 @@ const ehMoto = v => sugerirNcm(v).startsWith('8711');
 const TIPOS_NOTA = {
   // Carro comprado pela loja (vai para o nome da loja): nota de entrada CFOP 1102.
   // Igual às notas 1034, 1038 e 1039 do Sebrae: natureza ENTRADA, ICMS CST 20 (18%) com redução de 90% (confirmado pela loja), PIS/COFINS 07,
-  // destinatário contribuinte isento (2), frete por conta do destinatário (1) e pagamento em PIX com o valor da compra.
+  // destinatário não contribuinte (9: a SEFAZ passou a recusar o 2 com a rejeição 805), frete por conta do destinatário (1) e pagamento em PIX com o valor da compra.
   entrada_compra: {
-    nome: 'entrada de compra', natOp: 'ENTRADA', cfop: 1102, tpNF: 0, pRedBC: '90.00', indIEDest: 2, modFrete: 1, pagamentoPix: true,
+    nome: 'entrada de compra', natOp: 'ENTRADA', cfop: 1102, tpNF: 0, pRedBC: '90.00', indIEDest: 9, modFrete: 1, pagamentoPix: true,
     pessoa: d => d.fornecedor, quem: 'vendedor',
     bloqueio: d => (d.veiculo.tipo_entrada === 'compra' ? null : 'A nota de entrada de compra (1102) é só para carro comprado que vai para o nome da loja. Carro em consignação, troca ou compra sem transferir usa a entrada de consignação (1917).'),
     valor: d => d.veiculo.valor_compra,
