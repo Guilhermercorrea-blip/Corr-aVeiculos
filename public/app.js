@@ -1143,6 +1143,7 @@ async function cartaoNfe(id, tipo) {
         <input id="xml-origem-${tipo}" type="file" accept=".xml,text/xml,application/xml">
         <small class="suave" id="xml-origem-info-${tipo}">Sem o XML, o ICMS sai no padrão (18% sobre 10% do valor), que pode não bater com o da nota da loja. PIS/COFINS saem 07, como sempre.</small></div>` : ''}
       ${`
+      ${f.motor ? '<div class="campo c12"><details><summary class="suave pequeno">Dados do CRLV do carro (já preenchidos na entrada: clique para conferir ou corrigir)</summary><div class="grade" style="margin-top:8px">' : ''}
       <div class="campo c12"><span><b>Dados do CRLV para a aba "Veículo Novo"</b> (vão em todas as notas). Ficam guardados no carro: na próxima nota já vêm preenchidos.</span></div>
       ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: true, largura: 'c4' })}
       ${campo('Potência (CV)', 'ficha.potencia', { valor: f.potencia, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
@@ -1156,7 +1157,8 @@ async function cartaoNfe(id, tipo) {
       ${selecao('Espécie', 'ficha.especie', o.especies, f.especie, 'c4')}
       ${selecao('Cor (DENATRAN)', 'ficha.cor', o.cores, f.cor, 'c4')}
       ${selecao('Pintura', 'ficha.pintura', o.pinturas, f.pintura, 'c4')}
-      ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}`}
+      ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}
+      ${f.motor ? '</div></details></div>' : ''}`}
       ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo)
         ? '<div class="campo c12"><details><summary class="suave pequeno">Alternativa: gerar o arquivo para importar no Emissor do Sebrae</summary><div style="margin-top:8px"><button type="submit" class="secundario">Baixar arquivo da nota</button></div></details></div>'
         : '<div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>'}
