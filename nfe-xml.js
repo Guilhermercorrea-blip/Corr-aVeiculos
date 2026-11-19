@@ -99,7 +99,8 @@ function montarInfNFe(n) {
     el('vIPI', zero) + el('vIPIDevol', zero) + el('vPIS', tvPIS) + el('vCOFINS', tvCOFINS) + el('vOutro', zero) + el('vNF', valor) + '</ICMSTot>' + ibs.total + '</total>';
   const transp = `<transp>${el('modFrete', n.modFrete)}</transp>`;
   const pag = n.pagamentoPix
-    ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '17')}${el('vPag', valor)}</detPag></pag>`
+    // PIX (17) agora exige o grupo card (rejeição 391); tpIntegra 2 = pagamento não integrado à automação (sem maquininha)
+    ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '17')}${el('vPag', valor)}<card>${el('tpIntegra', '2')}</card></detPag></pag>`
     : `<pag><detPag>${el('tPag', '90')}${el('vPag', zero)}</detPag></pag>`;
   return `<infNFe Id="NFe${n.chave}" versao="4.00">${ide}${emit}${dest}${det}${total}${transp}${pag}</infNFe>`;
 }
