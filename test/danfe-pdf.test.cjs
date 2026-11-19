@@ -29,7 +29,7 @@ test('PDF do DANFE: arquivo PDF válido, com as posições do índice conferindo
   const inicioXref = Number(s.match(/startxref\n(\d+)/)[1]);
   assert.equal(s.slice(inicioXref, inicioXref + 4), 'xref');
   const posicoes = [...s.slice(inicioXref).matchAll(/(\d{10}) 00000 n/g)].map(m => Number(m[1]));
-  assert.equal(posicoes.length, 6);
+  assert.equal(posicoes.length, 7);
   posicoes.forEach((p, i) => assert.ok(s.slice(p).startsWith(`${i + 1} 0 obj`), `objeto ${i + 1} fora do lugar`));
   // o tamanho declarado do fluxo de desenho bate com o conteúdo
   const m = s.match(/\/Length (\d+) >>\nstream\n/);

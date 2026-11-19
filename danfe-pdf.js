@@ -2,6 +2,8 @@
 // DANFE em arquivo PDF (para "Baixar PDF"), gerado direto do XML autorizado, sem bibliotecas.
 // Desenha o mesmo leiaute da página do danfe.js (caixas, textos e código de barras Code-128C em vetor) com as fontes
 // padrão do PDF (Helvetica), então o arquivo é pequeno e o texto fica selecionável. Em homologação leva "SEM VALOR FISCAL".
+const fs = require('node:fs');
+const path = require('node:path');
 const { lerNota, valores128C, PADROES_128 } = require('./danfe');
 
 const MM = 72 / 25.4; // pontos por milímetro
@@ -86,6 +88,21 @@ class Pagina {
   }
 }
 
+// Logo da loja (public/img/logo.jpg): JPEG entra direto no PDF, sem recompressão
+function lerLogo() {
+  try {
+    const b = fs.readFileSync(path.join(__dirname, 'public', 'img', 'logo.jpg'));
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xFF) { i++; continue; }
+      const m = b[i + 1], len = b.readUInt16BE(i + 2);
+      if (m >= 0xC0 && m <= 0xC3) return { jpg: b, h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7), comp: b[i + 9] };
+      i += 2 + len;
+    }
+  } catch { /* sem logo: o DANFE sai só com o nome */ }
+  return null;
+}
+const LOGO = lerLogo();
+
 function desenhar(n) {
   const p = new Pagina();
   const e = n.emit, d = n.dest, t = n.tot;
@@ -112,8 +129,14 @@ function desenhar(n) {
 
   // Cabeçalho: emitente | DANFE | chave
   p.caixa(X, 27, 70, 30); p.caixa(X + 70, 27, 40, 30); p.caixa(X + 110, 27, 86, 30);
-  const linhasNome = p.paragrafo(e.nome, X + 2, 33, 66, { tam: 11, negrito: true, align: 'c', max: 3 });
-  p.paragrafo(`${e.xLgr}, ${e.nro} - ${e.bairro} - ${e.mun}/${e.uf} - CEP ${cep(e.cep)}${e.fone ? ' - Fone ' + fone(e.fone) : ''}`, X + 2, 33 + linhasNome * 4.8 + 1.5, 66, { tam: 6.5, align: 'c', max: 4 });
+  // com logo: logo à esquerda (24 mm) e nome/endereço ao lado; sem logo: texto em toda a largura
+  const tx = LOGO ? X + 26 : X + 2, tw = LOGO ? 43 : 66;
+  if (LOGO) {
+    const lw = 23, lh = lw * LOGO.h / LOGO.w;
+    p.ops.push(`q ${(lw * MM).toFixed(2)} 0 0 ${(lh * MM).toFixed(2)} ${((X + 2) * MM).toFixed(2)} ${p.y(42 + lh / 2).toFixed(2)} cm /Im1 Do Q`);
+  }
+  const linhasNome = p.paragrafo(e.nome, tx, 30, tw, { tam: LOGO ? 8.5 : 11, negrito: true, align: 'c', max: 3 });
+  p.paragrafo(`${e.xLgr}, ${e.nro} - ${e.bairro} - ${e.mun}/${e.uf} - CEP ${cep(e.cep)}${e.fone ? ' - Fone ' + fone(e.fone) : ''}`, tx, 30 + linhasNome * (LOGO ? 3.8 : 4.8) + 1.5, tw, { tam: LOGO ? 6 : 6.5, align: 'c', max: 5 });
   p.texto('DANFE', X + 70, 28.5, { tam: 13, negrito: true, align: 'c', w: 40 });
   p.paragrafo('Documento Auxiliar da Nota Fiscal Eletrônica', X + 72, 33.5, 36, { tam: 6, align: 'c', max: 2 });
   p.texto('0 - Entrada', X + 70, 38.5, { tam: 6.5, align: 'c', w: 40 });
@@ -203,17 +226,20 @@ function gerarDanfePdf(xml) {
   const objetos = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>',
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >>${LOGO ? ' /XObject << /Im1 7 0 R >>' : ''} >> /Contents 4 0 R >>`,
     null, // conteúdo (stream)
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
   ];
+  if (LOGO) objetos.push({ imagem: LOGO });
   const partes = [Buffer.from('%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n', 'latin1')];
   const offsets = [];
   let pos = partes[0].length;
   objetos.forEach((o, i) => {
     offsets.push(pos);
-    const corpo = o === null
+    const corpo = o && o.imagem
+      ? Buffer.concat([Buffer.from(`${i + 1} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${o.imagem.w} /Height ${o.imagem.h} /ColorSpace ${o.imagem.comp === 1 ? '/DeviceGray' : '/DeviceRGB'} /BitsPerComponent 8 /Filter /DCTDecode /Length ${o.imagem.jpg.length} >>\nstream\n`, 'latin1'), o.imagem.jpg, Buffer.from('\nendstream\nendobj\n', 'latin1')])
+      : o === null
       ? Buffer.concat([Buffer.from(`${i + 1} 0 obj\n<< /Length ${conteudo.length} >>\nstream\n`, 'latin1'), conteudo, Buffer.from('\nendstream\nendobj\n', 'latin1')])
       : Buffer.from(`${i + 1} 0 obj\n${o}\nendobj\n`, 'latin1');
     partes.push(corpo);
