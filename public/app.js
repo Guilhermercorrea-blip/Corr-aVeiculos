@@ -1785,10 +1785,10 @@ async function telaNotaServico() {
   const nomeBanco = n => (['pessoa-fisica', 'cliente-consignacao'].includes(n.tomador) ? `${n.tomador_nome || ''} (CPF ${n.tomador_doc || ''})` : d.tomadores.find(t => t.id === n.tomador)?.nome || n.tomador);
   app.innerHTML = `
   <div class="cabecalho"><div><h1>Nota de serviço</h1><div class="suave">Comissão de banco (financiamento e seguros), emitida direto na Receita.</div></div></div>
-  <div class="cartao" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'}">
+  ${real && d.habilitado ? '' : `<div class="cartao" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'}">
     <strong>${real ? 'NOTA REAL: ela vale de verdade e não volta atrás.' : 'Ambiente de TESTES da Receita: a nota não vale.'}</strong>
     <p class="suave pequeno">${d.habilitado ? `Certificado: ${esc(d.certificado)}. Próximo número de DPS: ${d.proximoNumero}.` : 'O certificado digital não está neste computador (ou você abriu o sistema por fora da loja). A emissão só funciona no PC da loja.'}</p>
-  </div>
+  </div>`}
   <div class="cartao">
     <h2>Nova nota</h2>
     <form id="form-nfse" class="grade" novalidate>
