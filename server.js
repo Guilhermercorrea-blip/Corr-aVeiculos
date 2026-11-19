@@ -189,6 +189,7 @@ rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ct
 rota('GET', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, c, ctx) => { const d = nfeDireta.estado(p.id, p.tipo); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
 rota('POST', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitir(p.id, p.tipo, corpo); });
 rota('POST', '/api/veiculos/:id/nfe/:tipo/xml', (p, q, corpo) => nfeDireta.anexarXml(p.id, p.tipo, corpo.xml));
+rota('GET', '/api/notas-mes', (p, q) => require('./notas-mes').listar(q.get('mes') || require('./notas-mes').mesAnterior()));
 rota('GET', '/api/nfe-notas/:id/xml', p => nfeDireta.xmlDaNotaRegistrada(p.id));
 rota('GET', '/api/nfe-envios/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.xmlDoEnvio(p.id); });
 rota('GET', '/api/nfse/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.xmlDaNota(Number(p.id)); });
@@ -510,6 +511,18 @@ http.createServer((req, res) => {
 
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));
+  // Todas as notas do mês (XML + PDF) em um ZIP (só logado)
+  const zipMes = url.pathname.match(/^\/notas-mes\/(\d{4}-\d{2})\.zip$/);
+  if (zipMes) {
+    try {
+      const r = require('./notas-mes').zipDoMes(zipMes[1]);
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="' + r.arquivo + '"', 'Cache-Control': 'no-store' });
+      return res.end(r.zip);
+    } catch (e) {
+      if (!e.status) console.error(e);
+      return paginaAviso(res, e.status || 500, e.message);
+    }
+  }
   // DANFE da NF-e emitida direto pelo sistema (página para imprimir / salvar PDF), a partir do XML autorizado
   // "Baixar PDF": o DANFE como arquivo PDF, gerado do XML autorizado (só logado)
   const danfePdf = url.pathname.match(/^\/danfe(-nota)?\/(\d+)\.pdf$/);

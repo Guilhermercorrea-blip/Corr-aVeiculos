@@ -1909,6 +1909,56 @@ async function telaNotaServico() {
 
 // ---------- navegação ----------
 
+// ---------- notas emitidas no mês (XML e PDF para o contador) ----------
+function mesAnteriorISO() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+const NOME_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+async function telaNotasEmitidas(mesPedido) {
+  const mes = /^\d{4}-\d{2}$/.test(mesPedido || '') ? mesPedido : mesAnteriorISO();
+  const d = await api('GET', `/notas-mes?mes=${mes}`);
+  const [ano, m] = mes.split('-');
+  const linhas = d.itens.map(i => `<tr>
+      <td>${dataBR(i.data)}</td><td>${esc(i.rotulo)}</td><td>${esc(i.numero)}</td>
+      <td>${i.veiculo_id ? `<a href="#/carro/${i.veiculo_id}">${esc(i.modelo)}${i.placa ? ' · ' + esc(i.placa) : ''}</a>` : esc(i.tomador || '')}</td>
+      <td style="text-align:right">${reais(i.valor || 0)}</td>
+      <td>${i.pdf ? `<a class="botao-link" href="${i.pdf}" download>PDF</a> ` : ''}<button type="button" class="secundario" data-xml-url="${esc(i.xml)}">XML</button></td></tr>`).join('');
+  const pendentes = d.semXml.length ? `<div class="cartao"><strong>Gerada no Emissor, sem o XML anexado (não entra no pacote)</strong>
+    <p class="suave pequeno">Anexe o arquivo que termina em <b>-procNfe.xml</b> na página do carro para ela aparecer aqui.</p>
+    <ul class="pequeno">${d.semXml.map(i => `<li>Nº ${esc(i.numero)} · ${esc(i.rotulo)} · <a href="#/carro/${i.veiculo_id}">${esc(i.modelo)} ${esc(i.placa)}</a></li>`).join('')}</ul></div>` : '';
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>Notas emitidas</h1><div class="suave">Todas as notas do mês, com XML e PDF. Cada nota continua guardada no carro dela.</div></div></div>
+  <div class="cartao">
+    <div class="grade">
+      <div class="campo c4"><label for="mes-notas">Mês</label><input id="mes-notas" type="month" value="${mes}"></div>
+      <div class="campo c8" style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" id="mes-anterior" class="secundario">Mês passado</button>
+        ${d.itens.length ? `<a class="botao-link" href="/notas-mes/${mes}.zip" download>Baixar tudo de ${NOME_MES[Number(m) - 1]} (ZIP)</a>` : ''}
+      </div>
+    </div>
+    ${d.itens.length ? `<p class="pequeno"><strong>${d.itens.length}</strong> nota(s) em ${NOME_MES[Number(m) - 1]} de ${ano}, total ${reais(d.total)}. O ZIP leva os XML e os PDF (NF-e) e um resumo.csv.</p>
+    <table class="pequeno"><thead><tr><th>Data</th><th>Tipo</th><th>Nº</th><th>Carro / cliente</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`
+      : `<p class="suave">Nenhuma nota com XML autorizado em ${NOME_MES[Number(m) - 1]} de ${ano}.</p>`}
+  </div>
+  ${pendentes}`;
+  document.getElementById('mes-notas').addEventListener('change', e => { if (e.target.value) ir(`#/notas-fiscais/${e.target.value}`); });
+  document.getElementById('mes-anterior').addEventListener('click', () => ir(`#/notas-fiscais/${mesAnteriorISO()}`));
+  app.querySelectorAll('[data-xml-url]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      const r = await api('GET', b.dataset.xmlUrl.replace(/^\/api/, ''));
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+      link.download = r.arquivo;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    } catch (e) { aviso(e.message, true); }
+  }));
+}
+
 async function navegar() {
   const partes = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const [pagina, id, acao] = partes;
@@ -1923,6 +1973,7 @@ async function navegar() {
     else if (pagina === 'pessoas' || pagina === 'pessoa') { if (id) await telaPessoa(Number(id)); else await telaPessoas(); }
     else if (pagina === 'contratos') await telaContratos();
     else if (pagina === 'nota-servico') await telaNotaServico();
+    else if (pagina === 'notas-fiscais') await telaNotasEmitidas(id);
     else if (pagina === 'configuracoes') await telaConfiguracoes();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();

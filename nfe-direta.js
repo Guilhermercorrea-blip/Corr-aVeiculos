@@ -61,6 +61,8 @@ async function emitir(veiculoId, tipo, dados = {}) {
   }
   if (r.cStat === '100') {
     atualizar('autorizada', { cStat: r.cStat, motivo: r.xMotivo, protocolo: r.nProt, xml: r.nfeProc });
+    // Em produção, o XML autorizado também fica guardado na nota do carro (aparece em "Notas emitidas" e na página do carro)
+    if (!homologacao) db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE chave = ?').run(r.nfeProc, r.nProt, g.chave);
     return { ok: true, id, ambiente, numero, chave: g.chave, protocolo: r.nProt };
   }
   const motivo = r.cStat ? `${r.cStat}: ${r.xMotivo}` : `${r.cStatLote || 'sem código'}: ${r.xMotivoLote || r.bruto || 'resposta inesperada'}`;
