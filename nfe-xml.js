@@ -28,6 +28,20 @@ function grupoIbsCbsTeste(centavos) {
   return { item, total };
 }
 
+// Impostos do item: ICMS copiado da nota de venda da loja (devolução de compra em espelho); PIS/COFINS 07
+function impostosEspelho(e) {
+  const r = c => dinheiro(c || 0);
+  const i = e.icms;
+  const icms = '<ICMS><ICMS20>' + el('orig', i.orig) + el('CST', '20') + el('modBC', i.modBC) + el('pRedBC', i.pRedBC) + el('vBC', r(i.vBC)) +
+    el('pICMS', i.pICMS) + el('vICMS', r(i.vICMS)) + '</ICMS20></ICMS>';
+  const pc = (t, nome, aliq, val) => {
+    if (!t) return `<${nome}><${nome}NT>${el('CST', '07')}</${nome}NT></${nome}>`;
+    if (t.grupo === nome + 'Aliq') return `<${nome}><${nome}Aliq>${el('CST', t.CST)}${el('vBC', r(t.vBC))}${el(aliq, t.aliquota)}${el(val, r(t.valor))}</${nome}Aliq></${nome}>`;
+    return `<${nome}><${nome}NT>${el('CST', t.CST)}</${nome}NT></${nome}>`;
+  };
+  return icms + pc(null, 'PIS') + pc(null, 'COFINS');
+}
+
 // n = valores calculados em nfe.gerarNota (mesmos do TXT)
 function montarInfNFe(n) {
   if (n.venda) throw new Error('A nota de venda ainda não sai direto pela SEFAZ: use o Emissor do Sebrae por enquanto.');
@@ -52,20 +66,27 @@ function montarInfNFe(n) {
     '<dest>' + (n.doc.length === 11 ? el('CPF', n.doc) : el('CNPJ', n.doc)) + el('xNome', n.nomeDest) +
     '<enderDest>' + el('xLgr', p.endereco) + el('nro', p.numero) + el('xBairro', p.bairro) + el('cMun', n.cMun) + el('xMun', p.cidade) +
     el('UF', n.uf) + el('CEP', n.cep) + el('cPais', '1058') + el('xPais', 'BRASIL') + el('fone', n.fone) + '</enderDest>' +
-    el('indIEDest', n.indIEDest || 9) + '</dest>';
+    el('indIEDest', n.indIEDest || 9) + el('IE', n.ieDest) + '</dest>';
+  // Impostos do item: espelho da nota da loja (devolução de compra) ou o padrão das notas da loja
+  const impostoItem = n.espelho ? impostosEspelho(n.espelho) : ('<ICMS><ICMS20>' + el('orig', '0') + el('CST', '20') + el('modBC', '3') + el('pRedBC', n.pRedBC || '90.00') +
+    el('vBC', n.icmsNota ? dinheiro(n.icmsNota.base) : '0.00') + el('pICMS', '18.0000') + el('vICMS', n.icmsNota ? dinheiro(n.icmsNota.valor) : '0.00') + '</ICMS20></ICMS>' +
+    '<PIS><PISNT>' + el('CST', '07') + '</PISNT></PIS><COFINS><COFINSNT>' + el('CST', '07') + '</COFINSNT></COFINS>');
+  const ed = n.espelho;
+  const tvBC = ed ? dinheiro(ed.icms.vBC || 0) : n.icmsNota ? dinheiro(n.icmsNota.base) : '0.00';
+  const tvICMS = ed ? dinheiro(ed.icms.vICMS || 0) : n.icmsNota ? dinheiro(n.icmsNota.valor) : '0.00';
+  const tvPIS = '0.00';
+  const tvCOFINS = '0.00';
   const det =
     '<det nItem="1"><prod>' +
     el('cProd', 'S' + n.veiculoId) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + el('CFOP', n.cfop) +
     el('uCom', 'UN') + el('qCom', '1.0000') + el('vUnCom', n.vUn) + el('vProd', valor) + el('cEANTrib', 'SEM GTIN') +
     el('uTrib', 'UN') + el('qTrib', '1.0000') + el('vUnTrib', n.vUn) + el('indTot', '1') + '</prod>' +
-    '<imposto><ICMS><ICMS20>' + el('orig', '0') + el('CST', '20') + el('modBC', '3') + el('pRedBC', n.pRedBC || '90.00') +
-    el('vBC', '0.00') + el('pICMS', '18.0000') + el('vICMS', '0.00') + '</ICMS20></ICMS>' +
-    '<PIS><PISNT>' + el('CST', '07') + '</PISNT></PIS><COFINS><COFINSNT>' + el('CST', '07') + '</COFINSNT></COFINS>' + ibs.item + '</imposto></det>';
+    '<imposto>' + impostoItem + ibs.item + '</imposto></det>';
   const zero = '0.00';
   const total =
-    '<total><ICMSTot>' + el('vBC', zero) + el('vICMS', zero) + el('vICMSDeson', zero) + el('vFCP', zero) + el('vBCST', zero) + el('vST', zero) +
+    '<total><ICMSTot>' + el('vBC', tvBC) + el('vICMS', tvICMS) + el('vICMSDeson', zero) + el('vFCP', zero) + el('vBCST', zero) + el('vST', zero) +
     el('vFCPST', zero) + el('vFCPSTRet', zero) + el('vProd', valor) + el('vFrete', zero) + el('vSeg', zero) + el('vDesc', zero) + el('vII', zero) +
-    el('vIPI', zero) + el('vIPIDevol', zero) + el('vPIS', zero) + el('vCOFINS', zero) + el('vOutro', zero) + el('vNF', valor) + '</ICMSTot>' + ibs.total + '</total>';
+    el('vIPI', zero) + el('vIPIDevol', zero) + el('vPIS', tvPIS) + el('vCOFINS', tvCOFINS) + el('vOutro', zero) + el('vNF', valor) + '</ICMSTot>' + ibs.total + '</total>';
   const transp = `<transp>${el('modFrete', n.modFrete)}</transp>`;
   const pag = n.pagamentoPix
     ? `<pag><detPag>${el('indPag', '0')}${el('tPag', '17')}${el('vPag', valor)}</detPag></pag>`

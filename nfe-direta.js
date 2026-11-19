@@ -10,7 +10,7 @@ const sefaz = require('./nfe-sefaz');
 const nfseServico = require('./nfse-servico');
 
 // Por enquanto só as notas que o XML direto já cobre (a venda tem o grupo do veículo e continua pelo Emissor)
-const TIPOS_DIRETOS = ['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra'];
+const TIPOS_DIRETOS = ['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'];
 
 function ambienteAtual() { return process.env.NFE_AMBIENTE === 'producao' ? 'producao' : 'homologacao'; }
 
@@ -46,7 +46,7 @@ async function emitir(veiculoId, tipo, dados = {}) {
 
   // Em homologação usa um número alto e único, para não esbarrar em testes anteriores nem gastar a numeração real
   const numero = homologacao ? 800000000 + (Math.floor(Date.now() / 1000) % 100000000) : Number(dados.numero);
-  const g = await nfe.gerarNota(veiculoId, tipo, { numero, ncm: dados.ncm, valor: dados.valor, data: dados.data, referencia: dados.referencia, homologacao, xml: true });
+  const g = await nfe.gerarNota(veiculoId, tipo, { numero, ncm: dados.ncm, valor: dados.valor, data: dados.data, referencia: dados.referencia, origemXml: dados.origemXml, homologacao, xml: true });
   const id = Number(db.conexao.prepare("INSERT INTO nfe_envios (veiculo_id, tipo, ambiente, numero, chave, situacao) VALUES (?, ?, ?, ?, ?, 'enviando')")
     .run(Number(veiculoId), tipo, ambiente, numero, g.chave).lastInsertRowid);
   const atualizar = (situacao, extra = {}) => db.conexao.prepare('UPDATE nfe_envios SET situacao = ?, cstat = ?, motivo = ?, protocolo = ?, xml = ? WHERE id = ?')

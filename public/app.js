@@ -157,6 +157,7 @@ function blocoPessoa(prefixo, titulo, p = {}) {
       ${campo('Cidade', `${prefixo}.cidade`, { valor: p.cidade, largura: 'c5' })}
       ${campo('UF', `${prefixo}.uf`, { valor: p.uf, largura: 'c2', extra: 'maxlength="2"' })}
       ${campo('E-mail', `${prefixo}.email`, { valor: p.email, tipo: 'email', largura: 'c6' })}
+      ${campo('Inscrição estadual (só empresa)', `${prefixo}.ie`, { valor: p.ie, largura: 'c6' })}
     </div>
   </fieldset>`;
 }
@@ -881,7 +882,7 @@ async function telaCarro(id) {
   </div>
 
   ${vendido ? '<div class="cartao" id="cartao-avaliacao"><h2>Avaliação no Google</h2><p class="suave pequeno">Carregando convite…</p></div>' : ''}
-  ${v.tipo_entrada === 'compra' ? `<div class="cartao" id="cartao-nfe-entrada_compra"><h2>${TITULO_NFE.entrada_compra}</h2><p class="suave pequeno">Carregando…</p></div>` : ''}
+  ${v.tipo_entrada === 'compra' ? `<div class="cartao" id="cartao-nfe-entrada_compra"><h2>${TITULO_NFE.entrada_compra}</h2><p class="suave pequeno">Carregando…</p></div><div class="cartao" id="cartao-nfe-devolucao_compra"><h2>${TITULO_NFE.devolucao_compra}</h2><p class="suave pequeno">Carregando…</p></div>` : ''}
   ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? ['entrada_consignacao', 'devolucao_consignacao'].map(t => `<div class="cartao" id="cartao-nfe-${t}"><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('') : ''}
   ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
 
@@ -1019,6 +1020,7 @@ const TITULO_NFE = {
   entrada_compra: 'Nota fiscal de entrada (compra · CFOP 1102)',
   entrada_consignacao: 'Nota fiscal de entrada (consignação)',
   devolucao_consignacao: 'Nota fiscal de devolução (consignação)',
+  devolucao_compra: 'Nota fiscal de devolução de compra (CFOP 5202)',
   venda: 'Nota fiscal de venda',
 };
 // Salva o arquivo da nota. No Chrome/Edge abre a janela "Salvar como" já na última pasta usada para as notas
@@ -1094,7 +1096,7 @@ async function blocoNfeDireta(id, tipo, form) {
     botao.disabled = true;
     botao.textContent = 'Enviando à SEFAZ… não feche';
     try {
-      const r = await api('POST', `/veiculos/${id}/nfe/${tipo}/direta`, { ...dados, senha, confirmar: true, confirmarProducao: real });
+      const r = await api('POST', `/veiculos/${id}/nfe/${tipo}/direta`, { ...dados, origemXml: form._origemXml || undefined, senha, confirmar: true, confirmarProducao: real });
       aviso(`${real ? 'Nota' : 'Nota de TESTE'} nº ${r.numero} autorizada. Protocolo ${r.protocolo}.`);
     } catch (e) {
       aviso(e.message, true);
@@ -1123,8 +1125,12 @@ async function cartaoNfe(id, tipo) {
       ${campo('Valor da nota', 'valor', { valor: paraTexto(s.valor), dinheiro: true, obrig: true, largura: 'c4' })}
       ${campo('Data e hora', 'data', { valor: agoraLocal().slice(0, 16), tipo: 'datetime-local', obrig: true, largura: 'c4' })}
       ${s.referencia !== null ? `
-      ${campo('Chave da nota de entrada', 'referencia', { valor: s.referencia, obrig: true, largura: 'c12', extra: 'inputmode="numeric" maxlength="54" placeholder="44 números da DANFE da entrada"' })}
-      <div class="campo c12"><small class="suave">${s.entrada ? `Já preenchida com a nota de entrada nº ${s.entrada.numero}, gerada pelo sistema.` : 'Se a entrada foi feita direto no Sebrae, copie a chave de acesso dela (está na DANFE).'} Use quando o carro volta para o dono ou quando o dono transfere direto para o comprador.</small></div>` : ''}
+      ${campo(tipo === 'devolucao_compra' ? 'Chave da nota de venda da loja (ou da sua entrada)' : 'Chave da nota de entrada', 'referencia', { valor: s.referencia, obrig: true, largura: 'c12', extra: 'inputmode="numeric" maxlength="54" placeholder="44 números da DANFE da entrada"' })}
+      <div class="campo c12"><small class="suave">${s.entrada ? `Já preenchida com a nota de entrada nº ${s.entrada.numero}, gerada pelo sistema.` : 'Se a entrada foi feita direto no Sebrae, copie a chave de acesso dela (está na DANFE).'} ${tipo === 'devolucao_compra' ? 'Use quando o carro comprado volta para quem vendeu. Se a loja emitiu nota de venda, a devolução aponta a nota dela.' : 'Use quando o carro volta para o dono ou quando o dono transfere direto para o comprador.'}</small></div>` : ''}
+      ${tipo === 'devolucao_compra' ? `
+      <div class="campo c12"><label for="xml-origem-${tipo}"><b>XML da nota de venda da loja</b> (recomendado: a devolução sai com o mesmo ICMS da nota dela, para a loja estornar o ICMS)</label>
+        <input id="xml-origem-${tipo}" type="file" accept=".xml,text/xml,application/xml">
+        <small class="suave" id="xml-origem-info-${tipo}">Sem o XML, o ICMS sai no padrão (18% sobre 10% do valor), que pode não bater com o da nota da loja. PIS/COFINS saem 07, como sempre.</small></div>` : ''}
       ${tipo === 'venda' ? `
       <div class="campo c12"><span><b>Dados do CRLV para o RENAVE</b> (aba "Veículo Novo" do Sebrae). Ficam guardados no carro.</span></div>
       ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: true, largura: 'c4' })}
@@ -1142,14 +1148,34 @@ async function cartaoNfe(id, tipo) {
       ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}` : ''}
       <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
     </form>
-    ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
+    ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
-    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
+    <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
     const form = document.getElementById(`form-nfe-${tipo}`);
+    // Devolução de compra: lê o XML da nota de venda da loja e mostra o que vai sair espelhado (o servidor confere tudo de novo)
+    const xmlOrigem = document.getElementById(`xml-origem-${tipo}`);
+    if (xmlOrigem) xmlOrigem.addEventListener('change', async () => {
+      const info = document.getElementById(`xml-origem-info-${tipo}`);
+      form._origemXml = null;
+      const arq = xmlOrigem.files[0];
+      if (!arq) return;
+      const texto = await arq.text();
+      const doc = new DOMParser().parseFromString(texto, 'application/xml');
+      const chave = (doc.querySelector('infNFe')?.getAttribute('Id') || '').replace(/^NFe/, '');
+      if (!/^\d{44}$/.test(chave)) { info.textContent = 'Esse arquivo não parece o XML de uma NF-e. Escolha o XML da nota de venda da loja.'; return; }
+      const tot = doc.getElementsByTagName('ICMSTot')[0];
+      const totv = n => Math.round(Number(tot?.getElementsByTagName(n)[0]?.textContent || 0) * 100);
+      const nome = doc.getElementsByTagName('emit')[0]?.getElementsByTagName('xNome')[0]?.textContent || '';
+      const nNF = doc.getElementsByTagName('nNF')[0]?.textContent || '';
+      form._origemXml = texto;
+      form.elements.referencia.value = chave;
+      form.elements.valor.value = 'R$ ' + paraTexto(totv('vNF'));
+      info.innerHTML = `Espelho da nota nº <b>${esc(nNF)}</b> de <b>${esc(nome)}</b>: valor ${reais(totv('vNF'))}, base do ICMS ${reais(totv('vBC'))}, ICMS ${reais(totv('vICMS'))}. A loja, o valor, a chave e o ICMS saem iguais aos da nota dela (PIS/COFINS 07).`;
+    });
     form.addEventListener('submit', e => {
       e.preventDefault();
       enviar(form, async dados => {
-        const r = await api('POST', `/veiculos/${id}/nfe/${tipo}`, dados);
+        const r = await api('POST', `/veiculos/${id}/nfe/${tipo}`, { ...dados, origemXml: form._origemXml || undefined });
         const salvo = await salvarArquivoNota(r);
         aviso(salvo === false
           ? `Nota nº ${r.numero} gerada, mas o arquivo não foi salvo. Clique em "Baixar arquivo da nota" de novo (o número é o mesmo).`

@@ -177,6 +177,8 @@ for (const [coluna, tipo] of [['tomador_doc', 'TEXT'], ['tomador_nome', 'TEXT'],
 }
 const colunasPessoa = db.prepare('PRAGMA table_info(pessoas)').all().map(c => c.name);
 if (!colunasPessoa.includes('arquivado_em')) db.exec('ALTER TABLE pessoas ADD COLUMN arquivado_em TEXT');
+// Inscrição estadual de empresa (ex.: loja que vendeu um carro): vai na nota quando o destinatário é contribuinte
+if (!colunasPessoa.includes('ie')) db.exec('ALTER TABLE pessoas ADD COLUMN ie TEXT');
 const colunasVeiculo = db.prepare('PRAGMA table_info(veiculos)').all().map(c => c.name);
 // Quando o CRV está no nome de outra pessoa (procuração): a nota e o campo "Proprietário no CRV" do contrato usam esta pessoa
 if (!colunasVeiculo.includes('proprietario_crv_id')) db.exec('ALTER TABLE veiculos ADD COLUMN proprietario_crv_id INTEGER REFERENCES pessoas(id)');
@@ -193,7 +195,7 @@ for (const [coluna, tipo] of [['forma_pagamento', 'TEXT'], ['valor_pix', 'INTEGE
 const TIPOS_ENTRADA =['compra', 'compra_sem_transferir', 'consignacao', 'troca'];
 const CATEGORIAS_GASTO = ['oficina', 'pecas', 'combustivel', 'documentacao', 'estetica', 'comissao', 'outros'];
 
-const CAMPOS_PESSOA = ['nome', 'cpf', 'rg', 'nascimento', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf'];
+const CAMPOS_PESSOA = ['nome', 'cpf', 'rg', 'nascimento', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf', 'ie'];
 const CAMPOS_VEICULO = ['marca_modelo', 'ano_fab', 'ano_mod', 'cor', 'combustivel', 'placa', 'renavam', 'chassi', 'km_entrada',
   'tipo_entrada', 'entrada_em', 'valor_compra', 'valor_consignacao', 'comissao', 'forma_pagamento', 'obs'];
 const CAMPOS_GASTO = ['data', 'categoria', 'descricao', 'valor'];

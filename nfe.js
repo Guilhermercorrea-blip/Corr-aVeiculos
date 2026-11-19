@@ -152,6 +152,16 @@ const TIPOS_NOTA = {
     bloqueio: d => (TIPOS_CONSIGNACAO.includes(d.veiculo.tipo_entrada) ? null : 'A devolução de consignação é só para carro em consignação, troca ou compra sem transferir'),
     valor: d => (d.veiculo.tipo_entrada === 'compra_sem_transferir' ? d.veiculo.valor_consignacao : d.veiculo.valor_compra),
   },
+  // Carro comprado que volta para quem vendeu (ex.: chegou diferente do anúncio). Igual às notas 1066 e 1073 do Sebrae:
+  // saída (tpNF 1), finalidade devolução (4), CFOP 5202 (6202 fora de SP), aponta a nota de origem (a de venda da loja
+  // vendedora ou a nossa entrada), ICMS 20 destacado (18% sobre 10% do valor), PIS/COFINS 07, frete por conta do destinatário.
+  devolucao_compra: {
+    nome: 'devolução de compra', natOp: 'DEVOLUÇÃO DE MERCADORIA', cfop: 5202, cfopFora: 6202, tpNF: 1, finNFe: 4, referencia: true, refTipo: 'entrada_compra',
+    indFinal: 0, modFrete: 1, icmsDestacado: true,
+    pessoa: d => d.fornecedor, quem: 'vendedor',
+    bloqueio: d => (d.veiculo.tipo_entrada === 'compra' ? null : 'A devolução de compra é só para carro comprado pela loja (CFOP 1102).'),
+    valor: d => d.veiculo.valor_compra,
+  },
   venda: {
     nome: 'venda', natOp: 'SAIDA', cfop: 5102, tpNF: 1,
     pessoa: d => d.comprador, quem: 'comprador',
@@ -230,7 +240,7 @@ function sugestao(veiculoId, tipo) {
   const anterior = db.conexao.prepare('SELECT * FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(veiculoId, tipo);
   // A devolução aponta a nota de entrada: a gerada pelo sistema, se houver (senão o usuário cola a chave)
   const entrada = config.referencia
-    ? db.conexao.prepare("SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = 'entrada_consignacao' ORDER BY id DESC").get(veiculoId)
+    ? db.conexao.prepare('SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(veiculoId, config.refTipo || 'entrada_consignacao')
     : null;
   const valor = anterior?.valor ?? entrada?.valor ?? config.valor(d) ?? null;
   return {
@@ -277,20 +287,43 @@ function validarFicha(f, v) {
   };
 }
 
+// Devolução de compra como ESPELHO do ICMS da nota de venda da loja (lida do XML dela), para a loja conseguir estornar o ICMS.
+// PIS/COFINS ficam CST 07, como nas devoluções 1066 e 1073 (confirmado pela loja em 19/11/2026).
+function linhasEspelho(o, valor) {
+  const r = c => dinheiro(c || 0);
+  const i = o.icms;
+  if (i.grupo !== 'ICMS20') throw db.erro(`O ICMS da nota da loja é do tipo ${i.grupo} (CST ${i.CST}). Por enquanto o espelho só sai para ICMS 20 (com redução de base). Fale com o contador.`);
+  const zeros = n => Array(n).fill('0.00').join('|');
+  return {
+    N: `N04|${i.orig}|20|${i.modBC}|${i.pRedBC}|${r(i.vBC)}|${i.pICMS}|${r(i.vICMS)}|||||||`,
+    Q: 'Q04|07|',
+    S: 'S04|07|',
+    W: `W02|${r(i.vBC)}|${r(i.vICMS)}|${zeros(12)}|${dinheiro(valor)}|${zeros(9)}|${dinheiro(valor)}|0.00|`,
+  };
+}
+
 async function gerarNota(veiculoId, tipo, dados = {}) {
   const config = TIPOS_NOTA[tipo];
   if (!config) throw db.erro('Tipo de nota inválido', 404);
   const d = db.obterVeiculo(veiculoId);
   const v = d.veiculo;
-  const p = config.pessoa(d);
+  // Devolução de compra com o XML da nota de venda da loja: a nota sai como espelho dela (impostos, valor, chave e dados da loja)
+  let origem = null;
+  if (tipo === 'devolucao_compra' && dados.origemXml) {
+    try { origem = require('./nfe-origem').lerNotaOrigem(dados.origemXml); } catch (e) { throw db.erro(e.message); }
+    if (origem.vProd !== origem.valor) throw db.erro('A nota da loja tem frete, desconto ou outros valores além do carro. Fale com o contador antes de devolver.');
+  }
+  const p = origem
+    ? { ...config.pessoa(d), nome: origem.loja.nome, cpf: origem.loja.cnpj, ie: origem.loja.ie, telefone: origem.loja.telefone, endereco: origem.loja.endereco, numero: origem.loja.numero, bairro: origem.loja.bairro, cidade: origem.loja.cidade, uf: origem.loja.uf, cep: origem.loja.cep }
+    : config.pessoa(d);
   const bloqueio = config.bloqueio(d);
   if (bloqueio) throw db.erro(bloqueio);
 
   const numero = Number(dados.numero);
   if (!Number.isSafeInteger(numero) || numero < 1 || numero > 999999999) throw db.erro('Número da nota inválido');
-  const ncm = String(dados.ncm || '');
+  const ncm = String((origem && NCM[origem.ncm] ? origem.ncm : dados.ncm) || '');
   if (!NCM[ncm]) throw db.erro('Escolha o tipo do veículo (NCM)');
-  const valor = Number(dados.valor);
+  const valor = origem ? origem.valor : Number(dados.valor);
   if (!Number.isSafeInteger(valor) || valor <= 0) throw db.erro('Informe o valor da nota');
   const usado = db.conexao.prepare('SELECT veiculo_id, tipo FROM nfe_notas WHERE numero = ? AND serie = 1').get(numero);
   if (usado && (usado.veiculo_id !== Number(veiculoId) || usado.tipo !== tipo)) throw db.erro(`A nota nº ${numero} já foi gerada para outra nota. Use o próximo número.`, 409);
@@ -313,12 +346,12 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const ficha = tipo === 'venda' ? validarFicha({ ...lerFicha(veiculoId), ...(dados.ficha || {}) }, v) : null;
   let referencia = null;
   if (config.referencia) {
-    referencia = digitos(dados.referencia);
+    referencia = digitos(origem ? origem.chave : dados.referencia);
     if (referencia.length !== 44 || digitoChave(referencia.slice(0, 43)) !== Number(referencia[43])) {
       throw db.erro('Informe a chave de acesso da nota de entrada (44 números, está na DANFE ou no Sebrae)');
     }
   }
-  const cMun = await codigoMunicipio(p);
+  const cMun = origem?.loja.cMun || await codigoMunicipio(p);
   if (!cMun) throw db.erro(`Não achei o código IBGE da cidade "${p.cidade}/${uf}". Confira a cidade e o CEP do ${config.quem}.`);
   const pagamentos = tipo === 'venda' ? pagamentosVenda(d.venda, valor) : null;
 
@@ -336,12 +369,18 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const nomeDest = homologacao ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL' : semAcento(p.nome).toUpperCase();
   const vUn = (valor / 100).toFixed(10);
   // Venda a pessoa não contribuinte (indIEDest 9) vai como consumidor final, senão a SEFAZ rejeita (696)
-  const indFinal = config.tpNF === 1 ? 1 : 0;
+  const indFinal = config.indFinal ?? (config.tpNF === 1 ? 1 : 0);
+  // Empresa com inscrição estadual (ex.: loja que vendeu o carro): contribuinte (1). Senão, o que o tipo de nota diz.
+  const ieDest = doc.length === 14 ? digitos(p.ie) : '';
+  const indIEDest = ieDest ? 1 : (config.indIEDest || 9);
+  const cfop = config.cfopFora && uf !== 'SP' ? config.cfopFora : config.cfop;
+  const icmsNota = config.icmsDestacado ? { base: Math.round(valor * 0.10), valor: Math.round(Math.round(valor * 0.10) * 0.18) } : null;
   const venda = tipo === 'venda';
   const c = venda ? calcularVenda(valor, v.valor_compra) : null;
   const zeros = n => Array(n).fill('0.00').join('|');
 
   // Layout TXT do Emissor Sebrae 4.01, copiado de notas exportadas pelo próprio emissor (1079 e 1054).
+  const espelho = origem ? linhasEspelho(origem, valor) : null;
   const linhas = [
     'NOTAFISCAL|1',
     `A|4.00|NFe${chave}|`,
@@ -350,23 +389,26 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     `C|${EMITENTE.xNome}|${EMITENTE.xFant}|${EMITENTE.ie}||${EMITENTE.im}|${EMITENTE.cnae}|${EMITENTE.crt}||`,
     `C02|${EMITENTE.cnpj}|`,
     `C05|${EMITENTE.xLgr}|${EMITENTE.nro}||${EMITENTE.xBairro}|${EMITENTE.cMun}|${EMITENTE.xMun}|${EMITENTE.uf}|${EMITENTE.cep}|1058|BRASIL|${EMITENTE.fone}|`,
-    `E|${campoTxt(nomeDest)}|${config.indIEDest || 9}|||||`,
+    `E|${campoTxt(nomeDest)}|${indIEDest}|${ieDest}||||`,
     `${doc.length === 11 ? 'E03' : 'E02'}|${doc}|`,
     `E05|${campoTxt(p.endereco)}|${campoTxt(p.numero)}||${campoTxt(p.bairro)}|${cMun}|${campoTxt(p.cidade)}|${uf}|${digitos(p.cep)}|1058|BRASIL|${fone.length >= 6 && fone.length <= 14 ? fone : ''}|`,
     'H|1||',
-    `I|S${veiculoId}|||${campoTxt(descricaoVeiculo(v), 120)}|${ncm}|||${config.cfop}|UN|1.0000|${vUn}|${valorTxt}|||UN|1.0000|${vUn}|||||1|||||${venda ? 'SP020110' : ''}|`,
+    `I|S${veiculoId}|||${campoTxt(descricaoVeiculo(v), 120)}|${ncm}|||${cfop}|UN|1.0000|${vUn}|${valorTxt}|||UN|1.0000|${vUn}|||||1|||||${venda ? 'SP020110' : ''}|`,
     ...(venda ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
     'M||',
     'N|',
-    venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||` : `N04|0|20|3|${config.pRedBC || '90.00'}|0.00|18.0000|0.00|||||||`,
+    espelho ? espelho.N : venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||`
+      : icmsNota ? `N04|0|20|3|90.0000|${dinheiro(icmsNota.base)}|18.0000|${dinheiro(icmsNota.valor)}|||||||`
+        : `N04|0|20|3|${config.pRedBC || '90.00'}|0.00|18.0000|0.00|||||||`,
     'Q|',
-    venda ? `Q02|01|${dinheiro(c.baseLucro)}|0.6500|${dinheiro(c.pis)}|` : 'Q04|07|',
+    espelho ? espelho.Q : venda ? `Q02|01|${dinheiro(c.baseLucro)}|0.6500|${dinheiro(c.pis)}|` : 'Q04|07|',
     'S|',
-    venda ? `S02|01|${dinheiro(c.baseLucro)}|3.0000|${dinheiro(c.cofins)}|` : 'S04|07|',
+    espelho ? espelho.S : venda ? `S02|01|${dinheiro(c.baseLucro)}|3.0000|${dinheiro(c.cofins)}|` : 'S04|07|',
     'W|',
-    venda
+    espelho ? espelho.W : venda
       ? `W02|${dinheiro(c.baseIcms)}|${dinheiro(c.icms)}|${zeros(12)}|${valorTxt}|${zeros(6)}|${dinheiro(c.pis)}|${dinheiro(c.cofins)}|0.00|${valorTxt}|0.00|`
-      : `W02|${zeros(14)}|${valorTxt}|${zeros(9)}|${valorTxt}|0.00|`,
+      : icmsNota ? `W02|${dinheiro(icmsNota.base)}|${dinheiro(icmsNota.valor)}|${zeros(12)}|${valorTxt}|${zeros(9)}|${valorTxt}|0.00|`
+        : `W02|${zeros(14)}|${valorTxt}|${zeros(9)}|${valorTxt}|0.00|`,
     'W04c|0.00|',
     'W04e|0.00|',
     'W04g|0.00|',
@@ -378,7 +420,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   // XML para enviar direto à SEFAZ (sem o Emissor do Sebrae), com os mesmos valores do TXT acima
   const xml = dados.xml === true ? require('./nfe-xml').montarInfNFe({
     chave, cNF, cDV, numero, dhEmi, uf, homologacao, indFinal, referencia, nomeDest, doc, cMun, veiculoId, ncm, valor, vUn, venda,
-    natOp: config.natOp, tpNF: config.tpNF, finNFe: config.finNFe, cfop: config.cfop, pRedBC: config.pRedBC, indIEDest: config.indIEDest,
+    natOp: config.natOp, tpNF: config.tpNF, finNFe: config.finNFe, cfop, pRedBC: config.pRedBC, indIEDest, ieDest, icmsNota,
+    espelho: origem ? { icms: origem.icms } : null,
     modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix,
     emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
     xProd: campoTxt(descricaoVeiculo(v), 120),
@@ -391,8 +434,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     if (ficha) db.conexao.prepare('UPDATE veiculos SET ficha_nfe = ? WHERE id = ?').run(JSON.stringify({ ...ficha, chassi: undefined }), veiculoId);
   }
 
-  const sufixo = { venda: 'venda', entrada_compra: 'entrada-compra', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao' }[tipo];
-  return { conteudo, xml, chave, numero, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
+  const sufixo = { venda: 'venda', entrada_compra: 'entrada-compra', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao', devolucao_compra: 'devolucao-compra' }[tipo];
+  return { conteudo, xml, chave, numero, espelho: origem ? { chave: origem.chave, numero: origem.numero, loja: origem.loja.nome, valor: origem.valor, vICMS: origem.icms.vICMS, vBC: origem.icms.vBC } : null, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
 }
 const gerarEntradaConsignacao = (id, dados) => gerarNota(id, 'entrada_consignacao', dados);
 

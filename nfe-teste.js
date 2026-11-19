@@ -75,4 +75,29 @@ function pedirSenha(texto) {
       if (r.bruto) console.log(r.bruto);
     }
   }
+  if (modo === 'devolucao') {
+    // Devolução de compra ESPELHADA, em homologação: loja de teste com os dados da JAVEP (empresa, da nota 1066),
+    // XML de venda montado só para o teste (mesmo ICMS da 1066 e PIS/COFINS de exemplo). Banco temporário.
+    const fs = require('node:fs');
+    process.env.PASTA_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'nfe-homolog-dev-'));
+    const db = require('./db');
+    const nfe = require('./nfe');
+    const ref = '35260950752211000230550020002810531745567770';
+    const origemXml = `<nfeProc><NFe><infNFe Id="NFe${ref}" versao="4.00"><ide><nNF>281053</nNF><tpNF>1</tpNF></ide>` +
+      '<emit><CNPJ>50752211000230</CNPJ><xNome>JAVEP VEICULOS PECAS E SERVICOS LTDA</xNome><enderEmit><xLgr>AV COMENDADOR ALFREDO MAFFEI</xLgr><nro>200</nro><xBairro>JD GIBERTONI</xBairro><cMun>3548906</cMun><xMun>Sao Carlos</xMun><UF>SP</UF><CEP>13561270</CEP><fone>162107700</fone></enderEmit><IE>637249930116</IE></emit>' +
+      '<dest><CNPJ>07793106000139</CNPJ></dest><det nItem="1"><prod><NCM>87032210</NCM><vProd>25500.00</vProd></prod><imposto>' +
+      '<ICMS><ICMS20><orig>0</orig><CST>20</CST><modBC>3</modBC><pRedBC>90.00</pRedBC><vBC>2550.00</vBC><pICMS>18.00</pICMS><vICMS>459.00</vICMS></ICMS20></ICMS>' +
+      '<PIS><PISAliq><CST>01</CST><vBC>1000.00</vBC><pPIS>0.6500</pPIS><vPIS>6.50</vPIS></PISAliq></PIS><COFINS><COFINSAliq><CST>01</CST><vBC>1000.00</vBC><pCOFINS>3.0000</pCOFINS><vCOFINS>30.00</vCOFINS></COFINSAliq></COFINS></imposto></det>' +
+      '<total><ICMSTot><vBC>2550.00</vBC><vICMS>459.00</vICMS><vPIS>6.50</vPIS><vCOFINS>30.00</vCOFINS><vNF>25500.00</vNF></ICMSTot></total></infNFe></NFe></nfeProc>';
+    const { id } = db.criarCompra({ pessoa: { nome: 'JAVEP VEICULOS PECAS E SERVICOS LTDA', cpf: '50752211000230', endereco: 'AV COMENDADOR ALFREDO MAFFEI', numero: '200', bairro: 'JD GIBERTONI', cidade: 'Sao Carlos', uf: 'SP', cep: '13561270' },
+      veiculo: { marca_modelo: 'CARRO DE TESTE FOX', ano_fab: 2012, ano_mod: 2012, cor: 'Prata', placa: 'TST1A23', chassi: '9BWAA05Z0C4000001', tipo_entrada: 'compra', valor_compra: 2550000 } });
+    const numero = 800000000 + (Math.floor(Date.now() / 1000) % 100000000);
+    const g = await nfe.gerarNota(id, 'devolucao_compra', { numero, ncm: '87032210', valor: 2550000, homologacao: true, xml: true, origemXml });
+    console.log('Devolução de TESTE nº', numero, '| espelho:', JSON.stringify(g.espelho));
+    const r = await sefaz.autorizar('homologacao', sefaz.assinarNfe(g.xml, g.chave, cert), cert);
+    console.log('Lote: cStat', r.cStatLote, '|', r.xMotivoLote);
+    console.log('Nota: cStat', r.cStat, '|', r.xMotivo, r.nProt ? '| protocolo ' + r.nProt : '');
+    if (r.bruto) console.log(r.bruto);
+    console.log(r.cStat === '100' ? 'AUTORIZADA em homologação (sem valor fiscal).' : 'Não autorizou: me mostre esta tela.');
+  }
 })().catch(e => { console.error('ERRO:', e.message); process.exit(1); });
