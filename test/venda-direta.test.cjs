@@ -75,3 +75,10 @@ test('venda direta sai SEMPRE em homologação, mesmo com o servidor em produç�
     assert.equal(db.conexao.prepare('SELECT COUNT(*) n FROM nfe_notas WHERE veiculo_id = ?').get(id).n, 0, 'teste não gasta número real');
   } finally { delete process.env.NFE_AMBIENTE; }
 });
+
+test('valor da nota menor que o do contrato: os pagamentos vão até o valor da nota, sem erro', () => {
+  const lista = nfe.pagamentosVenda({ valor_pix: 1000000, valor_financiado: 2000000 }, 2500000);
+  assert.deepEqual(lista.map(p => [p.tPag, p.valor]), [['17', 1000000], ['18', 1500000]]);
+  const maior = nfe.pagamentosVenda({ valor_pix: 1000000 }, 1200000);
+  assert.deepEqual(maior.map(p => [p.tPag, p.valor, p.xPag]), [['17', 1000000, ''], ['99', 200000, 'Outros']]);
+});

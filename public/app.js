@@ -1166,7 +1166,7 @@ async function cartaoNfe(id, tipo) {
         : '<div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>'}
     </form>
     ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra', 'venda'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
-    ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
+    ${s.venda ? `<div id="tributos-venda" class="pequeno" style="margin-top:10px;padding:10px;border:1px solid #c9d1dc;border-radius:6px"></div>` : ''}
     <p class="suave pequeno" data-some-autorizada>Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
     // Nota feita pelo Emissor: anexar o XML autorizado libera "Baixar nota" (DANFE) e "Baixar XML"
     el.querySelectorAll('[data-anexar-xml]').forEach(inp => inp.addEventListener('change', async () => {
@@ -1189,6 +1189,27 @@ async function cartaoNfe(id, tipo) {
       } catch (e) { aviso(e.message, true); }
     }));
     const form = document.getElementById(`form-nfe-${tipo}`);
+    // Nota de venda: tributos calculados na hora, conforme o valor digitado (pode ser diferente do contrato)
+    const caixaTributos = document.getElementById('tributos-venda');
+    if (caixaTributos) {
+      const mostrar = () => {
+        let valor = null;
+        try { valor = paraCentavos(form.elements.valor.value); } catch { valor = null; }
+        const contrato = s.venda.valorContrato ? `Valor da venda no contrato: <b>${reais(s.venda.valorContrato)}</b>. Compra: ${reais(s.venda.valorCompra)}.` : '';
+        if (!valor || valor <= 0) { caixaTributos.innerHTML = `<b>Tributos da venda</b><br><span class="suave">Digite o valor da nota para ver os impostos.</span><br>${contrato}`; return; }
+        const baseIcms = Math.round(valor * 0.10), icms = Math.round(baseIcms * 0.18);
+        const lucro = Math.max(0, valor - s.venda.valorCompra), pis = Math.round(lucro * 0.0065), cofins = Math.round(lucro * 0.03);
+        caixaTributos.innerHTML = `<b>Tributos desta nota</b> (valor ${reais(valor)})
+          <table class="pequeno" style="margin:6px 0"><tbody>
+          <tr><td>ICMS: 18% sobre 10% do valor (${reais(baseIcms)})</td><td class="num"><b>${reais(icms)}</b></td></tr>
+          <tr><td>PIS: 0,65% sobre o lucro (${reais(lucro)} = venda − compra)</td><td class="num"><b>${reais(pis)}</b></td></tr>
+          <tr><td>COFINS: 3% sobre o lucro</td><td class="num"><b>${reais(cofins)}</b></td></tr>
+          <tr><td><b>Total de tributos</b></td><td class="num"><b>${reais(icms + pis + cofins)}</b></td></tr>
+          </tbody></table>${contrato}${s.venda.valorContrato && valor !== s.venda.valorContrato ? ' <span style="color:#b7791f">O valor da nota está diferente do contrato.</span>' : ''}`;
+      };
+      form.elements.valor.addEventListener('input', mostrar);
+      mostrar();
+    }
     // Devolução de compra: lê o XML da nota de venda da loja e mostra o que vai sair espelhado (o servidor confere tudo de novo)
     const xmlOrigem = document.getElementById(`xml-origem-${tipo}`);
     if (xmlOrigem) xmlOrigem.addEventListener('change', async () => {

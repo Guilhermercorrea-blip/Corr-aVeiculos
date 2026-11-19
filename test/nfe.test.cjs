@@ -82,8 +82,10 @@ test('gera a nota de venda no padrão da nota 1054 (com RENAVE)', async () => {
   db.registrarVenda(id, { pessoa: { ...dono, nome: 'Comprador Teste', cpf: '86288366757' }, venda: { valor_venda: 2050000, meios_pagamento: ['pix'], valor_pix: 2050000, km_saida: 1000 } });
   const s = nfe.sugestao(id, 'venda');
   assert.equal(s.permitido, true);
-  assert.equal(s.valor, 2050000);
-  assert.deepEqual(s.calculo, { baseIcms: 205000, icms: 36900, baseLucro: 100000, pis: 650, cofins: 3000 });
+  // o valor da nota de venda é digitado na hora (pode ser diferente do contrato); a tela recebe o do contrato e a compra para calcular
+  assert.equal(s.valor, null);
+  assert.deepEqual(s.venda, { valorContrato: 2050000, valorCompra: 1950000 });
+  assert.deepEqual(nfe.calcularVenda(2050000, 1950000), { baseIcms: 205000, icms: 36900, baseLucro: 100000, pis: 650, cofins: 3000 });
   assert.equal(s.ficha.combustivel, '16');
   assert.equal(s.ficha.cor, '10');
   assert.equal(s.ficha.cilindrada, '999');
@@ -110,7 +112,7 @@ test('formas de pagamento fecham com o valor da nota', () => {
   const p = nfe.pagamentosVenda({ valor_pix: 1000000, valor_financiado: 3000000, valor_troca: 1500000, valor_saldo: 500000 }, 6000000);
   assert.deepEqual(p.map(x => [x.indPag, x.tPag, x.valor]), [[0, '17', 1000000], [0, '18', 3000000], [0, '99', 1500000], [1, '05', 500000]]);
   assert.equal(nfe.pagamentosVenda({ valor_pix: 100 }, 300).at(-1).valor, 200);
-  assert.throws(() => nfe.pagamentosVenda({ valor_pix: 500 }, 300), /passa do valor/);
+  assert.deepEqual(nfe.pagamentosVenda({ valor_pix: 500 }, 300).map(p => p.valor), [300]); // nota menor que a venda: o pagamento vai até o valor da nota
 });
 
 test('devolução de consignação no padrão das notas 1067-1069 (aponta a chave da entrada)', async () => {

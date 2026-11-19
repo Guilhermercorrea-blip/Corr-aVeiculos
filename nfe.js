@@ -214,7 +214,11 @@ function calcularVenda(valor, valorCompra) {
 // Formas de pagamento da venda no formato da nota (tPag). A soma fecha com o valor da nota.
 function pagamentosVenda(vd, valor) {
   const lista = [];
-  const add = (indPag, tPag, centavos, xPag = '') => { if (centavos > 0) lista.push({ indPag, tPag, xPag, valor: centavos }); };
+  let resta = valor;
+  const add = (indPag, tPag, centavos, xPag = '') => {
+    const v = Math.min(centavos || 0, resta);
+    if (v > 0) { lista.push({ indPag, tPag, xPag, valor: v }); resta -= v; }
+  };
   add(0, '17', vd.valor_pix);
   add(0, '16', vd.valor_deposito);
   add(0, '01', vd.valor_dinheiro);
@@ -222,9 +226,7 @@ function pagamentosVenda(vd, valor) {
   add(0, '18', vd.valor_financiado);
   add(0, '99', vd.valor_troca, 'Veiculo usado recebido na troca');
   add(1, '05', vd.valor_saldo);
-  const soma = lista.reduce((s, p) => s + p.valor, 0);
-  if (soma > valor) throw db.erro('A soma das formas de pagamento passa do valor da venda. Confira a venda.');
-  add(0, '99', valor - soma, 'Outros');
+  add(0, '99', resta, 'Outros');
   return lista;
 }
 
@@ -243,7 +245,7 @@ function sugestao(veiculoId, tipo) {
     // a autorizada primeiro: um arquivo gerado e nunca transmitido não serve de referência
     ? db.conexao.prepare('SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY (xml_autorizado IS NOT NULL OR protocolo IS NOT NULL) DESC, id DESC').get(veiculoId, config.refTipo || 'entrada_consignacao')
     : null;
-  const valor = anterior?.valor ?? entrada?.valor ?? config.valor(d) ?? null;
+  const valor = tipo === 'venda' ? (anterior?.valor ?? null) : (anterior?.valor ?? entrada?.valor ?? config.valor(d) ?? null);
   return {
     referencia: config.referencia ? (anterior?.referencia || entrada?.chave || '') : null,
     entrada: entrada ? { numero: entrada.numero, chave: entrada.chave } : null,
@@ -253,6 +255,8 @@ function sugestao(veiculoId, tipo) {
     valor,
     ficha: sugerirFicha(d.veiculo, lerFicha(veiculoId)),
     calculo: tipo === 'venda' && valor ? calcularVenda(valor, d.veiculo.valor_compra) : null,
+    // para a tela calcular os tributos enquanto o valor é digitado
+    venda: tipo === 'venda' && d.venda ? { valorCompra: d.veiculo.valor_compra || 0, valorContrato: d.venda.valor_venda || 0 } : null,
     ultima: anterior ? { id: anterior.id, numero: anterior.numero, criado_em: anterior.criado_em, temXml: !!anterior.xml_autorizado, protocolo: anterior.protocolo || null } : null,
     opcoes: opcoesTela(),
   };
