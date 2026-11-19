@@ -532,6 +532,8 @@ function desfazerVenda(id) {
       if (t && t.status !== 'estoque') throw erro('O carro que entrou na troca já foi vendido. Desfaça aquela venda primeiro.');
     }
     db.prepare('DELETE FROM vendas WHERE id = ?').run(venda.id);
+    const notaTroca = venda.troca_veiculo_id && notaFiscalDoCarro(venda.troca_veiculo_id);
+    if (notaTroca) throw erro(`O carro que entrou na troca tem ${notaTroca}. Não dá para desfazer a venda apagando ele: fale com o contador.`, 409);
     if (venda.troca_veiculo_id) db.prepare('DELETE FROM veiculos WHERE id = ?').run(venda.troca_veiculo_id);
     atualizar('veiculos', id, { status: 'estoque' });
   });
@@ -539,9 +541,22 @@ function desfazerVenda(id) {
   return { id };
 }
 
+// Nota fiscal autorizada (ou com envio sem resposta) fica guardada por lei: o carro dela não pode ser apagado
+function notaFiscalDoCarro(id) {
+  const nfe = db.prepare("SELECT numero FROM nfe_notas WHERE veiculo_id = ? AND (xml_autorizado IS NOT NULL OR protocolo IS NOT NULL)").get(id);
+  if (nfe) return `a NF-e nº ${nfe.numero}`;
+  const envio = db.prepare("SELECT numero FROM nfe_envios WHERE veiculo_id = ? AND ambiente = 'producao' AND situacao IN ('autorizada', 'incerta', 'enviando')").get(id);
+  if (envio) return `a NF-e nº ${envio.numero}`;
+  const nfse = db.prepare("SELECT numero_nfse FROM nfse_notas WHERE veiculo_id = ? AND ambiente = 'producao' AND status IN ('emitida', 'incerta', 'enviando')").get(id);
+  if (nfse) return `a NFS-e nº ${nfse.numero_nfse || '(sem número ainda)'}`;
+  return null;
+}
+
 // Apaga o carro com gastos e anexos (para cadastros de teste ou feitos por engano)
 function excluirVeiculo(id) {
   const { veiculo, origemTroca } = obterVeiculo(id);
+  const nota = notaFiscalDoCarro(id);
+  if (nota) throw erro(`Este carro tem ${nota}. Carro com nota fiscal não pode ser excluído: a nota e o XML precisam ficar guardados.`, 409);
   if (veiculo.status === 'vendido') throw erro('Este carro está vendido. Desfaça a venda antes de excluir.');
   if (origemTroca) throw erro(`Este carro entrou na troca do ${origemTroca.marca_modelo}. Desfaça aquela venda para tirá-lo do estoque.`);
   const arquivos = db.prepare('SELECT arquivo FROM anexos WHERE veiculo_id = ?').all(id);

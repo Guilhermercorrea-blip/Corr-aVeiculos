@@ -240,7 +240,8 @@ function sugestao(veiculoId, tipo) {
   const anterior = db.conexao.prepare('SELECT * FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(veiculoId, tipo);
   // A devolução aponta a nota de entrada: a gerada pelo sistema, se houver (senão o usuário cola a chave)
   const entrada = config.referencia
-    ? db.conexao.prepare('SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(veiculoId, config.refTipo || 'entrada_consignacao')
+    // a autorizada primeiro: um arquivo gerado e nunca transmitido não serve de referência
+    ? db.conexao.prepare('SELECT numero, chave, valor FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY (xml_autorizado IS NOT NULL OR protocolo IS NOT NULL) DESC, id DESC').get(veiculoId, config.refTipo || 'entrada_consignacao')
     : null;
   const valor = anterior?.valor ?? entrada?.valor ?? config.valor(d) ?? null;
   return {
@@ -312,6 +313,13 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   if (tipo === 'devolucao_compra' && dados.origemXml) {
     try { origem = require('./nfe-origem').lerNotaOrigem(dados.origemXml); } catch (e) { throw db.erro(e.message); }
     if (origem.vProd !== origem.valor) throw db.erro('A nota da loja tem frete, desconto ou outros valores além do carro. Fale com o contador antes de devolver.');
+    // A nota da loja precisa ser deste carro: se o XML traz algum chassi (no grupo do veículo ou na descrição), tem de ser o deste carro
+    const textoOrigem = String(dados.origemXml).toUpperCase().replace(/<SIGNATURE[\s\S]*<\/SIGNATURE>/, '');
+    const chassiCarro = String(v.chassi || '').toUpperCase().replace(/\s/g, '');
+    const chassisNoXml = [...new Set([...textoOrigem.matchAll(/(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])/g)].map(m => m[0]).filter(c => /[A-Z]/.test(c) && /\d/.test(c)))];
+    if (chassiCarro && chassisNoXml.length && !chassisNoXml.includes(chassiCarro)) {
+      throw db.erro(`Essa nota da loja é de outro carro (chassi ${chassisNoXml[0]}). Escolha o XML da compra deste carro.`);
+    }
   }
   const p = origem
     ? { ...config.pessoa(d), nome: origem.loja.nome, cpf: origem.loja.cnpj, ie: origem.loja.ie, telefone: origem.loja.telefone, endereco: origem.loja.endereco, numero: origem.loja.numero, bairro: origem.loja.bairro, cidade: origem.loja.cidade, uf: origem.loja.uf, cep: origem.loja.cep }
@@ -327,6 +335,12 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   if (!Number.isSafeInteger(valor) || valor <= 0) throw db.erro('Informe o valor da nota');
   const usado = db.conexao.prepare('SELECT veiculo_id, tipo FROM nfe_notas WHERE numero = ? AND serie = 1').get(numero);
   if (usado && (usado.veiculo_id !== Number(veiculoId) || usado.tipo !== tipo)) throw db.erro(`A nota nº ${numero} já foi gerada para outra nota. Use o próximo número.`, 409);
+  // Depois de autorizada, a nota não muda mais: gerar de novo trocaria a chave e o cadastro deixaria de bater com o XML
+  if (dados.homologacao !== true) {
+    const autorizada = db.conexao.prepare('SELECT 1 FROM nfe_notas WHERE serie = 1 AND numero = ? AND (xml_autorizado IS NOT NULL OR protocolo IS NOT NULL)').get(numero)
+      || db.conexao.prepare("SELECT 1 FROM nfe_envios WHERE ambiente = 'producao' AND situacao = 'autorizada' AND numero = ?").get(numero);
+    if (autorizada) throw db.erro(`A nota nº ${numero} já está autorizada na SEFAZ e não pode ser gerada de novo. Para ter o arquivo, use Baixar PDF / Baixar XML.`, 409);
+  }
 
   const doc = digitos(p?.cpf);
   const faltando = [

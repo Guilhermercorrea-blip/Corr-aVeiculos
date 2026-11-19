@@ -79,3 +79,14 @@ test('loja de outro estado: CFOP 6202; carro consignado não tem devolução de 
   const consig = db.criarCompra({ pessoa: { ...loja, cpf: '04252011000110' }, veiculo: { ...carro, placa: 'FOX1A27', tipo_entrada: 'consignacao' } });
   await assert.rejects(nfe.gerarNota(consig.id, 'devolucao_compra', { ficha: FICHA, numero: 1099, ncm: '87032210', valor: 2550000, referencia: CHAVE_LOJA }), /só para carro comprado/);
 });
+
+test('XML da loja com o chassi de outro carro: recusa; com o chassi deste carro: aceita', async () => {
+  const { id } = db.criarCompra({ pessoa: { ...loja, cpf: '11444777000161' }, veiculo: { ...carro, placa: 'FOX1A30' } });
+  const base = { ficha: FICHA, numero: 1198, ncm: '87032100', valor: 1, referencia: '', data: '2026-11-19T10:00', xml: true };
+  const outro = xmlVendaLoja().replace('<xProd>FOX</xProd>', '<xProd>FOX CHASSI 9BWAB05Z394087944</xProd>');
+  await assert.rejects(nfe.gerarNota(id, 'devolucao_compra', { ...base, origemXml: outro }), /outro carro/);
+  const v = db.obterVeiculo(id).veiculo;
+  const certo = xmlVendaLoja().replace('<xProd>FOX</xProd>', `<xProd>FOX CHASSI ${v.chassi}</xProd>`);
+  const g = await nfe.gerarNota(id, 'devolucao_compra', { ...base, origemXml: certo });
+  assert.equal(g.numero, 1198);
+});

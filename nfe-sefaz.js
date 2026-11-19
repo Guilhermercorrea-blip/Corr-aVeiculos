@@ -136,7 +136,7 @@ async function consultarChave(ambiente, chave, cert) {
   return {
     http: r.status, cStat: tag(r.xml, 'cStat'), xMotivo: tag(r.xml, 'xMotivo'),
     protocolo: prot ? tag(prot, 'nProt') : null, autorizadaEm: prot ? tag(prot, 'dhRecbto') : null, cStatProt: prot ? tag(prot, 'cStat') : null,
-    eventos, bruto: tag(r.xml, 'cStat') ? undefined : r.xml.slice(0, 500),
+    eventos, bruto: tag(r.xml, 'cStat') ? undefined : r.xml.slice(0, 500), protXml: prot || null,
   };
 }
 

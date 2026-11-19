@@ -32,7 +32,38 @@ function estado(veiculoId, tipo) {
   };
 }
 
+// Uma emissão de cada vez por carro e tipo (duplo clique não manda duas notas)
+const emAndamento = new Set();
+
+// Envio anterior que ficou sem resposta: pergunta à SEFAZ pela chave antes de deixar emitir outra
+async function resolverPendente(veiculoId, tipo, ambiente, cert) {
+  const p = db.conexao.prepare("SELECT id, numero, chave, xml FROM nfe_envios WHERE veiculo_id = ? AND tipo = ? AND ambiente = ? AND situacao IN ('incerta', 'enviando') ORDER BY id DESC").get(Number(veiculoId), tipo, ambiente);
+  if (!p) return null;
+  let c;
+  try { c = await sefaz.consultarChave(ambiente, p.chave, cert); }
+  catch (e) { throw db.erro(`A nota nº ${p.numero} ficou sem resposta e a SEFAZ não respondeu à consulta agora. Tente de novo em alguns minutos. (${e.message})`, 502); }
+  if (c.cStatProt === '100' && c.protXml) {
+    if (!p.xml || !p.xml.includes(p.chave)) throw db.erro(`A nota nº ${p.numero} FOI autorizada (protocolo ${c.protocolo}), mas o XML assinado não ficou guardado. Me chame para recuperar. Não emita de novo.`, 409);
+    const nfeProc = `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">${p.xml}${c.protXml}</nfeProc>`;
+    db.conexao.prepare("UPDATE nfe_envios SET situacao = 'autorizada', cstat = '100', motivo = 'Autorizada (confirmada por consulta)', protocolo = ?, xml = ? WHERE id = ?").run(c.protocolo, nfeProc, p.id);
+    if (ambiente === 'producao') db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE chave = ?').run(nfeProc, c.protocolo, p.chave);
+    return { ok: true, id: p.id, ambiente, numero: p.numero, chave: p.chave, protocolo: c.protocolo, recuperada: true };
+  }
+  if (c.cStat === '217') { // a SEFAZ não recebeu: o envio não vale e pode emitir de novo
+    db.conexao.prepare("UPDATE nfe_envios SET situacao = 'rejeitada', motivo = 'Não chegou à SEFAZ (consulta: 217)' WHERE id = ?").run(p.id);
+    return null;
+  }
+  throw db.erro(`A nota nº ${p.numero} ainda está sem resposta (consulta: ${c.cStat || '?'} ${c.xMotivo || ''}). Não emita de novo; tente daqui a alguns minutos.`, 409);
+}
+
 async function emitir(veiculoId, tipo, dados = {}) {
+  const trava = `${veiculoId}:${tipo}`;
+  if (emAndamento.has(trava)) throw db.erro('Esta nota já está sendo enviada. Aguarde a resposta.', 409);
+  emAndamento.add(trava);
+  try { return await emitirUmaVez(veiculoId, tipo, dados); } finally { emAndamento.delete(trava); }
+}
+
+async function emitirUmaVez(veiculoId, tipo, dados) {
   if (!TIPOS_DIRETOS.includes(tipo)) throw db.erro('Essa nota ainda não sai direto pela SEFAZ. Use o arquivo do Emissor do Sebrae.', 400);
   const caminho = nfseServico.caminhoCertificado();
   if (!caminho) throw db.erro('O certificado digital não está neste computador.', 400);
@@ -43,20 +74,25 @@ async function emitir(veiculoId, tipo, dados = {}) {
   const ja = !homologacao && autorizadaEmProducao(veiculoId, tipo);
   if (ja) throw db.erro(`Esta nota já foi autorizada (nº ${ja.numero}, protocolo ${ja.protocolo}). Não emita de novo.`, 409);
   const cert = nfse.carregarCertificado(caminho, String(dados.senha || ''));
+  const recuperada = await resolverPendente(veiculoId, tipo, ambiente, cert);
+  if (recuperada) return recuperada;
+  if (!homologacao && autorizadaEmProducao(veiculoId, tipo)) throw db.erro('Esta nota já foi autorizada. Não emita de novo.', 409);
 
   // Em homologação usa um número alto e único, para não esbarrar em testes anteriores nem gastar a numeração real
   const numero = homologacao ? 800000000 + (Math.floor(Date.now() / 1000) % 100000000) : Number(dados.numero);
   const g = await nfe.gerarNota(veiculoId, tipo, { numero, ncm: dados.ncm, valor: dados.valor, data: dados.data, referencia: dados.referencia, pagamento: dados.pagamento, origemXml: dados.origemXml, ficha: dados.ficha, homologacao, xml: true });
-  const id = Number(db.conexao.prepare("INSERT INTO nfe_envios (veiculo_id, tipo, ambiente, numero, chave, situacao) VALUES (?, ?, ?, ?, ?, 'enviando')")
-    .run(Number(veiculoId), tipo, ambiente, numero, g.chave).lastInsertRowid);
+  // O XML assinado fica guardado ANTES do envio: se a resposta se perder, dá para recuperar a nota pela consulta da chave
+  const assinado = sefaz.assinarNfe(g.xml, g.chave, cert);
+  const id = Number(db.conexao.prepare("INSERT INTO nfe_envios (veiculo_id, tipo, ambiente, numero, chave, situacao, xml) VALUES (?, ?, ?, ?, ?, 'enviando', ?)")
+    .run(Number(veiculoId), tipo, ambiente, numero, g.chave, assinado).lastInsertRowid);
   const atualizar = (situacao, extra = {}) => db.conexao.prepare('UPDATE nfe_envios SET situacao = ?, cstat = ?, motivo = ?, protocolo = ?, xml = ? WHERE id = ?')
     .run(situacao, extra.cStat || null, extra.motivo || null, extra.protocolo || null, extra.xml || null, id);
 
   let r;
   try {
-    r = await sefaz.autorizar(ambiente, sefaz.assinarNfe(g.xml, g.chave, cert), cert);
+    r = await sefaz.autorizar(ambiente, assinado, cert);
   } catch (e) {
-    atualizar('incerta', { motivo: 'Sem resposta da SEFAZ: ' + e.message });
+    atualizar('incerta', { motivo: 'Sem resposta da SEFAZ: ' + e.message, xml: assinado });
     throw db.erro('Sem resposta da SEFAZ. NÃO emita de novo ainda: me peça para consultar a chave ' + g.chave + '. (' + e.message + ')', 502);
   }
   if (r.cStat === '100') {
@@ -64,6 +100,11 @@ async function emitir(veiculoId, tipo, dados = {}) {
     // Em produção, o XML autorizado também fica guardado na nota do carro (aparece em "Notas emitidas" e na página do carro)
     if (!homologacao) db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE chave = ?').run(r.nfeProc, r.nProt, g.chave);
     return { ok: true, id, ambiente, numero, chave: g.chave, protocolo: r.nProt };
+  }
+  // Recusa de verdade: a nota veio com código de rejeição, ou o lote inteiro foi recusado. Qualquer outra resposta fica para conferir.
+  if (!r.cStat && (!r.cStatLote || ['103', '104', '105'].includes(r.cStatLote))) {
+    atualizar('incerta', { cStat: r.cStatLote, motivo: 'Resposta sem o resultado da nota: ' + (r.xMotivoLote || r.bruto || 'resposta inesperada'), xml: assinado });
+    throw db.erro('A SEFAZ respondeu sem dizer se autorizou. NÃO emita de novo: na próxima tentativa o sistema consulta a chave ' + g.chave + ' antes.', 502);
   }
   const motivo = r.cStat ? `${r.cStat}: ${r.xMotivo}` : `${r.cStatLote || 'sem código'}: ${r.xMotivoLote || r.bruto || 'resposta inesperada'}`;
   atualizar('rejeitada', { cStat: r.cStat || r.cStatLote, motivo });
