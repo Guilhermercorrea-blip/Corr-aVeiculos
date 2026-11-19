@@ -168,4 +168,4 @@ function xmlDaNota(id) {
   return { arquivo: `NFSe-${n.numero_nfse}.xml`, conteudo: n.xml_nfse };
 }
 
-module.exports = { listar, previa, emitir, xmlDaNota, proximoNumero };
+module.exports = { listar, previa, emitir, xmlDaNota, proximoNumero, caminhoCertificado };

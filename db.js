@@ -140,6 +140,22 @@ CREATE TABLE IF NOT EXISTS nfse_notas (
   UNIQUE (ambiente, serie, n_dps)
 );
 
+-- NF-e enviadas pelo sistema direto à SEFAZ (cada tentativa fica registrada; a autorizada guarda o XML com o protocolo)
+CREATE TABLE IF NOT EXISTS nfe_envios (
+  id INTEGER PRIMARY KEY,
+  veiculo_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL,
+  ambiente TEXT NOT NULL,
+  numero INTEGER NOT NULL,
+  chave TEXT NOT NULL,
+  situacao TEXT NOT NULL,
+  cstat TEXT,
+  motivo TEXT,
+  protocolo TEXT,
+  xml TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_gastos_veiculo ON gastos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_anexos_veiculo ON anexos(veiculo_id);
 CREATE INDEX IF NOT EXISTS idx_veiculos_status ON veiculos(status);

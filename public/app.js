@@ -1049,6 +1049,61 @@ async function salvarArquivoNota(r) {
   return true;
 }
 
+// NF-e direto na SEFAZ (sem o Emissor do Sebrae): usa os mesmos campos do formulário da nota acima
+const SITUACAO_NFE = { autorizada: 'Autorizada', rejeitada: 'Recusada', incerta: 'Conferir (sem resposta)', enviando: 'Enviando…' };
+async function blocoNfeDireta(id, tipo, form) {
+  const caixa = document.getElementById(`nfe-direta-${tipo}`);
+  let s;
+  try { s = await api('GET', `/veiculos/${id}/nfe/${tipo}/direta`); } catch (e) { caixa.innerHTML = `<p class="suave pequeno">${esc(e.message)}</p>`; return; }
+  if (!s.suportado) { caixa.remove(); return; }
+  const real = s.ambiente === 'producao';
+  const lista = s.envios.length ? `<table class="pequeno" style="margin-top:8px"><thead><tr><th>Quando</th><th>Ambiente</th><th>Nº</th><th>Situação</th><th>Protocolo / motivo</th><th></th></tr></thead><tbody>${s.envios.map(e => `<tr>
+      <td>${esc(e.criado_em.slice(0, 16))}</td><td>${e.ambiente === 'producao' ? 'Real' : 'Teste'}</td><td>${e.numero}</td>
+      <td>${esc(SITUACAO_NFE[e.situacao] || e.situacao)}</td><td>${esc(e.protocolo || e.motivo || '')}</td>
+      <td>${e.situacao === 'autorizada' ? `<button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
+  caixa.innerHTML = `
+    <h3 style="margin:0 0 6px">Emitir direto na SEFAZ <span class="suave pequeno">(sem o Emissor do Sebrae)</span></h3>
+    <p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>
+    ${s.jaAutorizada ? `<p class="pequeno"><strong>Já autorizada:</strong> nota nº ${s.jaAutorizada.numero}, protocolo ${esc(s.jaAutorizada.protocolo)}.</p>` : s.habilitado ? `
+    <p class="suave pequeno">Usa os dados do formulário acima (número, tipo, valor, data${tipo === 'devolucao_consignacao' ? ' e chave da entrada' : ''}). Confira antes.</p>
+    <label class="pequeno" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nfe-ok-${tipo}" style="width:auto;margin:0"> Conferi os dados${real ? ' e quero emitir a nota real' : ''}</label>
+    <div class="grade" style="margin-top:6px">
+      <div class="campo c4"><label for="nfe-senha-${tipo}">Senha do certificado digital</label><input id="nfe-senha-${tipo}" type="password" autocomplete="off" placeholder="não fica guardada"></div>
+      <div class="campo c4" style="align-self:end"><button type="button" id="nfe-emitir-${tipo}">Emitir direto na SEFAZ</button></div>
+    </div>` : '<p class="suave pequeno">O certificado digital não está disponível aqui. A emissão direta só funciona onde o certificado está instalado.</p>'}
+    ${lista}`;
+  caixa.querySelectorAll('[data-xml-nfe]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      const r = await api('GET', `/nfe-envios/${b.dataset.xmlNfe}/xml`);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+      link.download = r.arquivo;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    } catch (e) { aviso(e.message, true); }
+  }));
+  const botao = document.getElementById(`nfe-emitir-${tipo}`);
+  if (!botao) return;
+  botao.addEventListener('click', async () => {
+    if (!form.reportValidity()) return;
+    if (!document.getElementById(`nfe-ok-${tipo}`).checked) return aviso('Marque que você conferiu os dados.', true);
+    const senha = document.getElementById(`nfe-senha-${tipo}`).value;
+    if (!senha) return aviso('Digite a senha do certificado.', true);
+    let dados;
+    try { dados = lerForm(form); } catch (e) { return aviso(e.message, true); }
+    botao.disabled = true;
+    botao.textContent = 'Enviando à SEFAZ… não feche';
+    try {
+      const r = await api('POST', `/veiculos/${id}/nfe/${tipo}/direta`, { ...dados, senha, confirmar: true, confirmarProducao: real });
+      aviso(`${real ? 'Nota' : 'Nota de TESTE'} nº ${r.numero} autorizada. Protocolo ${r.protocolo}.`);
+    } catch (e) {
+      aviso(e.message, true);
+    }
+    document.getElementById(`nfe-senha-${tipo}`).value = '';
+    cartaoNfe(id, tipo);
+  });
+}
+
 async function cartaoNfe(id, tipo) {
   const el = document.getElementById(`cartao-nfe-${tipo}`);
   const titulo = TITULO_NFE[tipo];
@@ -1087,6 +1142,7 @@ async function cartaoNfe(id, tipo) {
       ${campo('Código marca/modelo', 'ficha.marca_modelo', { valor: f.marca_modelo, largura: 'c4', extra: 'inputmode="numeric"' })}` : ''}
       <div class="campo c4" style="justify-content:flex-end"><button type="submit">Baixar arquivo da nota</button></div>
     </form>
+    ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
     <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.' }[tipo]}</p>`;
     const form = document.getElementById(`form-nfe-${tipo}`);
@@ -1101,6 +1157,7 @@ async function cartaoNfe(id, tipo) {
         cartaoNfe(id, tipo);
       });
     });
+    if (document.getElementById(`nfe-direta-${tipo}`)) blocoNfeDireta(id, tipo, form);
   } catch (e) {
     el.innerHTML = `<h2>${titulo}</h2><p class="pequeno">${esc(e.message)}</p>`;
   }

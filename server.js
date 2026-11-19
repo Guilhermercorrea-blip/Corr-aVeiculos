@@ -20,6 +20,7 @@ const redesMeta = require('./redes-meta');
 const galeriaLoja = require('./galeria-loja');
 const nfe = require('./nfe');
 const nfseServico = require('./nfse-servico');
+const nfeDireta = require('./nfe-direta');
 const avaliacoes = require('./avaliacoes');
 const aniversarios = require('./aniversarios');
 
@@ -184,6 +185,10 @@ const soNoComputadorDaLoja = ctx => { if (!emissaoLiberada(ctx)) throw db.erro('
 rota('GET', '/api/nfse', (p, q, c, ctx) => { const d = nfseServico.listar(); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
 rota('POST', '/api/nfse/previa', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.previa(corpo); });
 rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.emitir(corpo); });
+// NF-e direto na SEFAZ (página do carro). Mesma regra da nota de serviço: só onde a emissão está liberada
+rota('GET', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, c, ctx) => { const d = nfeDireta.estado(p.id, p.tipo); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
+rota('POST', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitir(p.id, p.tipo, corpo); });
+rota('GET', '/api/nfe-envios/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.xmlDoEnvio(p.id); });
 rota('GET', '/api/nfse/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.xmlDaNota(Number(p.id)); });
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
 rota('POST', '/api/estoque-rapido', (p, q, corpo) => db.criarEstoqueRapido(corpo.carros));
