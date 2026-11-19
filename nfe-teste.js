@@ -30,7 +30,7 @@ function pedirSenha(texto) {
 
 (async () => {
   const modo = process.argv[2] || 'status';
-  console.log(modo === 'consultar' ? 'Consulta (só leitura) das notas na SEFAZ-SP - PRODUÇÃO' : 'NF-e direto na SEFAZ-SP - ambiente de HOMOLOGAÇÃO (não vale como nota)');
+  console.log(modo === 'cadastro' ? 'Cadastro de empresa na SEFAZ-SP (só leitura) - PRODUÇÃO' : modo === 'graciano' ? 'Nota da Graciano: consulta e, com a sua confirmação, ciência e download - PRODUÇÃO' : modo === 'destinadas' ? 'Consulta (só leitura) de cadastro e NF-e destinadas - PRODUÇÃO' : modo === 'consultar' ? 'Consulta (só leitura) das notas na SEFAZ-SP - PRODUÇÃO' : 'NF-e direto na SEFAZ-SP - ambiente de HOMOLOGAÇÃO (não vale como nota)');
   console.log('Certificado:', PFX);
   const cert = nfse.carregarCertificado(PFX, await pedirSenha('Senha do certificado (aparece *): '));
   console.log('Certificado aberto. Válido até', cert.validade);
@@ -99,5 +99,72 @@ function pedirSenha(texto) {
     console.log('Nota: cStat', r.cStat, '|', r.xMotivo, r.nProt ? '| protocolo ' + r.nProt : '');
     if (r.bruto) console.log(r.bruto);
     console.log(r.cStat === '100' ? 'AUTORIZADA em homologação (sem valor fiscal).' : 'Não autorizou: me mostre esta tela.');
+  }
+  if (modo === 'destinadas') {
+    // SÓ LEITURA, produção. (1) IE e endereço oficiais da Graciano; (2) NF-e emitidas contra o CNPJ da loja desde setembro/2026
+    const CNPJ_LOJA = '07793106000139', GRACIANO = '43952001000149';
+    const cad = await sefaz.consultarCadastro(GRACIANO, cert);
+    console.log('Cadastro da Graciano: cStat', cad.cStat, '|', cad.xMotivo);
+    console.log(JSON.stringify({ ie: cad.ie, nome: cad.nome, situacao: cad.situacao, endereco: cad.endereco }));
+    const d = await sefaz.distribuicaoDFe(CNPJ_LOJA, cert);
+    console.log('Distribuição de DF-e: cStat', d.cStat, '|', d.xMotivo, '| documentos lidos:', d.docs.length, '| NSU', d.ultNSU, '/', d.maxNSU);
+    const nfes = d.docs.filter(x => x.chave && x.dhEmi >= '2026-09-01');
+    for (const x of nfes) console.log(' ', x.dhEmi.slice(0, 10), '|', x.emitNome, '| CNPJ', x.emitCnpj, '| R$', x.vNF, '| tpNF', x.tpNF, '| situação', x.cStat, '| chave', x.chave);
+    const g = nfes.filter(x => x.emitCnpj === GRACIANO);
+    console.log(g.length ? 'ACHEI NF-e da Graciano para a loja: ' + g.length : 'NENHUMA NF-e da Graciano contra a loja nos documentos lidos.');
+  }
+  if (modo === 'graciano') {
+    // Acha a NF-e de venda da Graciano contra a loja, e (só se você confirmar aqui) registra a Ciência da Operação,
+    // baixa o XML completo e gera o DANFE para mandar ao contador. Salva em Desktop\NotasSites.
+    const fs = require('node:fs');
+    const readline = require('node:readline');
+    const danfe = require('./danfe');
+    const CNPJ_LOJA = '07793106000139', GRACIANO = '43952001000149';
+    const perguntar = texto => new Promise(resolve => { const rl = readline.createInterface({ input: process.stdin, output: process.stdout }); rl.question(texto, r => { rl.close(); resolve(r.trim().toLowerCase()); }); });
+
+    const cad = await sefaz.consultarCadastro(GRACIANO, cert);
+    console.log('Cadastro da Graciano: cStat', cad.cStat, '|', cad.xMotivo);
+    console.log('  IE', cad.ie, '|', cad.nome, '| situação', cad.situacao, '|', JSON.stringify(cad.endereco));
+    fs.writeFileSync(path.join(__dirname, '..', 'nfse-api', 'graciano-cadastro.json'), JSON.stringify(cad, null, 2));
+
+    const d = await sefaz.distribuicaoDFe(CNPJ_LOJA, cert);
+    console.log('Distribuição de DF-e: cStat', d.cStat, '|', d.xMotivo, '| documentos lidos:', d.docs.length);
+    const nfes = d.docs.filter(x => x.chave && x.dhEmi >= '2026-09-01');
+    for (const x of nfes) console.log(' ', x.dhEmi.slice(0, 10), '|', x.emitNome, '| R$', x.vNF, '| tpNF', x.tpNF, '| chave', x.chave);
+    const g = nfes.filter(x => x.emitCnpj === GRACIANO);
+    if (!g.length) { console.log('NENHUMA NF-e da Graciano contra a loja nos documentos lidos. Nada foi alterado.'); return; }
+    const nota = g[g.length - 1];
+    console.log(`\nNota da Graciano: emitida em ${nota.dhEmi.slice(0, 10)}, valor R$ ${nota.vNF}, chave ${nota.chave}`);
+    const r = await perguntar('Registrar a "Ciência da Operação" desta nota (evento oficial, sem efeito fiscal) e baixar o XML? (s/n) ');
+    if (r !== 's') { console.log('Nada foi registrado.'); return; }
+
+    const c = await sefaz.registrarCiencia(nota.chave, CNPJ_LOJA, cert);
+    console.log('Ciência: lote', c.cStatLote, c.xMotivoLote, '| evento', c.cStat, c.xMotivo, c.nProt ? '| protocolo ' + c.nProt : '');
+    if (!c.ok) { console.log('A Receita não registrou a ciência. Me mostre esta tela.'); if (c.bruto) console.log(c.bruto); return; }
+    await new Promise(r2 => setTimeout(r2, 4000));
+    const b = await sefaz.baixarNFe(nota.chave, CNPJ_LOJA, cert);
+    console.log('Download: cStat', b.cStat, '|', b.xMotivo);
+    if (!b.xml) { console.log(b.soResumo ? 'A Receita ainda devolveu só o resumo. Rode de novo em alguns minutos.' : 'Não veio o XML completo. Me mostre esta tela.'); return; }
+    const info = danfe.lerNota(b.xml);
+    const pasta = path.join(os.homedir(), 'Desktop', 'NotasSites');
+    fs.mkdirSync(pasta, { recursive: true });
+    const base = `NFe-recebida-${info.numero}-GRACIANO`;
+    fs.writeFileSync(path.join(pasta, base + '.xml'), b.xml);
+    fs.writeFileSync(path.join(pasta, base.replace('NFe-recebida', 'DANFE-recebida') + '.html'), danfe.gerarDanfe(b.xml));
+    console.log('\nSalvo em', pasta);
+    console.log('  XML   :', base + '.xml');
+    console.log('  DANFE :', base.replace('NFe-recebida', 'DANFE-recebida') + '.html (abra e use "Imprimir / Salvar PDF")');
+    console.log(`  Nota nº ${info.numero}, valor R$ ${info.tot.vNF}, protocolo ${info.protocolo}, item: ${info.itens[0]?.descricao?.slice(0, 70)}`);
+  }
+  if (modo === 'cadastro') {
+    // SÓ LEITURA: IE, razão social e endereço oficiais de uma empresa pelo CNPJ (para a nota de entrada)
+    const fs = require('node:fs');
+    const cnpj = String(process.argv[3] || '').replace(/\D/g, '');
+    if (cnpj.length !== 14) throw new Error('Use: node nfe-teste.js cadastro <CNPJ>');
+    const cad = await sefaz.consultarCadastro(cnpj, cert);
+    console.log('Cadastro: cStat', cad.cStat, '|', cad.xMotivo);
+    console.log('  IE', cad.ie, '|', cad.nome, '| situação', cad.situacao);
+    console.log('  ', JSON.stringify(cad.endereco));
+    fs.writeFileSync(path.join(__dirname, '..', 'nfse-api', 'cadastro-' + cnpj + '.json'), JSON.stringify(cad, null, 2));
   }
 })().catch(e => { console.error('ERRO:', e.message); process.exit(1); });

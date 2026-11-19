@@ -46,3 +46,30 @@ test('XML da entrada de consignação tem os mesmos valores do TXT e passa na as
 test('nota de venda ainda não sai direto pela SEFAZ (fica no Emissor por enquanto)', () => {
   assert.throws(() => require('../nfe-xml').montarInfNFe({ venda: true }), /venda ainda não sai/);
 });
+
+test('Ciência da Operação (210210): evento montado e assinado no padrão da SEFAZ', t => {
+  try { execFileSync('openssl', ['version'], { stdio: 'pipe' }); } catch { return t.skip('sem openssl'); }
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'evt-cert-'));
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', path.join(pasta, 'k.pem'), '-out', path.join(pasta, 'c.pem'), '-days', '2', '-subj', '/CN=TESTE'], { stdio: 'pipe' });
+  execFileSync('openssl', ['pkcs12', '-export', '-inkey', path.join(pasta, 'k.pem'), '-in', path.join(pasta, 'c.pem'), '-out', path.join(pasta, 'c.pfx'), '-passout', 'pass:x1'], { stdio: 'pipe' });
+  const cert = nfse.carregarCertificado(path.join(pasta, 'c.pfx'), 'x1');
+  const chave = '35261043952001000149550010000123451000000019';
+  const { id, inf } = sefaz.montarCiencia(chave, '07793106000139', new Date('2026-11-19T15:00:00Z'));
+  assert.equal(id, `ID210210${chave}01`);
+  for (const trecho of ['<cOrgao>91</cOrgao>', '<tpAmb>1</tpAmb>', '<tpEvento>210210</tpEvento>', '<nSeqEvento>1</nSeqEvento>', '<descEvento>Ciencia da Operacao</descEvento>', '<dhEvento>2026-11-19T12:00:00-03:00</dhEvento>']) assert.ok(inf.includes(trecho), trecho);
+  const ev = sefaz.assinarEvento(inf, id, cert);
+  const digest = ev.match(/<DigestValue>(.+?)<\/DigestValue>/)[1];
+  assert.equal(digest, crypto.createHash('sha1').update(inf.replace('<infEvento ', '<infEvento xmlns="http://www.portalfiscal.inf.br/nfe" ')).digest('base64'));
+  const si = ev.match(/<SignedInfo>[\s\S]+?<\/SignedInfo>/)[0].replace('<SignedInfo>', '<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">');
+  assert.ok(crypto.createVerify('RSA-SHA1').update(si).verify(cert.certPem, ev.match(/<SignatureValue>(.+?)<\/SignatureValue>/)[1], 'base64'));
+  assert.ok(ev.includes(`<Reference URI="#${id}">`));
+});
+
+test('distribuição de DF-e: lê o resumo de uma NF-e recebida', () => {
+  const zlib = require('node:zlib');
+  const xml = '<resNFe xmlns="http://www.portalfiscal.inf.br/nfe"><chNFe>35261043952001000149550010000123451000000019</chNFe><CNPJ>43952001000149</CNPJ><xNome>GRACIANO TESTE</xNome><dhEmi>2026-10-15T10:00:00-03:00</dhEmi><tpNF>1</tpNF><vNF>26000.00</vNF></resNFe>';
+  const r = sefaz.lerDocZip({ nsu: '7', schema: 'resNFe_v1.01', conteudo: zlib.gzipSync(Buffer.from(xml)).toString('base64') });
+  assert.equal(r.emitCnpj, '43952001000149');
+  assert.equal(r.vNF, '26000.00');
+  assert.equal(r.chave.length, 44);
+});
