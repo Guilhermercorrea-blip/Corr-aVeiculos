@@ -74,4 +74,24 @@ function xmlDoEnvio(id) {
   return { arquivo: `NFe-${e.ambiente === 'homologacao' ? 'TESTE-' : ''}${e.numero}-${e.chave}.xml`, conteudo: e.xml };
 }
 
-module.exports = { TIPOS_DIRETOS, estado, emitir, xmlDoEnvio, ambienteAtual };
+// ---------- Nota feita pelo Emissor do Sebrae: anexa o XML autorizado e libera "Baixar nota" (DANFE) e "Baixar XML" ----------
+function anexarXml(veiculoId, tipo, xml) {
+  const nota = db.conexao.prepare('SELECT id, numero, chave FROM nfe_notas WHERE veiculo_id = ? AND tipo = ? ORDER BY id DESC').get(Number(veiculoId), tipo);
+  if (!nota) throw db.erro('Gere primeiro o arquivo desta nota. O XML só se anexa a uma nota já registrada.', 404);
+  const texto = String(xml || '');
+  if (texto.length > 500000) throw db.erro('Arquivo grande demais para ser o XML de uma NF-e.', 400);
+  let n;
+  try { n = require('./danfe').lerNota(texto); } catch (e) { throw db.erro('Esse arquivo não parece o XML de uma NF-e autorizada. Use o XML da pasta Notas (termina em -procNfe.xml).', 400); }
+  if (n.chave !== nota.chave) throw db.erro('Esse XML é de outra nota (chave diferente da nota nº ' + nota.numero + '). Confira o arquivo.', 409);
+  if (n.cStat !== '100' || !n.protocolo) throw db.erro('Esse XML não tem a autorização da SEFAZ (protocolo). Anexe o XML depois que a nota for transmitida e autorizada.', 400);
+  db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE id = ?').run(texto, n.protocolo, nota.id);
+  return { ok: true, numero: nota.numero, protocolo: n.protocolo };
+}
+
+function xmlDaNotaRegistrada(id) {
+  const n = db.conexao.prepare('SELECT numero, chave, xml_autorizado FROM nfe_notas WHERE id = ?').get(Number(id));
+  if (!n || !n.xml_autorizado) throw db.erro('Essa nota ainda não tem o XML autorizado anexado.', 404);
+  return { arquivo: `NFe-${n.numero}-${n.chave}.xml`, conteudo: n.xml_autorizado };
+}
+
+module.exports = { TIPOS_DIRETOS, estado, emitir, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };

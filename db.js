@@ -187,6 +187,10 @@ if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos
 if (!colunasVeiculo.includes('ficha_nfe')) db.exec('ALTER TABLE veiculos ADD COLUMN ficha_nfe TEXT');
 // Chave da nota de entrada que a devolução de consignação aponta
 if (!db.prepare('PRAGMA table_info(nfe_notas)').all().some(c => c.name === 'referencia')) db.exec('ALTER TABLE nfe_notas ADD COLUMN referencia TEXT');
+// XML autorizado (nfeProc, com o protocolo) anexado depois que o Emissor transmite: dá os botões "Baixar nota" (DANFE) e "Baixar XML"
+for (const coluna of ['xml_autorizado', 'protocolo']) {
+  if (!db.prepare('PRAGMA table_info(nfe_notas)').all().some(c => c.name === coluna)) db.exec(`ALTER TABLE nfe_notas ADD COLUMN ${coluna} TEXT`);
+}
 const colunasVenda = db.prepare('PRAGMA table_info(vendas)').all().map(c => c.name);
 for (const [coluna, tipo] of [['forma_pagamento', 'TEXT'], ['valor_pix', 'INTEGER'], ['valor_deposito', 'INTEGER'], ['valor_dinheiro', 'INTEGER']]) {
   if (!colunasVenda.includes(coluna)) db.exec(`ALTER TABLE vendas ADD COLUMN ${coluna} ${tipo}`);

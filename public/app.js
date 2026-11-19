@@ -1118,7 +1118,15 @@ async function cartaoNfe(id, tipo) {
     el.innerHTML = `
     <h2>${titulo}</h2>
     <p class="pequeno">Gera o arquivo da nota com os dados do ${tipo === 'venda' ? 'comprador' : tipo === 'entrada_compra' ? 'vendedor' : 'dono'} e do carro. Depois, no Emissor do Sebrae: <b>Sistema → Importar arquivos</b>, confira e transmita.</p>
-    ${s.ultima ? `<p class="pequeno">Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>` : ''}
+    ${s.ultima ? `<p class="pequeno">Já gerada: nota nº <b>${s.ultima.numero}</b> em ${dataBR(s.ultima.criado_em.replace(' ', 'T'))}. Gerar de novo com o mesmo número substitui o arquivo.</p>
+    <div class="pequeno" style="margin:6px 0 10px;padding:8px;border:1px solid #c9d1dc;border-radius:6px">
+      ${s.ultima.temXml
+        ? `<strong>Autorizada</strong> · protocolo ${esc(s.ultima.protocolo)} &nbsp;
+           <a class="botao-link" href="/danfe-nota/${s.ultima.id}" target="_blank" rel="noopener">Baixar nota (DANFE)</a>
+           <button type="button" class="secundario" data-baixar-xml="${s.ultima.id}">Baixar XML</button>
+           <span class="suave"> · trocar o XML: <input type="file" accept=".xml,text/xml" data-anexar-xml></span>`
+        : `<span class="suave">Depois que o Emissor transmitir e a SEFAZ autorizar, anexe aqui o <b>XML autorizado</b> (pasta Notas, o arquivo que termina em <b>-procNfe.xml</b>) para liberar <b>Baixar nota</b> e <b>Baixar XML</b>:</span> <input type="file" accept=".xml,text/xml" data-anexar-xml>`}
+    </div>` : ''}
     <form id="form-nfe-${tipo}" class="grade" novalidate>
       ${campo('Número da nota', 'numero', { valor: s.numero, obrig: true, largura: 'c3', extra: 'inputmode="numeric"' })}
       ${selecao('Tipo do veículo (NCM)', 'ncm', Object.fromEntries(Object.entries(o.ncms).map(([k, t]) => [k, `${t} · ${k}`])), s.ncm, 'c5')}
@@ -1151,6 +1159,26 @@ async function cartaoNfe(id, tipo) {
     ${['entrada_consignacao', 'devolucao_consignacao', 'entrada_compra', 'devolucao_compra'].includes(tipo) ? `<div id="nfe-direta-${tipo}" class="conferencia" style="margin-top:12px"></div>` : ''}
     ${c ? `<p class="pequeno">ICMS: base ${reais(c.baseIcms)} (10% da venda) × 18% = <b>${reais(c.icms)}</b> · PIS/COFINS sobre ${reais(c.baseLucro)} (venda − compra): PIS <b>${reais(c.pis)}</b>, COFINS <b>${reais(c.cofins)}</b></p>` : ''}
     <p class="suave pequeno">Confira o número com o próximo do Sebrae. ${{ venda: 'CFOP 5102, cBenef SP020110, igual às suas vendas.', entrada_compra: 'CFOP 1102, igual às suas notas de compra 1034, 1038 e 1039 (pagamento em PIX).', entrada_consignacao: 'CFOP 1917, igual às suas notas de consignação.', devolucao_consignacao: 'CFOP 1918, igual às suas devoluções 1067 a 1069.', devolucao_compra: 'CFOP 5202 (6202 se a loja for de outro estado), igual às devoluções 1066 e 1073.' }[tipo]}</p>`;
+    // Nota feita pelo Emissor: anexar o XML autorizado libera "Baixar nota" (DANFE) e "Baixar XML"
+    el.querySelectorAll('[data-anexar-xml]').forEach(inp => inp.addEventListener('change', async () => {
+      const arq = inp.files[0];
+      if (!arq) return;
+      try {
+        const r = await api('POST', `/veiculos/${id}/nfe/${tipo}/xml`, { xml: await arq.text() });
+        aviso(`XML da nota nº ${r.numero} anexado. Já dá para baixar a nota e o XML.`);
+        cartaoNfe(id, tipo);
+      } catch (e) { aviso(e.message, true); inp.value = ''; }
+    }));
+    el.querySelectorAll('[data-baixar-xml]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        const r = await api('GET', `/nfe-notas/${b.dataset.baixarXml}/xml`);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+        link.download = r.arquivo;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      } catch (e) { aviso(e.message, true); }
+    }));
     const form = document.getElementById(`form-nfe-${tipo}`);
     // Devolução de compra: lê o XML da nota de venda da loja e mostra o que vai sair espelhado (o servidor confere tudo de novo)
     const xmlOrigem = document.getElementById(`xml-origem-${tipo}`);

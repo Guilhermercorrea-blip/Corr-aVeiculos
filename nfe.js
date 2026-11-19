@@ -252,7 +252,7 @@ function sugestao(veiculoId, tipo) {
     valor,
     ficha: tipo === 'venda' ? sugerirFicha(d.veiculo, lerFicha(veiculoId)) : null,
     calculo: tipo === 'venda' && valor ? calcularVenda(valor, d.veiculo.valor_compra) : null,
-    ultima: anterior ? { numero: anterior.numero, criado_em: anterior.criado_em } : null,
+    ultima: anterior ? { id: anterior.id, numero: anterior.numero, criado_em: anterior.criado_em, temXml: !!anterior.xml_autorizado, protocolo: anterior.protocolo || null } : null,
     opcoes: opcoesTela(),
   };
 }

@@ -188,6 +188,8 @@ rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ct
 // NF-e direto na SEFAZ (página do carro). Mesma regra da nota de serviço: só onde a emissão está liberada
 rota('GET', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, c, ctx) => { const d = nfeDireta.estado(p.id, p.tipo); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
 rota('POST', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitir(p.id, p.tipo, corpo); });
+rota('POST', '/api/veiculos/:id/nfe/:tipo/xml', (p, q, corpo) => nfeDireta.anexarXml(p.id, p.tipo, corpo.xml));
+rota('GET', '/api/nfe-notas/:id/xml', p => nfeDireta.xmlDaNotaRegistrada(p.id));
 rota('GET', '/api/nfe-envios/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.xmlDoEnvio(p.id); });
 rota('GET', '/api/nfse/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.xmlDaNota(Number(p.id)); });
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
@@ -509,6 +511,18 @@ http.createServer((req, res) => {
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));
   // DANFE da NF-e emitida direto pelo sistema (página para imprimir / salvar PDF), a partir do XML autorizado
+  // DANFE de uma nota feita pelo Emissor, a partir do XML autorizado anexado ao carro
+  const danfeNota = url.pathname.match(/^\/danfe-nota\/(\d+)$/);
+  if (danfeNota) {
+    try {
+      const html = require('./danfe').gerarDanfe(nfeDireta.xmlDaNotaRegistrada(Number(danfeNota[1])).conteudo);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
+    } catch (e) {
+      if (!e.status) console.error(e);
+      return paginaAviso(res, e.status || 500, e.message);
+    }
+  }
   const danfeUrl = url.pathname.match(/^\/danfe\/(\d+)$/);
   if (danfeUrl) {
     try {
