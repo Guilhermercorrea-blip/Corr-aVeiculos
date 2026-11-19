@@ -375,6 +375,14 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     ...(venda ? pagamentos.map(pg => `YA01|${pg.indPag}|${pg.tPag}|${pg.xPag}|${dinheiro(pg.valor)}||||`) : config.pagamentoPix ? [`YA01|0|17||${valorTxt}||||`] : ['YA01||90||0.00||||']),
   ];
   const conteudo = linhas.join('\r\n');
+  // XML para enviar direto à SEFAZ (sem o Emissor do Sebrae), com os mesmos valores do TXT acima
+  const xml = dados.xml === true ? require('./nfe-xml').montarInfNFe({
+    chave, cNF, cDV, numero, dhEmi, uf, homologacao, indFinal, referencia, nomeDest, doc, cMun, veiculoId, ncm, valor, vUn, venda,
+    natOp: config.natOp, tpNF: config.tpNF, finNFe: config.finNFe, cfop: config.cfop, pRedBC: config.pRedBC, indIEDest: config.indIEDest,
+    modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix,
+    emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
+    xProd: campoTxt(descricaoVeiculo(v), 120),
+  }) : null;
 
   if (!homologacao) {
     db.conexao.prepare(`INSERT INTO nfe_notas (veiculo_id, tipo, serie, numero, chave, valor, ncm, referencia) VALUES (?, ?, 1, ?, ?, ?, ?, ?)
@@ -384,7 +392,7 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   }
 
   const sufixo = { venda: 'venda', entrada_compra: 'entrada-compra', entrada_consignacao: 'entrada-consignacao', devolucao_consignacao: 'devolucao-consignacao' }[tipo];
-  return { conteudo, chave, numero, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
+  return { conteudo, xml, chave, numero, arquivo: `NFe-${numero}-${sufixo}-${(v.placa || 'S' + veiculoId).toUpperCase()}.txt` };
 }
 const gerarEntradaConsignacao = (id, dados) => gerarNota(id, 'entrada_consignacao', dados);
 
