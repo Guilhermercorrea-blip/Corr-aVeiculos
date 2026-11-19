@@ -508,6 +508,18 @@ http.createServer((req, res) => {
 
   const anexo = url.pathname.match(/^\/anexos\/(\d+)$/);
   if (anexo) return enviarAnexo(res, Number(anexo[1]));
+  // DANFE da NF-e emitida direto pelo sistema (página para imprimir / salvar PDF), a partir do XML autorizado
+  const danfeUrl = url.pathname.match(/^\/danfe\/(\d+)$/);
+  if (danfeUrl) {
+    try {
+      const html = require('./danfe').gerarDanfe(nfeDireta.xmlDoEnvio(Number(danfeUrl[1])).conteudo);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
+    } catch (e) {
+      if (!e.status) console.error(e);
+      return paginaAviso(res, e.status || 500, e.message);
+    }
+  }
   const contrato = url.pathname.match(/^\/contrato\/(\d+)\/(entrada|compra|consignacao|venda|repasse|avaliacao)$/);
   if (contrato) {
     try {

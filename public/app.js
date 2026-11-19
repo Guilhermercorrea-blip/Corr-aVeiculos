@@ -1060,7 +1060,7 @@ async function blocoNfeDireta(id, tipo, form) {
   const lista = s.envios.length ? `<table class="pequeno" style="margin-top:8px"><thead><tr><th>Quando</th><th>Ambiente</th><th>Nº</th><th>Situação</th><th>Protocolo / motivo</th><th></th></tr></thead><tbody>${s.envios.map(e => `<tr>
       <td>${esc(e.criado_em.slice(0, 16))}</td><td>${e.ambiente === 'producao' ? 'Real' : 'Teste'}</td><td>${e.numero}</td>
       <td>${esc(SITUACAO_NFE[e.situacao] || e.situacao)}</td><td>${esc(e.protocolo || e.motivo || '')}</td>
-      <td>${e.situacao === 'autorizada' ? `<button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
+      <td>${e.situacao === 'autorizada' ? `<a class="botao-link secundario" href="/danfe/${e.id}" target="_blank" rel="noopener">DANFE</a> <button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
   caixa.innerHTML = `
     <h3 style="margin:0 0 6px">Emitir direto na SEFAZ <span class="suave pequeno">(sem o Emissor do Sebrae)</span></h3>
     <p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>
