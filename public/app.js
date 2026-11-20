@@ -886,7 +886,7 @@ async function telaCarro(id, abaInicial) {
     </table></div>` : '<div class="vazio">Nenhum gasto lançado.</div>'}
   </div>
 
-  <div class="cartao" data-aba="dados">
+  <div class="cartao" data-aba="resumo">
     <h2>Dados do carro</h2>
     <div class="dados">
       <div><span>Placa</span>${esc(formatarPlaca(v.placa))}</div>
@@ -1208,7 +1208,6 @@ function montarAbasCarro(id, v, d, vendido, notas, abaInicial) {
     ['gastos', 'Gastos', d.gastos.length ? `<span class="contador">${d.gastos.length}</span>` : ''],
     ['notas', 'Notas fiscais', linhas.length ? `<span class="contador ${pendentes ? 'pendente' : 'ok'}">${autorizadas} ✓${pendentes ? ' · ' + pendentes + ' pendente' + (pendentes > 1 ? 's' : '') : ''}</span>` : ''],
     ['documentos', 'Documentos e contratos', docs ? `<span class="contador">${docs}</span>` : ''],
-    ['dados', 'Dados do carro', ''],
   ];
   const nav = document.createElement('nav');
   nav.className = 'abas';
