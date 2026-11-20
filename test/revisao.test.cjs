@@ -141,3 +141,37 @@ test('consignado devolvido ao dono sai do estoque e pode voltar; carro comprado 
   const comprado = carro({ tipo_entrada: 'compra' });
   assert.throws(() => db.marcarDevolvido(comprado), /Só carro em consignação/);
 });
+
+test('devoluções em lote: só carros devolvidos sem devolução, números em sequência, para na primeira recusa', async t => {
+  if (!temOpenssl) return t.skip('sem openssl');
+  process.env.NFE_AMBIENTE = 'producao';
+  try {
+    const montarDevolvido = async (numeroEntrada, cpf, placa) => {
+      const aux = db.criarCompra({ pessoa: { nome: 'Dono Aux', cpf, endereco: 'Rua A', numero: '1', bairro: 'C', cidade: 'Barra Bonita', uf: 'SP', cep: '17340000' },
+        veiculo: { marca_modelo: 'VW Gol 1.0', ano_fab: 2010, ano_mod: 2010, cor: 'Prata', placa, chassi: '9BWAA05Z094000000', tipo_entrada: 'consignacao', valor_compra: 2000000 } }).id;
+      const ent = await nfe.gerarNota(aux, 'entrada_consignacao', { ficha: FICHA, numero: numeroEntrada, ncm: '87032100', valor: 2000000, data: '2026-06-06T15:00', xml: true });
+      const prot = `<protNFe versao="4.00"><infProt><tpAmb>1</tpAmb><chNFe>${ent.chave}</chNFe><dhRecbto>2026-06-06T15:09:00-03:00</dhRecbto><nProt>1352600000${numeroEntrada}</nProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo></infProt></protNFe>`;
+      db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE numero = ?').run(`<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe xmlns="http://www.portalfiscal.inf.br/nfe">${ent.xml}</NFe>${prot}</nfeProc>`, '1', numeroEntrada);
+      db.conexao.prepare("UPDATE veiculos SET ficha_nfe = NULL WHERE id = ?").run(aux); // carro antigo, sem CRLV
+      db.marcarDevolvido(aux);
+      return aux;
+    };
+    const a = await montarDevolvido(7100, '93541134780', 'LOT1A01');
+    const b = await montarDevolvido(7101, '12345678062', 'LOT1A02');
+    const c = await montarDevolvido(7102, '98765432029', 'LOT1A03');
+    const pend = direta.devolucoesPendentes().map(p => p.id);
+    assert.ok([a, b, c].every(id => pend.includes(id)));
+    let n = 0;
+    const r = await trocar(sefaz, 'autorizar', async (amb, xml) => {
+      n++;
+      if (n === 2) return { cStatLote: '104', cStat: '999', xMotivo: 'Recusa de teste' };
+      return { cStat: '100', xMotivo: 'Autorizado', nProt: '13526000000' + n, nfeProc: '<nfeProc>' + xml.match(/<nNF>\d+<\/nNF>/)[0] + '</nfeProc>' };
+    }, () => direta.emitirDevolucoes({ ids: [a, b, c], senha: 'abc123', confirmar: true, confirmarProducao: true }));
+    assert.equal(r.emitidas, 1);
+    assert.equal(r.resultados.length, 2, 'parou na recusa, a terceira não foi enviada');
+    assert.equal(r.resultados[1].ok, false);
+    assert.equal(n, 2);
+    const pendDepois = direta.devolucoesPendentes().map(p => p.id);
+    assert.ok(!pendDepois.includes(a) && pendDepois.includes(b) && pendDepois.includes(c));
+  } finally { delete process.env.NFE_AMBIENTE; }
+});

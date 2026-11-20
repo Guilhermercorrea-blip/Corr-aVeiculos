@@ -654,7 +654,53 @@ async function telaLista(status) {
   };
   document.getElementById('busca').addEventListener('input', e => desenhar(e.target.value));
   desenhar('');
-  if (devolvidos.length) app.insertAdjacentHTML('beforeend', `<h2 style="margin-top:24px">Devolvidos ao dono</h2><div class="suave pequeno">Consignados que voltaram para o dono (saíram do estoque sem venda).</div><div class="lista-carros">${devolvidos.map(cartaoCarro).join('')}</div>`);
+  if (devolvidos.length) {
+    app.insertAdjacentHTML('beforeend', `<h2 style="margin-top:24px">Devolvidos ao dono</h2><div class="suave pequeno">Consignados que voltaram para o dono (saíram do estoque sem venda).</div><div id="lote-devolucoes"></div><div class="lista-carros">${devolvidos.map(cartaoCarro).join('')}</div>`);
+    blocoLoteDevolucoes();
+  }
+}
+
+// Devoluções de consignação pendentes: emite todas com uma senha só, na ordem, parando na primeira recusa
+async function blocoLoteDevolucoes() {
+  const caixa = document.getElementById('lote-devolucoes');
+  let s;
+  try { s = await api('GET', '/nfe/devolucoes-pendentes'); } catch (e) { caixa.innerHTML = ''; return; }
+  if (!s.pendentes.length) { caixa.innerHTML = ''; return; }
+  const real = s.ambiente === 'producao';
+  caixa.innerHTML = `<div class="cartao conferencia" style="margin-top:10px">
+    <h3 style="margin:0 0 6px">Devoluções sem nota (${s.pendentes.length})</h3>
+    <p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTAS REAIS: valem de verdade e não voltam atrás.' : 'Ambiente de TESTE da SEFAZ: as notas não valem.'}</strong></p>
+    <p class="suave pequeno">Devolução de consignação (CFOP 1918), no valor e com a chave da entrada de cada carro. Os números seguem a sequência. Se uma for recusada, as seguintes não saem.</p>
+    <table class="pequeno"><thead><tr><th><input type="checkbox" id="lote-todos" checked style="width:auto;margin:0"></th><th>Carro</th><th>Dono</th><th>Entrada</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+    ${s.pendentes.map(p => `<tr><td><input type="checkbox" data-lote="${p.id}" checked style="width:auto;margin:0"></td><td><a href="#/carro/${p.id}">${esc(p.marca_modelo)}${p.placa ? ' · ' + esc(formatarPlaca(p.placa)) : ''}</a></td><td>${esc(p.dono || '')}</td><td>${p.entrada}</td><td class="num">${reais(p.valor)}</td></tr>`).join('')}
+    </tbody></table>
+    ${s.habilitado ? `<label class="pequeno" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="lote-ok" style="width:auto;margin:0"> Conferi${real ? ' e quero emitir as notas reais' : ''}</label>
+    <div class="grade" style="margin-top:6px">
+      <div class="campo c4"><label for="lote-senha">Senha do certificado digital</label><input id="lote-senha" type="password" autocomplete="off" placeholder="não fica guardada"></div>
+      <div class="campo c4" style="align-self:end"><button type="button" id="lote-emitir">Emitir as devoluções marcadas</button></div>
+    </div>` : '<p class="suave pequeno">O certificado digital não está disponível aqui.</p>'}
+    <div id="lote-resultado" class="pequeno" style="margin-top:8px"></div></div>`;
+  document.getElementById('lote-todos').addEventListener('change', e => caixa.querySelectorAll('[data-lote]').forEach(c => { c.checked = e.target.checked; }));
+  const botao = document.getElementById('lote-emitir');
+  if (!botao) return;
+  botao.addEventListener('click', async () => {
+    const ids = [...caixa.querySelectorAll('[data-lote]:checked')].map(c => Number(c.dataset.lote));
+    if (!ids.length) return aviso('Marque pelo menos uma devolução.', true);
+    if (!document.getElementById('lote-ok').checked) return aviso('Marque que você conferiu.', true);
+    const senha = document.getElementById('lote-senha').value;
+    if (!senha) return aviso('Digite a senha do certificado.', true);
+    botao.disabled = true;
+    botao.textContent = `Enviando ${ids.length} nota(s) à SEFAZ… não feche`;
+    const saida = document.getElementById('lote-resultado');
+    try {
+      const r = await api('POST', '/nfe/devolucoes-lote', { ids, senha, confirmar: true, confirmarProducao: real });
+      saida.innerHTML = `<b>${r.emitidas} de ${ids.length} autorizada(s).</b><ul>${r.resultados.map(x => `<li>${x.placa ? esc(formatarPlaca(x.placa)) : 'Carro ' + x.id}: ${x.ok ? `nota nº ${x.numero} autorizada, protocolo ${esc(x.protocolo)}` : `<span style="color:#b42318">${esc(x.erro)}</span>`}</li>`).join('')}</ul>`;
+      aviso(`${r.emitidas} devolução(ões) autorizada(s).`, r.emitidas < ids.length);
+    } catch (e) { saida.innerHTML = `<span style="color:#b42318">${esc(e.message)}</span>`; aviso(e.message, true); }
+    document.getElementById('lote-senha').value = '';
+    botao.disabled = false;
+    botao.textContent = 'Emitir as devoluções marcadas';
+  });
 }
 
 // Entrada de carro (nova) ou edição dos dados de um carro já cadastrado

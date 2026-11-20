@@ -143,4 +143,43 @@ function xmlDaNotaRegistrada(id) {
   return { arquivo: `NFe-${n.numero}-${n.chave}.xml`, conteudo: n.xml_autorizado };
 }
 
-module.exports = { TIPOS_DIRETOS, estado, emitir, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };
+// ---------- Devoluções em lote ----------
+// Carros devolvidos ao dono com a entrada autorizada no carro e sem devolução real autorizada (nem envio esperando resposta)
+function devolucoesPendentes() {
+  return db.conexao.prepare(`
+    SELECT v.id, v.placa, v.marca_modelo, e.numero AS entrada, e.valor, p.nome AS dono
+    FROM veiculos v
+    JOIN nfe_notas e ON e.veiculo_id = v.id AND e.tipo = 'entrada_consignacao' AND e.xml_autorizado IS NOT NULL
+    LEFT JOIN pessoas p ON p.id = COALESCE(v.proprietario_crv_id, v.fornecedor_id)
+    WHERE v.status = 'devolvido'
+      AND NOT EXISTS (SELECT 1 FROM nfe_notas d WHERE d.veiculo_id = v.id AND d.tipo = 'devolucao_consignacao' AND (d.xml_autorizado IS NOT NULL OR d.protocolo IS NOT NULL))
+      AND NOT EXISTS (SELECT 1 FROM nfe_envios s WHERE s.veiculo_id = v.id AND s.tipo = 'devolucao_consignacao' AND s.ambiente = 'producao' AND s.situacao IN ('autorizada', 'incerta', 'enviando'))
+    GROUP BY v.id ORDER BY e.numero`).all();
+}
+
+// Emite uma por uma, na ordem, com a mesma senha. Para na primeira que não for autorizada (o resto fica para depois).
+async function emitirDevolucoes(dados = {}) {
+  const ids = (Array.isArray(dados.ids) ? dados.ids : []).map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
+  if (!ids.length) throw db.erro('Escolha as devoluções que vão sair.', 400);
+  if (dados.confirmar !== true) throw db.erro('Confirme a emissão na tela antes de enviar.', 400);
+  const pendentes = new Map(devolucoesPendentes().map(p => [p.id, p]));
+  const resultados = [];
+  for (const id of ids) {
+    const p = pendentes.get(id);
+    if (!p) { resultados.push({ id, ok: false, erro: 'Já tem devolução ou não está como devolvido.' }); continue; }
+    const s = nfe.sugestao(id, 'devolucao_consignacao');
+    try {
+      const r = await emitir(id, 'devolucao_consignacao', {
+        numero: s.numero, ncm: s.ncm, valor: s.valor, referencia: s.referencia,
+        senha: dados.senha, confirmar: true, confirmarProducao: dados.confirmarProducao === true,
+      });
+      resultados.push({ id, ok: true, placa: p.placa, numero: r.numero, protocolo: r.protocolo, ambiente: r.ambiente });
+    } catch (e) {
+      resultados.push({ id, ok: false, placa: p.placa, numero: s.numero, erro: e.message });
+      break; // não segue depois de uma recusa ou falta de resposta
+    }
+  }
+  return { resultados, emitidas: resultados.filter(r => r.ok).length, ambiente: ambienteAtual('devolucao_consignacao') };
+}
+
+module.exports = { TIPOS_DIRETOS, estado, emitir, devolucoesPendentes, emitirDevolucoes, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };
