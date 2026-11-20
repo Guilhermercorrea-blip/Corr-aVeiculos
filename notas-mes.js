@@ -125,4 +125,34 @@ function zipDoMes(mes) {
   return { arquivo: `Notas-Correa-${mes}.zip`, zip: montarZip(arquivos), quantidade: lista.itens.length };
 }
 
-module.exports = { listar, zipDoMes, mesAnterior, montarZip, crc32, mesValido };
+// Todas as notas, de cada mês, numa pasta por mês (AAAA-MM/NF-e/...): usado pela cópia automática para o PC da loja
+function zipTodas(desde = '2026-01', ate = mesAtual()) {
+  const arquivos = [];
+  let total = 0;
+  for (let mes = desde; mes <= ate; mes = proximoMes(mes)) {
+    if (!listar(mes).itens.length) continue;
+    const z = zipDoMes(mes);
+    total += z.quantidade;
+    for (const f of lerZip(z.zip)) arquivos.push({ nome: `${mes}/${f.nome}`, dados: f.dados });
+  }
+  return { zip: montarZip(arquivos), quantidade: total };
+}
+function mesAtual(hoje = new Date()) { return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`; }
+function proximoMes(mes) { const [a, m] = mes.split('-').map(Number); return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`; }
+// Lê de volta um ZIP feito por montarZip (sem compressão)
+function lerZip(buf) {
+  const fim = buf.length - 22, n = buf.readUInt16LE(fim + 10);
+  let p = buf.readUInt32LE(fim + 16);
+  const lista = [];
+  for (let i = 0; i < n; i++) {
+    const tam = buf.readUInt32LE(p + 20), nomeLen = buf.readUInt16LE(p + 28), local = buf.readUInt32LE(p + 42);
+    lista.push({ nome: buf.slice(p + 46, p + 46 + nomeLen).toString('utf8'), dados: buf.slice(local + 30 + nomeLen, local + 30 + nomeLen + tam) });
+    p += 46 + nomeLen;
+  }
+  return lista;
+}
+
+module.exports = { listar, zipDoMes, zipTodas, lerZip, mesAnterior, montarZip, crc32, mesValido };
+
+// No servidor: node notas-mes.js exportar > notas.zip   (a tarefa do PC da loja usa isso para copiar os PDF e XML para o OneDrive)
+if (require.main === module && process.argv[2] === 'exportar') process.stdout.write(zipTodas().zip);

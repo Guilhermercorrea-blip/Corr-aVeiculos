@@ -74,3 +74,12 @@ test('entrada de compra: PIX sai com tPag 17 e grupo card; depósito sai com tPa
   assert.match(dep.xml, /<tPag>16<\/tPag><vPag>22000.00<\/vPag><\/detPag>/);
   assert.ok(dep.conteudo.includes('YA01|0|16|'));
 });
+
+test('exportar tudo: uma pasta por mês com o XML e o PDF de cada nota', () => {
+  const r = notas.zipTodas('2026-09', '2026-11');
+  const nomes = notas.lerZip(r.zip).map(f => f.nome);
+  assert.ok(nomes.some(n => /^2026-10\/NF-e\/NFe-2001-.*\.pdf$/.test(n)));
+  assert.ok(nomes.some(n => /^2026-10\/NF-e\/NFe-2001-.*\.xml$/.test(n)));
+  assert.ok(nomes.includes('2026-10/resumo.csv'));
+  assert.ok(!nomes.some(n => n.startsWith('2026-09/')));
+});
