@@ -806,8 +806,8 @@ function dadosPessoa(p) {
   return `<strong>${esc(p.nome)}</strong> <a class="pequeno" href="#/pessoas/${p.id}">Editar cadastro</a><br><span class="suave pequeno">CPF ${esc(formatarCPF(p.cpf))}${p.telefone ? ' · ' + esc(p.telefone) : ''}${end ? '<br>' + esc(end) : ''}</span>`;
 }
 
-async function telaCarro(id) {
-  const d = await api('GET', `/veiculos/${id}`);
+async function telaCarro(id, abaInicial) {
+  const [d, notas] = await Promise.all([api('GET', `/veiculos/${id}`), api('GET', `/veiculos/${id}/notas`).catch(() => [])]);
   const v = d.veiculo;
   const vendido = v.status === 'vendido';
   const devolvido = v.status === 'devolvido';
@@ -823,7 +823,7 @@ async function telaCarro(id) {
         <span class="etiqueta ${vendido || devolvido ? 'vendido' : ''}">${vendido ? 'Vendido' : devolvido ? 'Devolvido ao dono' : 'Em estoque'}</span>
       </div>
       <h1>${esc(v.marca_modelo)} <span class="suave">${anosTexto(v)}</span></h1>
-      <div class="suave">${vendido ? `Vendido em ${dataBR(v.vendido_em)} · ficou ${v.dias_estoque} dias` : devolvido ? 'Voltou para o dono: não está no estoque' : `${v.dias_estoque} dias no pátio`}</div>
+      <div class="suave">${vendido && v.tipo_entrada === 'compra' && !notas.some(n => n.tipo === 'venda' && n.autorizada) ? `Vendido em ${dataBR(v.vendido_em)} · <span class="etiqueta alerta">Nota de venda pendente há ${diasDesde(v.vendido_em)} dia${diasDesde(v.vendido_em) === 1 ? '' : 's'}</span>` : vendido ? `Vendido em ${dataBR(v.vendido_em)} · ficou ${v.dias_estoque} dias` : devolvido ? 'Voltou para o dono: não está no estoque' : `${v.dias_estoque} dias no pátio`}</div>
     </div>
     <div class="acoes">
       <a class="botao-link secundario" href="#/carro/${id}/editar">Editar dados</a>
@@ -833,7 +833,7 @@ async function telaCarro(id) {
     </div>
   </div>
 
-  <div class="cartao">
+  <div class="cartao" data-aba="resumo">
     <h2>Quanto custou ${vendido ? 'e quanto deu de lucro' : 'até agora'}</h2>
     <div class="conta">
       <div><span>${v.tipo_entrada === 'consignacao' ? 'Valor líquido ao dono' : v.tipo_entrada === 'troca' ? 'Valor da troca' : 'Valor de compra'}</span><span>${reais(v.valor_compra)}</span></div>
@@ -847,7 +847,7 @@ async function telaCarro(id) {
   </div>
 
   ${v.impostos ? `
-  <div class="cartao">
+  <div class="cartao" data-aba="resumo">
     <h2>Impostos da venda</h2>
     <p class="pequeno">Diferença entre venda e compra: <strong>${reais(v.impostos.margem)}</strong>. É sobre ela que incidem PIS, COFINS, IRPJ e CSLL.</p>
     <div class="tabela-rolagem"><table>
@@ -865,7 +865,7 @@ async function telaCarro(id) {
     <p class="suave pequeno">Estimativa no regime de lucro presumido, igual às suas notas de venda. Vencimentos já pulando fim de semana e feriados nacionais fixos. Confirme os valores com o contador.</p>
   </div>` : ''}
 
-  <div class="cartao">
+  <div class="cartao" data-aba="gastos">
     <h2>Gastos com o carro</h2>
     ${vendido ? '' : `
     <form id="form-gasto" class="grade" style="margin-bottom:12px">
@@ -886,7 +886,7 @@ async function telaCarro(id) {
     </table></div>` : '<div class="vazio">Nenhum gasto lançado.</div>'}
   </div>
 
-  <div class="cartao">
+  <div class="cartao" data-aba="dados">
     <h2>Dados do carro</h2>
     <div class="dados">
       <div><span>Placa</span>${esc(formatarPlaca(v.placa))}</div>
@@ -903,7 +903,7 @@ async function telaCarro(id) {
   </div>
 
   ${vendido && d.venda.km_saida == null ? `
-  <div class="cartao" style="border-color:var(--vermelho)">
+  <div class="cartao" data-aba="resumo" style="border-color:var(--vermelho)">
     <h2>Falta o km na entrega</h2>
     <p class="pequeno">O contrato de venda só sai com o km preenchido, porque a garantia é por dias ou km.</p>
     <form id="form-km" class="grade" novalidate>
@@ -912,7 +912,7 @@ async function telaCarro(id) {
     </form>
   </div>` : ''}
 
-  <div class="cartao">
+  <div class="cartao" data-aba="documentos">
     <h2>Contratos</h2>
     <p><a class="botao-link secundario" href="/placa.html?id=${id}" target="_blank">Imprimir placa de preço para o vidro (A4)</a></p>
     ${v.tipo_entrada === 'compra_sem_transferir' ? `<p>Valor do contrato de compra: <strong>${reais(v.valor_compra)}</strong><br>Valor do contrato de consignação (preço para venda): <strong>${reais(v.valor_consignacao)}</strong></p>` : ''}
@@ -932,20 +932,18 @@ async function telaCarro(id) {
     <p class="suave pequeno">Os campos que faltarem saem com uma linha em branco para preencher à mão.</p>
   </div>
 
-  ${vendido ? '<div class="cartao" id="cartao-avaliacao"><h2>Avaliação no Google</h2><p class="suave pequeno">Carregando convite…</p></div>' : ''}
-  ${v.tipo_entrada === 'compra' ? `<div class="cartao" id="cartao-nfe-entrada_compra"><h2>${TITULO_NFE.entrada_compra}</h2><p class="suave pequeno">Carregando…</p></div><div class="cartao" id="cartao-nfe-devolucao_compra"><h2>${TITULO_NFE.devolucao_compra}</h2><p class="suave pequeno">Carregando…</p></div>` : ''}
-  ${['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada) ? ['entrada_consignacao', 'devolucao_consignacao'].map(t => `<div class="cartao" id="cartao-nfe-${t}"><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('') : ''}
-  ${vendido ? '<div class="cartao" id="cartao-nfe-venda"><h2>Nota fiscal de venda</h2><p class="suave pequeno">Carregando…</p></div>' : ''}
+  ${vendido ? '<div class="cartao" data-aba="resumo" id="cartao-avaliacao"><h2>Avaliação no Google</h2><p class="suave pequeno">Carregando convite…</p></div>' : ''}
+  ${linhasNotas(v, vendido, notas).cartoes.map(t => `<div class="cartao" data-aba="notas" data-form-nota="${t}" id="cartao-nfe-${t}" hidden><h2>${TITULO_NFE[t]}</h2><p class="suave pequeno">Carregando…</p></div>`).join('')}
 
   ${d.anexos.some(a => a.tipo === 'foto_veiculo') ? `
-  <div class="cartao">
+  <div class="cartao" data-aba="documentos">
     <h2>Fotos do carro</h2>
     <div class="galeria-carro">${d.anexos.filter(a => a.tipo === 'foto_veiculo').map(a => `
       <a href="/anexos/${a.id}" target="_blank" rel="noopener"><img src="/anexos/${a.id}" alt="${esc(a.nome_original || 'Foto do carro')}" loading="lazy"><span>${esc(a.nome_original || 'Foto do carro')}</span></a>`).join('')}</div>
   </div>` : ''}
 
   ${d.anexos.some(a => a.tipo !== 'foto_veiculo') ? `
-  <div class="cartao">
+  <div class="cartao" data-aba="documentos">
     <h2>Documentos anexados</h2>
     <ul class="lista-anexos">${d.anexos.filter(a => a.tipo !== 'foto_veiculo').map(a => `
       <li><a href="/anexos/${a.id}" target="_blank">${NOME_DOC[a.tipo] || 'Arquivo'}${a.nome_original ? ' · ' + esc(a.nome_original) : ''}</a>
@@ -953,7 +951,7 @@ async function telaCarro(id) {
     </ul>
   </div>` : ''}
 
-  <div class="cartao">
+  <div class="cartao" data-aba="resumo">
     <h2>${v.tipo_entrada === 'troca' ? 'Veio na troca de' : v.tipo_entrada === 'consignacao' ? 'Dono (consignante)' : 'Comprado de'}</h2>
     ${dadosPessoa(d.fornecedor)}
     ${d.proprietarioCrv ? `<p class="pequeno" style="margin-top:10px"><strong>Proprietário no CRV (outra pessoa, por procuração):</strong></p>${dadosPessoa(d.proprietarioCrv)}` : ''}
@@ -961,7 +959,7 @@ async function telaCarro(id) {
   </div>
 
   ${d.venda ? `
-  <div class="cartao">
+  <div class="cartao" data-aba="resumo">
     <h2>Venda</h2>
     ${dadosPessoa(d.comprador)}
     <div class="dados" style="margin-top:12px">
@@ -979,23 +977,24 @@ async function telaCarro(id) {
     ${d.venda.obs ? `<p class="suave">${esc(d.venda.obs)}</p>` : ''}
   </div>` : ''}`;
 
+  montarAbasCarro(id, v, d, vendido, notas, abaInicial || (location.hash.endsWith('/nota') ? 'notas' : null));
+  if (location.hash.endsWith('/nota')) abrirFormNota('venda');
   const formGasto = document.getElementById('form-gasto');
   if (vendido) cartaoAvaliacao(id);
   for (const tipo of Object.keys(TITULO_NFE)) if (document.getElementById(`cartao-nfe-${tipo}`)) cartaoNfe(id, tipo);
-  if (location.hash.endsWith('/nota')) setTimeout(() => document.getElementById('cartao-nfe-venda')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 600);
   formGasto?.addEventListener('submit', e => {
     e.preventDefault();
     enviar(formGasto, async dados => {
       await api('POST', `/veiculos/${id}/gastos`, dados);
       aviso('Gasto lançado');
-      telaCarro(id);
+      telaCarro(id, 'gastos');
     });
   });
   app.querySelectorAll('[data-apagar]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('Apagar este gasto?')) return;
     try {
       await api('DELETE', `/gastos/${b.dataset.apagar}`);
-      telaCarro(id);
+      telaCarro(id, 'gastos');
     } catch (e) { aviso(e.message, true); }
   }));
   const formKm = document.getElementById('form-km');
@@ -1079,8 +1078,8 @@ const TITULO_NFE = {
   entrada_compra: 'Nota fiscal de entrada (compra · CFOP 1102)',
   entrada_consignacao: 'Nota fiscal de entrada (consignação)',
   devolucao_consignacao: 'Nota fiscal de devolução (consignação)',
-  devolucao_compra: 'Nota fiscal de devolução de compra (CFOP 5202)',
-  venda: 'Nota fiscal de venda',
+  devolucao_compra: 'Nota de saída: devolução de compra (o carro volta para quem vendeu)',
+  venda: 'Nota de saída: venda',
 };
 // Salva o arquivo da nota. No Chrome/Edge abre a janela "Salvar como" já na última pasta usada para as notas
 // (o navegador lembra a pasta pelo id 'notas-fiscais'); nos outros navegadores vai para Downloads como antes.
@@ -1154,6 +1153,7 @@ async function blocoNfeDireta(id, tipo, form) {
     if (!senha) return aviso('Digite a senha do certificado.', true);
     let dados;
     try { dados = lerForm(form); } catch (e) { return aviso(e.message, true); }
+    if (form._salvarComprador) { try { await form._salvarComprador(); } catch (e) { return aviso(e.message, true); } }
     botao.disabled = true;
     botao.textContent = 'Enviando à SEFAZ… não feche';
     try {
@@ -1163,8 +1163,158 @@ async function blocoNfeDireta(id, tipo, form) {
       aviso(e.message, true);
     }
     document.getElementById(`nfe-senha-${tipo}`).value = '';
-    cartaoNfe(id, tipo);
+    if (document.querySelector('.abas')) telaCarro(id, 'notas'); else cartaoNfe(id, tipo);
   });
+}
+
+// ---------- Aba "Notas fiscais" da página do carro ----------
+function diasDesde(iso) {
+  const ms = Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00').getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+// Linhas da lista (uma por nota que se aplica ao carro) e os formulários que existem
+function linhasNotas(v, vendido, notas) {
+  const consignado = ['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada);
+  const ultima = tipo => notas.filter(n => n.tipo === tipo).pop() || null;
+  const linhas = [];
+  if (v.tipo_entrada === 'compra') {
+    linhas.push({ chave: 'entrada_compra', nome: 'Entrada (compra · CFOP 1102)', nota: ultima('entrada_compra') });
+    const saida = ultima('venda') || ultima('devolucao_compra');
+    linhas.push({ chave: 'saida', nome: saida?.tipo === 'devolucao_compra' ? 'Saída: devolução de compra (CFOP 5202)' : 'Nota de saída (venda)', nota: saida?.autorizada ? saida : null,
+      aviso: vendido ? 'Comprador e pagamentos vêm da venda registrada. Emita quando o cliente pedir.' : 'Registre a venda para emitir a nota de venda.' });
+  }
+  if (consignado) {
+    linhas.push({ chave: 'entrada_consignacao', nome: 'Entrada (consignação · CFOP 1917)', nota: ultima('entrada_consignacao') });
+    linhas.push({ chave: 'devolucao_consignacao', nome: 'Devolução (consignação · CFOP 1918)', nota: ultima('devolucao_consignacao'), aviso: 'Quando o carro volta para o dono ou o dono transfere direto ao comprador.' });
+  }
+  const cartoes = v.tipo_entrada === 'compra' ? ['entrada_compra', ...(vendido ? ['venda'] : []), 'devolucao_compra'] : consignado ? ['entrada_consignacao', 'devolucao_consignacao'] : [];
+  return { linhas, cartoes };
+}
+function abrirFormNota(chave) {
+  const tipos = chave === 'saida' ? [document.getElementById('tipo-saida')?.value || 'venda'] : [chave];
+  document.querySelectorAll('[data-form-nota]').forEach(c => { c.hidden = !tipos.includes(c.dataset.formNota); });
+  const seletor = document.getElementById('bloco-tipo-saida');
+  if (seletor) seletor.hidden = chave !== 'saida';
+  const alvo = chave === 'saida' ? seletor : document.getElementById(`cartao-nfe-${chave}`);
+  alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function montarAbasCarro(id, v, d, vendido, notas, abaInicial) {
+  const { linhas } = linhasNotas(v, vendido, notas);
+  const autorizadas = notas.filter(n => n.autorizada).length;
+  const pendentes = linhas.filter(l => !l.nota && !(l.chave === 'devolucao_consignacao' && v.status === 'estoque') && !(l.chave === 'saida' && !vendido)).length;
+  const docs = d.anexos.length;
+  const ABAS = [
+    ['resumo', 'Resumo', ''],
+    ['gastos', 'Gastos', d.gastos.length ? `<span class="contador">${d.gastos.length}</span>` : ''],
+    ['notas', 'Notas fiscais', linhas.length ? `<span class="contador ${pendentes ? 'pendente' : 'ok'}">${autorizadas} ✓${pendentes ? ' · ' + pendentes + ' pendente' + (pendentes > 1 ? 's' : '') : ''}</span>` : ''],
+    ['documentos', 'Documentos e contratos', docs ? `<span class="contador">${docs}</span>` : ''],
+    ['dados', 'Dados do carro', ''],
+  ];
+  const nav = document.createElement('nav');
+  nav.className = 'abas';
+  nav.innerHTML = ABAS.map(([k, t, c]) => `<button type="button" class="aba" data-aba-botao="${k}">${t} ${c}</button>`).join('');
+  const cabecalho = app.querySelector('.cabecalho');
+  cabecalho.after(nav);
+  let anterior = nav;
+  for (const [k] of ABAS) {
+    const painel = document.createElement('section');
+    painel.className = 'painel-aba';
+    painel.dataset.painel = k;
+    anterior.after(painel);
+    anterior = painel;
+  }
+  // lista de notas no topo da aba Notas
+  const lista = document.createElement('div');
+  lista.className = 'cartao';
+  lista.innerHTML = linhas.length ? `<h2>Notas fiscais deste carro</h2>
+    <p class="suave pequeno">Cada nota numa linha. As autorizadas já têm PDF e XML; as que faltam têm o botão para emitir.</p>
+    ${linhas.map(l => `<div class="linha-nota">
+      <div><b>${l.nome}</b>${!l.nota && l.aviso ? `<br><span class="suave pequeno">${l.aviso}</span>` : ''}</div>
+      <div>${l.nota?.autorizada ? '<span class="situacao ok">Autorizada</span>' : l.nota ? '<span class="situacao falta">Gerada, sem XML</span>' : '<span class="situacao falta">Não emitida</span>'}</div>
+      <div class="pequeno">${l.nota ? `Nº <b>${l.nota.numero}</b> · ${dataBR(String(l.nota.data).replace(' ', 'T')).slice(0, 10)}` : ''}</div>
+      <div class="botoes">${l.nota?.temXml ? `<a class="botao-link" href="/danfe-nota/${l.nota.id}.pdf" download>Baixar PDF</a><button type="button" class="secundario" data-xml-nota="${l.nota.id}">XML</button><a class="botao-link secundario" href="/danfe-nota/${l.nota.id}" target="_blank" rel="noopener">Imprimir</a>`
+        : `<button type="button" data-abrir-nota="${l.chave}">${l.nota ? 'Abrir…' : 'Emitir…'}</button>`}</div>
+    </div>`).join('')}` : '<p class="suave">Este tipo de entrada não tem nota fiscal pelo sistema.</p>';
+  app.querySelector('[data-painel="notas"]').append(lista);
+  // seletor do tipo de nota de saída (carro comprado): venda primeiro; devolução de compra só se escolher
+  if (v.tipo_entrada === 'compra') {
+    const bloco = document.createElement('div');
+    bloco.className = 'cartao';
+    bloco.id = 'bloco-tipo-saida';
+    bloco.hidden = true;
+    bloco.innerHTML = `<label class="campo" style="max-width:520px"><span>Tipo de nota de saída</span><select id="tipo-saida">
+      <option value="venda" ${vendido ? 'selected' : 'disabled'}>Venda normal (5102 · 6102 se o comprador for de outro estado)${vendido ? '' : ' — registre a venda primeiro'}</option>
+      <option value="devolucao_compra" ${vendido ? '' : 'selected'}>Devolução de compra: o carro volta para quem vendeu (5202)</option></select></label>
+      <p class="pequeno" id="alerta-devolucao-compra" style="border-left:4px solid var(--vermelho);padding-left:8px" hidden><b>Atenção:</b> esta NÃO é a nota de venda. Use só quando o carro comprado volta para quem vendeu.</p>`;
+    app.querySelector('[data-painel="notas"]').append(bloco);
+    const sel = bloco.querySelector('#tipo-saida');
+    const trocar = () => { document.getElementById('alerta-devolucao-compra').hidden = sel.value !== 'devolucao_compra'; abrirFormNota('saida'); };
+    sel.addEventListener('change', trocar);
+    document.getElementById('alerta-devolucao-compra').hidden = sel.value !== 'devolucao_compra';
+  }
+  // cada cartão vai para a sua aba
+  app.querySelectorAll('[data-aba]').forEach(c => app.querySelector(`[data-painel="${c.dataset.aba}"]`).append(c));
+  const mostrar = k => {
+    nav.querySelectorAll('.aba').forEach(b => b.classList.toggle('ativa', b.dataset.abaBotao === k));
+    app.querySelectorAll('.painel-aba').forEach(p => { p.hidden = p.dataset.painel !== k; });
+    try { sessionStorage.setItem('aba-carro', k); } catch { /* sem armazenamento: tudo bem */ }
+  };
+  nav.querySelectorAll('.aba').forEach(b => b.addEventListener('click', () => mostrar(b.dataset.abaBotao)));
+  let lembrada = null;
+  try { lembrada = sessionStorage.getItem('aba-carro'); } catch { /* idem */ }
+  mostrar(abaInicial || (ABAS.some(a => a[0] === lembrada) ? lembrada : 'resumo'));
+  lista.querySelectorAll('[data-abrir-nota]').forEach(b => b.addEventListener('click', () => abrirFormNota(b.dataset.abrirNota)));
+  lista.querySelectorAll('[data-xml-nota]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      const r = await api('GET', `/nfe-notas/${b.dataset.xmlNota}/xml`);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+      link.download = r.arquivo;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    } catch (e) { aviso(e.message, true); }
+  }));
+}
+
+// Comprador da nota de venda: já vem da venda (contrato). Pode corrigir aqui; salva no cadastro antes de emitir.
+async function blocoComprador(id, form) {
+  let c;
+  try { c = (await api('GET', `/veiculos/${id}`)).comprador; } catch { return; }
+  if (!c) return;
+  const bloco = document.createElement('div');
+  bloco.className = 'campo c12';
+  bloco.innerHTML = `<div style="border:1px solid var(--borda);border-radius:8px;padding:12px">
+    <b>Comprador</b> <span class="pequeno" style="color:var(--verde)">· preenchido com o comprador da venda registrada. Se algo mudou, corrija aqui antes de emitir.</span>
+    <div class="grade" style="margin-top:8px">
+      ${campo('Nome completo', 'comprador.nome', { valor: c.nome, obrig: true, largura: 'c6' })}
+      ${campo('CPF ou CNPJ', 'comprador.cpf', { valor: c.cpf, obrig: true, largura: 'c3' })}
+      ${campo('Telefone', 'comprador.telefone', { valor: c.telefone, largura: 'c3' })}
+      ${campo('CEP', 'comprador.cep', { valor: c.cep, obrig: true, largura: 'c3' })}
+      ${campo('Rua', 'comprador.endereco', { valor: c.endereco, obrig: true, largura: 'c5' })}
+      ${campo('Número', 'comprador.numero', { valor: c.numero, obrig: true, largura: 'c2' })}
+      ${campo('Bairro', 'comprador.bairro', { valor: c.bairro, obrig: true, largura: 'c2' })}
+      ${campo('Cidade', 'comprador.cidade', { valor: c.cidade, obrig: true, largura: 'c4' })}
+      ${campo('UF', 'comprador.uf', { valor: c.uf, obrig: true, largura: 'c2' })}
+      <div class="campo c6" style="justify-content:flex-end"><span class="pequeno" id="cfop-venda"></span></div>
+    </div></div>`;
+  form.prepend(bloco);
+  const uf = form.elements['comprador.uf'];
+  const mostrarCfop = () => {
+    const u = String(uf.value || '').trim().toUpperCase();
+    const fora = u.length === 2 && u !== 'SP';
+    document.getElementById('cfop-venda').innerHTML = `CFOP desta nota: <b>${fora ? 6102 : 5102}</b>${fora ? ' (comprador de outro estado)' : ' (comprador de SP)'}`;
+  };
+  uf.addEventListener('input', mostrarCfop);
+  mostrarCfop();
+  const campos = ['nome', 'cpf', 'telefone', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf'];
+  form._salvarComprador = async () => {
+    const dados = Object.fromEntries(campos.map(k => [k, form.elements[`comprador.${k}`].value.trim()]));
+    dados.uf = dados.uf.toUpperCase();
+    const mudou = campos.some(k => String(c[k] ?? '') !== String(dados[k] ?? ''));
+    if (!mudou) return;
+    await api('PUT', `/pessoas/${c.id}`, dados);
+    Object.assign(c, dados);
+  };
 }
 
 async function cartaoNfe(id, tipo) {
@@ -1247,6 +1397,7 @@ async function cartaoNfe(id, tipo) {
       } catch (e) { aviso(e.message, true); }
     }));
     const form = document.getElementById(`form-nfe-${tipo}`);
+    if (tipo === 'venda') await blocoComprador(id, form);
     // Nota de venda: tributos calculados na hora, conforme o valor digitado (pode ser diferente do contrato)
     const caixaTributos = document.getElementById('tributos-venda');
     if (caixaTributos) {
@@ -1255,15 +1406,28 @@ async function cartaoNfe(id, tipo) {
         try { valor = paraCentavos(form.elements.valor.value); } catch { valor = null; }
         const contrato = s.venda.valorContrato ? `Valor da venda no contrato: <b>${reais(s.venda.valorContrato)}</b>. Compra: ${reais(s.venda.valorCompra)}.` : '';
         if (!valor || valor <= 0) { caixaTributos.innerHTML = `<b>Tributos da venda</b><br><span class="suave">Digite o valor da nota para ver os impostos.</span><br>${contrato}`; return; }
-        const baseIcms = Math.round(valor * 0.10), icms = Math.round(baseIcms * 0.18);
-        const lucro = Math.max(0, valor - s.venda.valorCompra), pis = Math.round(lucro * 0.0065), cofins = Math.round(lucro * 0.03);
-        caixaTributos.innerHTML = `<b>Tributos desta nota</b> (valor ${reais(valor)})
+        // Mesma conta do impostos.js (lucro presumido): base do ICMS = 10% da venda; PIS/COFINS/IRPJ/CSLL sobre o lucro (venda − compra)
+        const lucro = Math.max(0, valor - s.venda.valorCompra), presumido = Math.round(lucro * 0.32);
+        const itens = [
+          ['ICMS', '18% sobre 10% do valor (' + reais(Math.round(valor * 0.10)) + ')', Math.round(Math.round(valor * 0.10) * 0.18), 'na nota · apuração mensal'],
+          ['PIS', '0,65% sobre o lucro', Math.round(lucro * 0.0065), 'na nota · dia 25 do mês seguinte'],
+          ['COFINS', '3% sobre o lucro', Math.round(lucro * 0.03), 'na nota · dia 25 do mês seguinte'],
+          ['IRPJ', '15% sobre 32% do lucro (' + reais(presumido) + ')', Math.round(presumido * 0.15), 'depois · trimestral'],
+          ['CSLL', '9% sobre 32% do lucro', Math.round(presumido * 0.09), 'depois · trimestral'],
+        ];
+        const naNota = itens.slice(0, 3).reduce((t, i) => t + i[2], 0), depois = itens.slice(3).reduce((t, i) => t + i[2], 0), total = naNota + depois;
+        const sobra = valor - s.venda.valorCompra - (s.venda.gastos || 0) - total;
+        caixaTributos.innerHTML = `<b>Impostos desta venda</b> (valor da nota ${reais(valor)})
           <table class="pequeno" style="margin:6px 0"><tbody>
-          <tr><td>ICMS: 18% sobre 10% do valor (${reais(baseIcms)})</td><td class="num"><b>${reais(icms)}</b></td></tr>
-          <tr><td>PIS: 0,65% sobre o lucro (${reais(lucro)} = venda − compra)</td><td class="num"><b>${reais(pis)}</b></td></tr>
-          <tr><td>COFINS: 3% sobre o lucro</td><td class="num"><b>${reais(cofins)}</b></td></tr>
-          <tr><td><b>Total de tributos</b></td><td class="num"><b>${reais(icms + pis + cofins)}</b></td></tr>
-          </tbody></table>${contrato}${s.venda.valorContrato && valor !== s.venda.valorContrato ? ' <span style="color:#b7791f">O valor da nota está diferente do contrato.</span>' : ''}`;
+          <tr><td>Valor de compra (entrada)</td><td></td><td class="num">${reais(s.venda.valorCompra)}</td></tr>
+          <tr><td><b>Lucro</b> (venda − compra, base do PIS, COFINS, IRPJ e CSLL)</td><td></td><td class="num"><b>${reais(lucro)}</b></td></tr>
+          ${itens.map(([n, r, val, q]) => `<tr><td>${n}: ${r}</td><td class="suave">${q}</td><td class="num"><b>${reais(val)}</b></td></tr>`).join('')}
+          <tr><td>Na nota (ICMS, PIS, COFINS)</td><td></td><td class="num">${reais(naNota)}</td></tr>
+          <tr><td>Pagos depois (IRPJ, CSLL)</td><td></td><td class="num">${reais(depois)}</td></tr>
+          <tr><td><b>Total de impostos</b></td><td></td><td class="num"><b>${reais(total)}</b></td></tr>
+          <tr><td>Sobra para a loja (venda − compra − gastos ${reais(s.venda.gastos || 0)} − impostos)</td><td></td><td class="num"><b class="${sobra >= 0 ? 'positivo' : 'negativo'}">${reais(sobra)}</b></td></tr>
+          </tbody></table>${contrato}${s.venda.valorContrato && valor !== s.venda.valorContrato ? ' <span style="color:#b7791f">O valor da nota está diferente do contrato.</span>' : ''}
+          <div class="suave">Estimativa no lucro presumido, como a aba Resumo. O adicional de 10% do IRPJ (lucro do trimestre acima de R$ 60 mil) não entra. Confirme com o contador.</div>`;
       };
       form.elements.valor.addEventListener('input', mostrar);
       mostrar();
@@ -1291,6 +1455,7 @@ async function cartaoNfe(id, tipo) {
     form.addEventListener('submit', e => {
       e.preventDefault();
       enviar(form, async dados => {
+        if (form._salvarComprador) await form._salvarComprador();
         const r = await api('POST', `/veiculos/${id}/nfe/${tipo}`, { ...dados, origemXml: form._origemXml || undefined });
         const salvo = await salvarArquivoNota(r);
         aviso(salvo === false

@@ -187,6 +187,7 @@ rota('POST', '/api/nfse/previa', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ct
 rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfseServico.emitir(corpo); });
 // NF-e direto na SEFAZ (página do carro). Mesma regra da nota de serviço: só onde a emissão está liberada
 rota('GET', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, c, ctx) => { const d = nfeDireta.estado(p.id, p.tipo); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
+rota('GET', '/api/veiculos/:id/notas', p => nfeDireta.notasDoCarro(p.id));
 rota('GET', '/api/nfe/devolucoes-pendentes', (p, q, c, ctx) => ({ pendentes: nfeDireta.devolucoesPendentes(), ambiente: nfeDireta.ambienteAtual('devolucao_consignacao'), habilitado: emissaoLiberada(ctx) }));
 rota('POST', '/api/nfe/devolucoes-lote', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitirDevolucoes(corpo); });
 rota('POST', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitir(p.id, p.tipo, corpo); });

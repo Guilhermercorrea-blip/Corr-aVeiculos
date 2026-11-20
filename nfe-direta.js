@@ -182,4 +182,12 @@ async function emitirDevolucoes(dados = {}) {
   return { resultados, emitidas: resultados.filter(r => r.ok).length, ambiente: ambienteAtual('devolucao_consignacao') };
 }
 
-module.exports = { TIPOS_DIRETOS, estado, emitir, devolucoesPendentes, emitirDevolucoes, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };
+// Notas reais do carro, para a aba "Notas fiscais": autorizadas (com PDF/XML) e as geradas sem autorização ainda
+function notasDoCarro(veiculoId) {
+  return db.conexao.prepare(`SELECT id, tipo, numero, criado_em, (xml_autorizado IS NOT NULL) AS tem_xml, protocolo
+    FROM nfe_notas WHERE veiculo_id = ? ORDER BY id`).all(Number(veiculoId)).map(n => ({
+    id: n.id, tipo: n.tipo, numero: n.numero, data: n.criado_em, autorizada: !!(n.tem_xml || n.protocolo), temXml: !!n.tem_xml, protocolo: n.protocolo || null,
+  }));
+}
+
+module.exports = { TIPOS_DIRETOS, estado, emitir, devolucoesPendentes, emitirDevolucoes, notasDoCarro, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };

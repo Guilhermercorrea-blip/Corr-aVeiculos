@@ -84,7 +84,7 @@ test('gera a nota de venda no padrão da nota 1054 (com RENAVE)', async () => {
   assert.equal(s.permitido, true);
   // o valor da nota de venda é digitado na hora (pode ser diferente do contrato); a tela recebe o do contrato e a compra para calcular
   assert.equal(s.valor, null);
-  assert.deepEqual(s.venda, { valorContrato: 2050000, valorCompra: 1950000 });
+  assert.deepEqual(s.venda, { valorContrato: 2050000, valorCompra: 1950000, gastos: 0 });
   assert.deepEqual(nfe.calcularVenda(2050000, 1950000), { baseIcms: 205000, icms: 36900, baseLucro: 100000, pis: 650, cofins: 3000 });
   assert.equal(s.ficha.combustivel, '16');
   assert.equal(s.ficha.cor, '10');

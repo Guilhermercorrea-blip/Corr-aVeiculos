@@ -256,7 +256,7 @@ function sugestao(veiculoId, tipo) {
     ficha: sugerirFicha(d.veiculo, lerFicha(veiculoId)),
     calculo: tipo === 'venda' && valor ? calcularVenda(valor, d.veiculo.valor_compra) : null,
     // para a tela calcular os tributos enquanto o valor é digitado
-    venda: tipo === 'venda' && d.venda ? { valorCompra: d.veiculo.valor_compra || 0, valorContrato: d.venda.valor_venda || 0 } : null,
+    venda: tipo === 'venda' && d.venda ? { valorCompra: d.veiculo.valor_compra || 0, valorContrato: d.venda.valor_venda || 0, gastos: d.veiculo.total_gastos || 0 } : null,
     ultima: anterior ? { id: anterior.id, numero: anterior.numero, criado_em: anterior.criado_em, temXml: !!anterior.xml_autorizado, protocolo: anterior.protocolo || null } : null,
     opcoes: opcoesTela(),
   };

@@ -223,3 +223,21 @@ button:disabled { opacity: .6; cursor: wait; }
 
 /* Aniversariantes no Painel */
 .aniversario { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borda, #dce2e7); }
+
+/* Página do carro em abas */
+.abas { display: flex; gap: 4px; border-bottom: 2px solid var(--borda); margin: 4px 0 16px; overflow-x: auto; position: sticky; top: 0; background: var(--fundo); z-index: 5; padding-top: 6px; }
+.aba { background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 10px 14px; font-weight: 600; font-size: .95rem; color: var(--texto-suave); cursor: pointer; white-space: nowrap; border-radius: 8px 8px 0 0; display: inline-flex; gap: 8px; align-items: center; }
+.aba:hover { background: #eef1f5; color: var(--texto); }
+.aba.ativa { color: var(--azul); border-bottom-color: var(--azul); background: #fff; }
+.aba .contador { font-size: .72rem; background: var(--azul-claro); color: var(--azul); padding: 1px 7px; border-radius: 99px; }
+.aba .contador.ok { background: var(--verde-claro); color: var(--verde); }
+.aba .contador.pendente { background: #fdecc8; color: #8a5a00; }
+.painel-aba[hidden], [data-form-nota][hidden], #bloco-tipo-saida[hidden] { display: none; }
+.linha-nota { display: grid; grid-template-columns: 1.4fr .6fr 1.2fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--borda); }
+.linha-nota:last-child { border-bottom: none; }
+.linha-nota .botoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.linha-nota .botoes a, .linha-nota .botoes button { padding: 6px 10px; font-size: .85rem; }
+@media (max-width: 640px) { .linha-nota { grid-template-columns: 1fr; } }
+.situacao { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+.situacao.ok { background: var(--verde-claro); color: var(--verde); }
+.situacao.falta { background: #fdecc8; color: #8a5a00; }
