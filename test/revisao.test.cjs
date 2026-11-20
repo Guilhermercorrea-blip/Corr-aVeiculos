@@ -131,3 +131,13 @@ test('devolução de consignação de carro antigo sem dados do CRLV: sai igual 
   const novo = carro();
   await assert.rejects(nfe.gerarNota(novo, 'entrada_consignacao', { numero: 7063, ncm: '87032210', valor: 100 }), /motor/);
 });
+
+test('consignado devolvido ao dono sai do estoque e pode voltar; carro comprado não', () => {
+  const id = carro();
+  assert.equal(db.marcarDevolvido(id).status, 'devolvido');
+  assert.ok(!db.listarVeiculos('estoque').some(v => v.id === id));
+  assert.ok(db.listarVeiculos('devolvido').some(v => v.id === id));
+  assert.equal(db.marcarDevolvido(id, false).status, 'estoque');
+  const comprado = carro({ tipo_entrada: 'compra' });
+  assert.throws(() => db.marcarDevolvido(comprado), /Só carro em consignação/);
+});

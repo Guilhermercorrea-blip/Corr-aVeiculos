@@ -552,6 +552,17 @@ function notaFiscalDoCarro(id) {
   return null;
 }
 
+// Consignado que voltou para o dono: sai do estoque (e volta, se marcado por engano)
+function marcarDevolvido(id, devolvido = true) {
+  const { veiculo } = obterVeiculo(id);
+  if (!TIPOS_CONSIGNACAO_DEVOLVE.includes(veiculo.tipo_entrada)) throw erro('Só carro em consignação volta para o dono. Carro comprado sai do estoque pela venda.');
+  if (devolvido && veiculo.status !== 'estoque') throw erro('Este carro não está em estoque');
+  if (!devolvido && veiculo.status !== 'devolvido') throw erro('Este carro não está marcado como devolvido');
+  atualizar('veiculos', id, { status: devolvido ? 'devolvido' : 'estoque' });
+  return { id, status: devolvido ? 'devolvido' : 'estoque' };
+}
+const TIPOS_CONSIGNACAO_DEVOLVE = ['consignacao', 'compra_sem_transferir', 'troca'];
+
 // Apaga o carro com gastos e anexos (para cadastros de teste ou feitos por engano)
 function excluirVeiculo(id) {
   const { veiculo, origemTroca } = obterVeiculo(id);
@@ -716,6 +727,6 @@ module.exports = {
   conexao: db, CATEGORIAS_GASTO, erro,
   criarAnexo, definirTipoAnexo, obterAnexo,
   criarCompra, listarVeiculos, obterVeiculo, atualizarVeiculo,
-  adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, criarEstoqueRapido,
+  adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, marcarDevolvido, criarEstoqueRapido,
   resumo, listarPessoas, obterPessoa, atualizarPessoa, excluirPessoa, restaurarPessoa, obterConfig, salvarConfig, descreverPagamento,
 };

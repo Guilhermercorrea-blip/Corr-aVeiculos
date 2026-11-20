@@ -51,6 +51,7 @@ async function resolverPendente(veiculoId, tipo, ambiente, cert) {
     const nfeProc = `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">${p.xml}${c.protXml}</nfeProc>`;
     db.conexao.prepare("UPDATE nfe_envios SET situacao = 'autorizada', cstat = '100', motivo = 'Autorizada (confirmada por consulta)', protocolo = ?, xml = ? WHERE id = ?").run(c.protocolo, nfeProc, p.id);
     if (ambiente === 'producao') db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE chave = ?').run(nfeProc, c.protocolo, p.chave);
+    if (ambiente === 'producao' && tipo === 'devolucao_consignacao') db.conexao.prepare("UPDATE veiculos SET status = 'devolvido' WHERE id = ? AND status = 'estoque'").run(Number(veiculoId));
     return { ok: true, id: p.id, ambiente, numero: p.numero, chave: p.chave, protocolo: c.protocolo, recuperada: true };
   }
   if (c.cStat === '217') { // a SEFAZ não recebeu: o envio não vale e pode emitir de novo
@@ -103,6 +104,7 @@ async function emitirUmaVez(veiculoId, tipo, dados) {
     atualizar('autorizada', { cStat: r.cStat, motivo: r.xMotivo, protocolo: r.nProt, xml: r.nfeProc });
     // Em produção, o XML autorizado também fica guardado na nota do carro (aparece em "Notas emitidas" e na página do carro)
     if (!homologacao) db.conexao.prepare('UPDATE nfe_notas SET xml_autorizado = ?, protocolo = ? WHERE chave = ?').run(r.nfeProc, r.nProt, g.chave);
+    if (!homologacao && tipo === 'devolucao_consignacao') db.conexao.prepare("UPDATE veiculos SET status = 'devolvido' WHERE id = ? AND status = 'estoque'").run(Number(veiculoId));
     return { ok: true, id, ambiente, numero, chave: g.chave, protocolo: r.nProt };
   }
   // Recusa de verdade: a nota veio com código de rejeição, ou o lote inteiro foi recusado. Qualquer outra resposta fica para conferir.

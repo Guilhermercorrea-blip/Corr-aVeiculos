@@ -551,7 +551,7 @@ function cartaoCarro(v) {
     <div class="linha" style="margin-top:0"><span class="placa">${esc(formatarPlaca(v.placa))}</span><span class="etiqueta">${TIPO_ENTRADA[v.tipo_entrada]}</span></div>
     <div class="modelo" style="margin-top:8px">${esc(v.marca_modelo)} <span class="suave">${anosTexto(v)}</span></div>
     <div class="linha suave">
-      <span>${v.status === 'vendido' ? 'Vendido ' + dataBR(v.vendido_em).slice(0, 10) : `<span class="${parado ? 'etiqueta alerta' : ''}">${v.dias_estoque} dias no pátio</span>`}</span>
+      <span>${v.status === 'vendido' ? 'Vendido ' + dataBR(v.vendido_em).slice(0, 10) : v.status === 'devolvido' ? 'Devolvido ao dono' : `<span class="${parado ? 'etiqueta alerta' : ''}">${v.dias_estoque} dias no pátio</span>`}</span>
       ${direita}
     </div>
   </a>`;
@@ -631,6 +631,7 @@ async function mostrarAniversarios(lista) {
 
 async function telaLista(status) {
   const carros = await api('GET', `/veiculos?status=${status}`);
+  const devolvidos = status === 'vendido' ? await api('GET', '/veiculos?status=devolvido') : [];
   const titulo = status === 'estoque' ? 'Estoque' : 'Vendidos';
   const totais = status === 'estoque'
     ? `${carros.length} carros · ${reais(carros.reduce((s, v) => s + v.custo_total, 0))} investidos`
@@ -653,6 +654,7 @@ async function telaLista(status) {
   };
   document.getElementById('busca').addEventListener('input', e => desenhar(e.target.value));
   desenhar('');
+  if (devolvidos.length) app.insertAdjacentHTML('beforeend', `<h2 style="margin-top:24px">Devolvidos ao dono</h2><div class="suave pequeno">Consignados que voltaram para o dono (saíram do estoque sem venda).</div><div class="lista-carros">${devolvidos.map(cartaoCarro).join('')}</div>`);
 }
 
 // Entrada de carro (nova) ou edição dos dados de um carro já cadastrado
@@ -762,6 +764,8 @@ async function telaCarro(id) {
   const d = await api('GET', `/veiculos/${id}`);
   const v = d.veiculo;
   const vendido = v.status === 'vendido';
+  const devolvido = v.status === 'devolvido';
+  const consignado = ['consignacao', 'compra_sem_transferir', 'troca'].includes(v.tipo_entrada);
   const hoje = agoraLocal().slice(0, 10);
 
   app.innerHTML = `
@@ -770,15 +774,16 @@ async function telaCarro(id) {
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <span class="placa">${esc(formatarPlaca(v.placa))}</span>
         <span class="etiqueta">${TIPO_ENTRADA[v.tipo_entrada]}</span>
-        <span class="etiqueta ${vendido ? 'vendido' : ''}">${vendido ? 'Vendido' : 'Em estoque'}</span>
+        <span class="etiqueta ${vendido || devolvido ? 'vendido' : ''}">${vendido ? 'Vendido' : devolvido ? 'Devolvido ao dono' : 'Em estoque'}</span>
       </div>
       <h1>${esc(v.marca_modelo)} <span class="suave">${anosTexto(v)}</span></h1>
-      <div class="suave">${vendido ? `Vendido em ${dataBR(v.vendido_em)} · ficou ${v.dias_estoque} dias` : `${v.dias_estoque} dias no pátio`}</div>
+      <div class="suave">${vendido ? `Vendido em ${dataBR(v.vendido_em)} · ficou ${v.dias_estoque} dias` : devolvido ? 'Voltou para o dono: não está no estoque' : `${v.dias_estoque} dias no pátio`}</div>
     </div>
     <div class="acoes">
       <a class="botao-link secundario" href="#/carro/${id}/editar">Editar dados</a>
-      ${vendido ? '<button class="perigo" id="desfazer">Desfazer venda</button>' : `<a class="botao-link" href="#/carro/${id}/vender">Registrar venda</a>`}
-      ${vendido ? '' : '<button class="perigo" id="excluir">Excluir carro</button>'}
+      ${vendido ? '<button class="perigo" id="desfazer">Desfazer venda</button>' : devolvido ? '<button class="secundario" id="voltar-estoque">Voltar para o estoque</button>' : `<a class="botao-link" href="#/carro/${id}/vender">Registrar venda</a>`}
+      ${!vendido && !devolvido && consignado ? '<button class="secundario" id="marcar-devolvido">Devolvido ao dono</button>' : ''}
+      ${vendido || devolvido ? '' : '<button class="perigo" id="excluir">Excluir carro</button>'}
     </div>
   </div>
 
@@ -965,6 +970,13 @@ async function telaCarro(id) {
       ir('#/estoque');
     } catch (e) { aviso(e.message, true); }
   });
+  for (const [botao, devolver] of [['marcar-devolvido', true], ['voltar-estoque', false]]) {
+    document.getElementById(botao)?.addEventListener('click', async () => {
+      if (!confirm(devolver ? 'Marcar como devolvido ao dono? O carro sai do estoque (a página e as notas continuam).' : 'Voltar o carro para o estoque?')) return;
+      try { await api('PUT', `/veiculos/${id}/devolvido`, { devolvido: devolver }); aviso(devolver ? 'Carro marcado como devolvido ao dono.' : 'Carro de volta ao estoque.'); telaCarro(id); }
+      catch (e) { aviso(e.message, true); }
+    });
+  }
   document.getElementById('desfazer')?.addEventListener('click', async () => {
     const extra = d.venda?.troca_veiculo_id ? '\n\nO carro que entrou na troca também sai do estoque.' : '';
     if (!confirm('Desfazer a venda e voltar o carro para o estoque?' + extra)) return;
