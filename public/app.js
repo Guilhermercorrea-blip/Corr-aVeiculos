@@ -1123,7 +1123,7 @@ async function blocoNfeDireta(id, tipo, form) {
       <td>${esc(SITUACAO_NFE[e.situacao] || e.situacao)}</td><td>${esc(e.protocolo || e.motivo || '')}</td>
       <td>${e.situacao === 'autorizada' ? `<a class="botao-link" href="/danfe/${e.id}.pdf" download>Baixar PDF</a> <button type="button" class="secundario" data-xml-nfe="${e.id}">Baixar XML</button> <a class="botao-link secundario" href="/danfe/${e.id}" target="_blank" rel="noopener">Imprimir</a>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
   caixa.innerHTML = `
-    <h3 style="margin:0 0 6px">${s.jaAutorizada ? 'Nota autorizada' : 'Emitir nota'}</h3>
+    <h3 style="margin:0 0 6px">${s.jaAutorizada ? 'Nota autorizada' : tipo === 'venda' ? '3. Emitir nota' : 'Emitir nota'}</h3>
     ${s.jaAutorizada ? '' : `<p class="pequeno" style="border-left:4px solid ${real ? '#b42318' : '#b7791f'};padding-left:8px"><strong>${real ? 'NOTA REAL: vale de verdade e não volta atrás.' : 'Ambiente de TESTE da SEFAZ: a nota não vale e usa um número de teste.'}</strong></p>`}
     ${s.jaAutorizada ? `<p class="pequeno"><strong>Autorizada:</strong> nota nº ${s.jaAutorizada.numero}, protocolo ${esc(s.jaAutorizada.protocolo)}.</p>` : s.habilitado ? `
     <p class="suave pequeno">Usa os dados do formulário acima (número, tipo, valor, data${tipo === 'devolucao_consignacao' ? ' e chave da entrada' : ''}). Confira antes.</p>
@@ -1284,7 +1284,7 @@ async function blocoComprador(id, form) {
   const bloco = document.createElement('div');
   bloco.className = 'campo c12';
   bloco.innerHTML = `<div style="border:1px solid var(--borda);border-radius:8px;padding:12px">
-    <b>Comprador</b> <span class="pequeno" style="color:var(--verde)">· preenchido com o comprador da venda registrada. Se algo mudou, corrija aqui antes de emitir.</span>
+    <h3 style="margin:0 0 4px">1. Comprador</h3><span class="pequeno" style="color:var(--verde)">· preenchido com o comprador da venda registrada. Se algo mudou, corrija aqui antes de emitir.</span>
     <div class="grade" style="margin-top:8px">
       ${campo('Nome completo', 'comprador.nome', { valor: c.nome, obrig: true, largura: 'c6' })}
       ${campo('CPF ou CNPJ', 'comprador.cpf', { valor: c.cpf, obrig: true, largura: 'c3' })}
@@ -1401,6 +1401,13 @@ async function cartaoNfe(id, tipo) {
     // Nota de venda: tributos calculados na hora, conforme o valor digitado (pode ser diferente do contrato)
     const caixaTributos = document.getElementById('tributos-venda');
     if (caixaTributos) {
+      // como na prévia: "2. Valor da nota" com os impostos logo abaixo do valor
+      const titulo = document.createElement('div');
+      titulo.className = 'campo c12';
+      titulo.innerHTML = '<h3 style="margin:8px 0 0">2. Valor da nota</h3>';
+      form.elements.numero.closest('.campo').before(titulo);
+      caixaTributos.style.gridColumn = '1 / -1';
+      form.elements.data.closest('.campo').after(caixaTributos);
       const mostrar = () => {
         let valor = null;
         try { valor = paraCentavos(form.elements.valor.value); } catch { valor = null; }
