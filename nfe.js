@@ -362,7 +362,19 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
   const uf = p.uf.toUpperCase();
   if (!C_UF[uf]) throw db.erro(`UF do ${config.quem} inválida`);
   // Dados do CRLV (aba "Veículo Novo" do Emissor): agora em todas as notas, não só na venda. Ficam guardados no carro.
-  const ficha = validarFicha({ ...lerFicha(veiculoId), ...(dados.ficha || {}) }, v);
+  // Devolução de consignação sem os dados do CRLV (carro antigo, entrada feita no Emissor sem a aba "Veículo Novo"):
+  // sai como as devoluções 1067-1069, com a mesma descrição e o mesmo código do item da nota de entrada.
+  const fichaJunta = { ...lerFicha(veiculoId), ...(dados.ficha || {}) };
+  const semFicha = tipo === 'devolucao_consignacao' && !String(fichaJunta.motor || '').trim();
+  const ficha = semFicha ? null : validarFicha(fichaJunta, v);
+  let itemEntrada = null;
+  if (tipo === 'devolucao_consignacao') {
+    const ent = db.conexao.prepare("SELECT xml_autorizado FROM nfe_notas WHERE veiculo_id = ? AND tipo = 'entrada_consignacao' AND xml_autorizado IS NOT NULL ORDER BY id DESC").get(veiculoId);
+    try { if (ent) itemEntrada = require('./danfe').lerNota(ent.xml_autorizado).itens[0] || null; } catch { itemEntrada = null; }
+  }
+  if (semFicha && !itemEntrada) throw db.erro('Informe o número do motor (está no CRLV). Sem os dados do CRLV, a devolução só sai igual à entrada quando o XML da nota de entrada está no carro.');
+  const codigoItem = semFicha && itemEntrada?.codigo ? campoTxt(itemEntrada.codigo, 60) : `S${veiculoId}`;
+  const descricaoItem = semFicha && itemEntrada?.descricao ? campoTxt(itemEntrada.descricao, 120) : campoTxt(descricaoVeiculo(v), 120);
   let referencia = null;
   if (config.referencia) {
     referencia = digitos(origem ? origem.chave : dados.referencia);
@@ -412,8 +424,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     `${doc.length === 11 ? 'E03' : 'E02'}|${doc}|`,
     `E05|${campoTxt(p.endereco)}|${campoTxt(p.numero)}||${campoTxt(p.bairro)}|${cMun}|${campoTxt(p.cidade)}|${uf}|${digitos(p.cep)}|1058|BRASIL|${fone.length >= 6 && fone.length <= 14 ? fone : ''}|`,
     'H|1||',
-    `I|S${veiculoId}|||${campoTxt(descricaoVeiculo(v), 120)}|${ncm}|||${cfop}|UN|1.0000|${vUn}|${valorTxt}|||UN|1.0000|${vUn}|||||1|||||${venda ? 'SP020110' : ''}|`,
-    ...(ficha ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
+    `I|${codigoItem}|||${descricaoItem}|${ncm}|||${cfop}|UN|1.0000|${vUn}|${valorTxt}|||UN|1.0000|${vUn}|||||1|||||${venda ? 'SP020110' : ''}|`,
+    ...(ficha ? [`J|3|${ficha.chassi}|${ficha.cor}|${campoTxt(semAcento(v.cor || CORES[ficha?.cor] || '').toUpperCase(), 40)}|${ficha.potencia}|${ficha.cilindrada}|${ficha.peso.toFixed(4)}|${ficha.peso.toFixed(4)}|1|${ficha.combustivel}|${ficha.motor}|${ficha.cmt.toFixed(4)}|${ficha.eixos}|${v.ano_mod}|${v.ano_fab}|${ficha.pintura}|${ficha.tipo}|${ficha.especie}|N|1|${ficha.marca_modelo}|${ficha.cor}|${ficha.lotacao}|0|`] : []),
     'M||',
     'N|',
     espelho ? espelho.N : venda ? `N04|0|20|3|90.0000|${dinheiro(c.baseIcms)}|18.0000|${dinheiro(c.icms)}|||||||`
@@ -444,8 +456,8 @@ async function gerarNota(veiculoId, tipo, dados = {}) {
     modFrete: config.modFrete ?? (venda ? 1 : 0), pagamentoPix: config.pagamentoPix, deposito: dados.pagamento === 'deposito',
     calculoVenda: c, pagamentos,
     emitente: EMITENTE, pessoa: p, cep: digitos(p.cep), fone: fone.length >= 6 && fone.length <= 14 ? fone : '',
-    xProd: campoTxt(descricaoVeiculo(v), 120),
-    ficha, xCor: campoTxt(semAcento(v.cor || CORES[ficha.cor]).toUpperCase(), 40), anoMod: v.ano_mod, anoFab: v.ano_fab,
+    xProd: descricaoItem, cProd: codigoItem,
+    ficha, xCor: campoTxt(semAcento(v.cor || CORES[ficha?.cor] || '').toUpperCase(), 40), anoMod: v.ano_mod, anoFab: v.ano_fab,
   }) : null;
 
   if (!homologacao) {

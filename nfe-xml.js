@@ -93,7 +93,7 @@ function montarInfNFe(n) {
   const tvCOFINS = cv ? dinheiro(cv.cofins) : '0.00';
   const det =
     '<det nItem="1"><prod>' +
-    el('cProd', 'S' + n.veiculoId) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + (n.venda ? el('cBenef', 'SP020110') : '') + el('CFOP', n.cfop) +
+    el('cProd', n.cProd || ('S' + n.veiculoId)) + el('cEAN', 'SEM GTIN') + el('xProd', n.xProd) + el('NCM', n.ncm) + (n.venda ? el('cBenef', 'SP020110') : '') + el('CFOP', n.cfop) +
     el('uCom', 'UN') + el('qCom', '1.0000') + el('vUnCom', n.vUn) + el('vProd', valor) + el('cEANTrib', 'SEM GTIN') +
     el('uTrib', 'UN') + el('qTrib', '1.0000') + el('vUnTrib', n.vUn) + el('indTot', '1') + veicProd(n.ficha, n.xCor, n.anoMod, n.anoFab) + '</prod>' +
     '<imposto>' + impostoItem + ibs.item + '</imposto></det>';

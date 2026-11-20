@@ -1146,14 +1146,14 @@ async function cartaoNfe(id, tipo) {
         <small class="suave" id="xml-origem-info-${tipo}">Sem o XML, o ICMS sai no padrão (18% sobre 10% do valor), que pode não bater com o da nota da loja. PIS/COFINS saem 07, como sempre.</small></div>` : ''}
       ${`
       ${f.motor ? '<div class="campo c12"><details><summary class="suave pequeno">Dados do CRLV do carro (já preenchidos na entrada: clique para conferir ou corrigir)</summary><div class="grade" style="margin-top:8px">' : ''}
-      <div class="campo c12"><span><b>Dados do CRLV para a aba "Veículo Novo"</b> (vão em todas as notas). Ficam guardados no carro: na próxima nota já vêm preenchidos.</span></div>
-      ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: true, largura: 'c4' })}
-      ${campo('Potência (CV)', 'ficha.potencia', { valor: f.potencia, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
-      ${campo('Cilindradas (cm³)', 'ficha.cilindrada', { valor: f.cilindrada, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
-      ${campo('Peso bruto (t)', 'ficha.peso', { valor: f.peso, obrig: true, largura: 'c2', extra: 'inputmode="decimal" placeholder="1,51"' })}
+      <div class="campo c12"><span><b>Dados do CRLV para a aba "Veículo Novo"</b> (vão em todas as notas). Ficam guardados no carro: na próxima nota já vêm preenchidos.${tipo === 'devolucao_consignacao' && !f.motor ? ' <b>Na devolução são opcionais:</b> sem o motor, a nota sai igual à de entrada (mesma descrição do carro), como as devoluções antigas.' : ''}</span></div>
+      ${campo('Nº do motor', 'ficha.motor', { valor: f.motor, obrig: tipo !== 'devolucao_consignacao', largura: 'c4' })}
+      ${campo('Potência (CV)', 'ficha.potencia', { valor: f.potencia, obrig: tipo !== 'devolucao_consignacao', largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Cilindradas (cm³)', 'ficha.cilindrada', { valor: f.cilindrada, obrig: tipo !== 'devolucao_consignacao', largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Peso bruto (t)', 'ficha.peso', { valor: f.peso, obrig: tipo !== 'devolucao_consignacao', largura: 'c2', extra: 'inputmode="decimal" placeholder="1,51"' })}
       ${campo('CMT (t)', 'ficha.cmt', { valor: f.cmt, largura: 'c2', extra: 'inputmode="decimal" placeholder="igual ao peso"' })}
       ${campo('Eixos', 'ficha.eixos', { valor: f.eixos, largura: 'c2', extra: 'inputmode="numeric"' })}
-      ${campo('Lotação', 'ficha.lotacao', { valor: f.lotacao, obrig: true, largura: 'c2', extra: 'inputmode="numeric"' })}
+      ${campo('Lotação', 'ficha.lotacao', { valor: f.lotacao, obrig: tipo !== 'devolucao_consignacao', largura: 'c2', extra: 'inputmode="numeric"' })}
       ${selecao('Combustível', 'ficha.combustivel', o.combustiveis, f.combustivel, 'c4')}
       ${selecao('Tipo', 'ficha.tipo', o.tipos, f.tipo, 'c4')}
       ${selecao('Espécie', 'ficha.especie', o.especies, f.especie, 'c4')}
