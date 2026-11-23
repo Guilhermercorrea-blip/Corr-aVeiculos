@@ -101,7 +101,9 @@ async function enviarEvento(notaId, tipo, dados = {}) {
   if (emAndamento.has(trava)) throw db.erro('Já tem um envio desta nota em andamento. Aguarde.', 409);
   emAndamento.add(trava);
   try {
-    const cert = nfse.carregarCertificado(caminho, String(dados.senha || ''));
+    let cert;
+    try { cert = nfse.carregarCertificado(caminho, String(dados.senha || '')); }
+    catch (e) { throw db.erro(e.message, 400); }
     const seq = tipo === 'cancelamento' ? 1
       : (db.conexao.prepare("SELECT MAX(seq) s FROM nfe_eventos WHERE nota_id = ? AND tipo = 'cce' AND situacao = 'registrado'").get(n.id).s || 0) + 1;
     if (tipo === 'cce' && seq > 20) throw db.erro('Esta nota já tem 20 cartas de correção (o máximo).', 409);

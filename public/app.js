@@ -1279,10 +1279,12 @@ function montarAbasCarro(id, v, d, vendido, notas, abaInicial) {
   lista.innerHTML = linhas.length ? `<h2>Notas fiscais deste carro</h2>
     <p class="suave pequeno">Cada nota numa linha. As autorizadas já têm PDF e XML; as que faltam têm o botão para emitir.</p>
     ${linhas.map(l => `<div class="linha-nota">
-      <div><b>${l.nome}</b>${!l.nota && l.aviso ? `<br><span class="suave pequeno">${l.aviso}</span>` : ''}</div>
-      <div>${l.nota?.autorizada ? '<span class="situacao ok">Autorizada</span>' : l.nota ? '<span class="situacao falta">Gerada, sem XML</span>' : '<span class="situacao falta">Não emitida</span>'}</div>
-      <div class="pequeno">${l.nota ? `Nº <b>${l.nota.numero}</b> · ${dataBR(String(l.nota.data).replace(' ', 'T')).slice(0, 10)}` : ''}</div>
-      <div class="botoes">${l.nota?.temXml ? `<a class="botao-link" href="/danfe-nota/${l.nota.id}.pdf" download>Baixar PDF</a><button type="button" class="secundario" data-xml-nota="${l.nota.id}">XML</button><a class="botao-link secundario" href="/danfe-nota/${l.nota.id}" target="_blank" rel="noopener">Imprimir</a>`
+      <div><b>${l.nome}</b>${!l.nota && l.aviso ? `<br><span class="suave pequeno">${l.aviso}</span>` : ''}
+        ${l.nota?.eventos?.filter(e => e.tipo === 'cce').length ? `<ul class="eventos-nota">${l.nota.eventos.filter(e => e.tipo === 'cce').map(e => `<li>Carta de correção ${e.seq} · ${dataBR(String(e.criado_em).replace(' ', 'T'))}: ${esc(e.texto)} <a href="/cce/${e.id}" target="_blank" rel="noopener">Imprimir</a> · <a href="#" data-xml-evento="${e.id}">XML</a></li>`).join('')}</ul>` : ''}
+        ${l.nota?.cancelada ? (() => { const c = l.nota.eventos.find(e => e.tipo === 'cancelamento'); return `<div class="pequeno" style="color:var(--vermelho);margin-top:4px">Cancelada em ${dataBR(String(l.nota.canceladaEm).replace(' ', 'T'))}${c ? ` · protocolo ${esc(c.protocolo || '')} · motivo: ${esc(c.texto)} · <a href="#" data-xml-evento="${c.id}">XML do cancelamento</a>` : ''}</div>`; })() : ''}</div>
+      <div>${l.nota?.cancelada ? '<span class="situacao cancelada">Cancelada</span>' : l.nota?.autorizada ? '<span class="situacao ok">Autorizada</span>' : l.nota ? '<span class="situacao falta">Gerada, sem XML</span>' : '<span class="situacao falta">Não emitida</span>'}</div>
+      <div class="pequeno">${l.nota ? `Nº <b>${l.nota.numero}</b> · ${dataBR(String(l.nota.data).replace(' ', 'T')).slice(0, 10)}${l.nota.podeCancelar && l.nota.cancelarAte ? `<br><span class="suave">pode cancelar até ${new Date(l.nota.cancelarAte).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')}</span>` : ''}` : ''}</div>
+      <div class="botoes">${l.nota?.temXml ? `<a class="botao-link" href="/danfe-nota/${l.nota.id}.pdf" download>Baixar PDF</a><button type="button" class="secundario" data-xml-nota="${l.nota.id}">XML</button><a class="botao-link secundario" href="/danfe-nota/${l.nota.id}" target="_blank" rel="noopener">Imprimir</a>${l.nota.cancelada ? '' : `<span class="mais-nota"><button type="button" class="secundario" data-mais-nota="${l.nota.id}">Mais ▾</button></span>`}`
         : `<button type="button" data-abrir-nota="${l.chave}">${l.nota ? 'Abrir…' : 'Emitir…'}</button>`}</div>
     </div>`).join('')}` : '<p class="suave">Este tipo de entrada não tem nota fiscal pelo sistema.</p>';
   app.querySelector('[data-painel="notas"]').append(lista);
@@ -1314,6 +1316,7 @@ function montarAbasCarro(id, v, d, vendido, notas, abaInicial) {
   try { lembrada = sessionStorage.getItem('aba-carro'); } catch { /* idem */ }
   mostrar(abaInicial || (ABAS.some(a => a[0] === lembrada) ? lembrada : 'resumo'));
   lista.querySelectorAll('[data-abrir-nota]').forEach(b => b.addEventListener('click', () => abrirFormNota(b.dataset.abrirNota)));
+  ligarEventosNota(id, lista, linhas, v);
   lista.querySelectorAll('[data-xml-nota]').forEach(b => b.addEventListener('click', async () => {
     try {
       const r = await api('GET', `/nfe-notas/${b.dataset.xmlNota}/xml`);
@@ -1324,6 +1327,95 @@ function montarAbasCarro(id, v, d, vendido, notas, abaInicial) {
       setTimeout(() => URL.revokeObjectURL(link.href), 5000);
     } catch (e) { aviso(e.message, true); }
   }));
+}
+
+// ---------- Cancelar nota (até 24 h) e carta de correção, a partir do "Mais ▾" de cada nota autorizada ----------
+function janelaNota(html) {
+  const fundo = document.createElement('div');
+  fundo.className = 'fundo-janela';
+  fundo.innerHTML = `<div class="janela" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.append(fundo);
+  const fechar = () => fundo.remove();
+  fundo.querySelectorAll('[data-fechar]').forEach(b => b.addEventListener('click', fechar));
+  fundo.addEventListener('click', e => { if (e.target === fundo) fechar(); });
+  return { fundo, fechar };
+}
+function ligarEventosNota(id, lista, linhas, v) {
+  const notaPorId = new Map(linhas.filter(l => l.nota).map(l => [String(l.nota.id), l]));
+  const fecharMenus = () => document.querySelectorAll('.menu-mais').forEach(m => m.remove());
+  document.addEventListener('click', fecharMenus);
+  lista.querySelectorAll('[data-xml-evento]').forEach(a => a.addEventListener('click', async e => {
+    e.preventDefault();
+    try {
+      const r = await api('GET', `/nfe-eventos/${a.dataset.xmlEvento}/xml`);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([r.conteudo], { type: 'application/xml;charset=utf-8' }));
+      link.download = r.arquivo;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    } catch (err) { aviso(err.message, true); }
+  }));
+  lista.querySelectorAll('[data-mais-nota]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    fecharMenus();
+    const l = notaPorId.get(b.dataset.maisNota);
+    const pode = !!l?.nota?.podeCancelar;
+    const menu = document.createElement('div');
+    menu.className = 'menu-mais';
+    menu.innerHTML = `<button type="button" data-acao="cce">Carta de correção<small>corrigir um dado que não muda o imposto</small></button>
+      <button type="button" data-acao="cancelar" ${pode ? '' : 'disabled'}>Cancelar nota<small>${pode ? 'até 24 horas depois da autorização' : 'prazo de 24 horas já passou'}</small></button>`;
+    b.parentElement.append(menu);
+    menu.addEventListener('click', ev => ev.stopPropagation());
+    menu.querySelector('[data-acao=cce]').addEventListener('click', () => { fecharMenus(); abrirCartaCorrecao(id, l); });
+    if (pode) menu.querySelector('[data-acao=cancelar]').addEventListener('click', () => { fecharMenus(); abrirCancelamento(id, l, v); });
+  }));
+}
+function abrirCancelamento(id, l, v) {
+  const n = l.nota;
+  const { fundo, fechar } = janelaNota(`<h2>Cancelar a nota nº ${n.numero}</h2>
+    <p class="pequeno">${esc(l.nome)} · ${esc(v.marca_modelo)}${v.placa ? ' ' + esc(formatarPlaca(v.placa)) : ''}</p>
+    <div class="regras-nota"><b>Cancelar não volta atrás.</b> Só dentro de 24 horas e se o veículo ainda não saiu com a nota. Depois do prazo, a correção é feita com uma nota de devolução/entrada.</div>
+    <label class="campo"><span>Motivo do cancelamento *</span><textarea id="motivo-cancelar" maxlength="255" placeholder="Ex.: nota emitida com o valor errado"></textarea></label>
+    <div class="contagem"><span id="cont-cancelar">0</span>/255 · mínimo 15</div>
+    <label class="campo" style="margin-top:8px"><span>Senha do certificado digital</span><input id="senha-cancelar" type="password" autocomplete="off" placeholder="não fica guardada"></label>
+    <label class="pequeno" style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="ok-cancelar" style="width:auto;margin:0"> Quero cancelar a nota ${n.numero} de verdade</label>
+    <div class="acoes" style="justify-content:flex-end"><button type="button" class="secundario" data-fechar>Voltar</button><button type="button" class="perigo" id="confirmar-cancelar" disabled>Cancelar a nota</button></div>`);
+  const motivo = fundo.querySelector('#motivo-cancelar'), ok = fundo.querySelector('#ok-cancelar'), botao = fundo.querySelector('#confirmar-cancelar');
+  const atualizar = () => { fundo.querySelector('#cont-cancelar').textContent = motivo.value.length; botao.disabled = !(motivo.value.trim().length >= 15 && ok.checked); };
+  motivo.addEventListener('input', atualizar); ok.addEventListener('change', atualizar);
+  botao.addEventListener('click', async () => {
+    const senha = fundo.querySelector('#senha-cancelar').value;
+    if (!senha) return aviso('Digite a senha do certificado.', true);
+    botao.disabled = true; botao.textContent = 'Enviando à SEFAZ…';
+    try {
+      const r = await api('POST', `/nfe-notas/${n.id}/cancelar`, { justificativa: motivo.value, senha, confirmar: true });
+      fechar();
+      aviso(`Nota nº ${n.numero} cancelada. Protocolo ${r.protocolo}.`);
+      telaCarro(id, 'notas');
+    } catch (e) { aviso(e.message, true); botao.disabled = false; botao.textContent = 'Cancelar a nota'; }
+  });
+}
+function abrirCartaCorrecao(id, l) {
+  const n = l.nota;
+  const { fundo, fechar } = janelaNota(`<h2>Carta de correção da nota nº ${n.numero}</h2>
+    <div class="regras-nota">A carta de correção <b>não pode</b> mudar: valor, imposto, base de cálculo, alíquota ou quantidade; quem vendeu ou quem comprou (CPF/CNPJ, nome); a data de emissão ou de saída.<br>Pode corrigir, por exemplo: endereço, bairro, CEP, descrição, cor, chassi digitado errado, dados do veículo.</div>
+    <label class="campo"><span>O que está errado e como fica certo *</span><textarea id="texto-cce" maxlength="1000" placeholder="Ex.: Onde se lê bairro Centro, leia-se Jardim Jorge Atalla."></textarea></label>
+    <div class="contagem"><span id="cont-cce">0</span>/1000 · mínimo 15 · cada nova carta substitui a anterior (máx. 20)</div>
+    <label class="campo" style="margin-top:8px"><span>Senha do certificado digital</span><input id="senha-cce" type="password" autocomplete="off" placeholder="não fica guardada"></label>
+    <div class="acoes" style="justify-content:flex-end;margin-top:10px"><button type="button" class="secundario" data-fechar>Voltar</button><button type="button" id="enviar-cce" disabled>Enviar carta de correção</button></div>`);
+  const texto = fundo.querySelector('#texto-cce'), botao = fundo.querySelector('#enviar-cce');
+  texto.addEventListener('input', () => { fundo.querySelector('#cont-cce').textContent = texto.value.length; botao.disabled = texto.value.trim().length < 15; });
+  botao.addEventListener('click', async () => {
+    const senha = fundo.querySelector('#senha-cce').value;
+    if (!senha) return aviso('Digite a senha do certificado.', true);
+    botao.disabled = true; botao.textContent = 'Enviando à SEFAZ…';
+    try {
+      const r = await api('POST', `/nfe-notas/${n.id}/cce`, { texto: texto.value, senha });
+      fechar();
+      aviso(`Carta de correção ${r.seq} da nota nº ${n.numero} registrada. Protocolo ${r.protocolo}.`);
+      telaCarro(id, 'notas');
+    } catch (e) { aviso(e.message, true); botao.disabled = false; botao.textContent = 'Enviar carta de correção'; }
+  });
 }
 
 // Comprador da nota de venda: já vem da venda (contrato). Pode corrigir aqui; salva no cadastro antes de emitir.

@@ -289,3 +289,19 @@ button:disabled { opacity: .6; cursor: wait; }
 .lista-simples li:last-child { border-bottom: 0; }
 .lista-mais { display: grid; gap: 8px; }
 .lista-mais a { display: block; background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px; text-decoration: none; font-weight: 600; }
+
+/* Notas: menu "Mais", janelas de cancelar e carta de correção */
+.situacao.cancelada { background: var(--vermelho-claro); color: var(--vermelho); }
+.mais-nota { position: relative; }
+.menu-mais { position: absolute; right: 0; top: 110%; background: #fff; border: 1px solid var(--borda); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); min-width: 240px; z-index: 20; padding: 4px; }
+.menu-mais button { display: block; width: 100%; text-align: left; background: none; color: var(--texto); border: none; padding: 9px 10px; border-radius: 6px; font-weight: 500; }
+.menu-mais button:hover { background: #eef1f5; }
+.menu-mais button[disabled] { color: var(--texto-suave); cursor: not-allowed; background: none; }
+.menu-mais small { display: block; color: var(--texto-suave); font-weight: 400; font-size: .78rem; }
+.fundo-janela { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 100; overflow: auto; }
+.janela { background: #fff; border-radius: 12px; max-width: 640px; width: 100%; padding: 18px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.janela h2 { margin-top: 0; }
+.janela textarea { width: 100%; min-height: 90px; font: inherit; padding: 8px; border: 1px solid var(--borda); border-radius: 8px; }
+.regras-nota { font-size: .85rem; border-left: 4px solid var(--vermelho); padding: 6px 10px; background: #fff5f4; margin: 8px 0 12px; }
+.contagem { font-size: .8rem; color: var(--texto-suave); text-align: right; }
+.eventos-nota { font-size: .85rem; margin: 4px 0 0; padding-left: 18px; }
