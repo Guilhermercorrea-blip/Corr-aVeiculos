@@ -16,21 +16,45 @@
 <body>
   <a href="#/" class="banner"><img src="img/banner.jpg" alt="Corrêa Veículos - Compra, vende, troca, financia, refinancia, consigna"></a>
   <header class="topo">
-    <nav>
+    <nav class="menu">
       <a href="#/" data-menu="painel">Painel</a>
-      <a href="#/estoque" data-menu="estoque">Estoque</a>
-      <a href="#/vendidos" data-menu="vendidos">Vendidos</a>
+      <div class="grupo">
+        <button type="button">Carros</button>
+        <div class="sub">
+          <a href="#/estoque" data-menu="estoque">Estoque</a>
+          <a href="#/vendidos" data-menu="vendidos">Vendidos e devolvidos</a>
+        </div>
+      </div>
       <a href="#/pessoas" data-menu="pessoas">Pessoas</a>
-      <a href="#/contratos" data-menu="contratos">Contratos</a>
-      <a href="#/nota-servico" data-menu="nota-servico">Nota de serviço</a>
-      <a href="#/notas-fiscais" data-menu="notas-fiscais">Notas emitidas</a>
-      <a href="#/configuracoes" data-menu="configuracoes">Configurações</a>
+      <div class="grupo">
+        <button type="button">Documentos <span class="bolinha" id="bolinha-docs" hidden></span></button>
+        <div class="sub">
+          <a href="#/notas-fiscais" data-menu="notas-fiscais">Notas fiscais (carros)</a>
+          <a href="#/nota-servico" data-menu="nota-servico">Notas de serviço (comissões)</a>
+          <hr>
+          <a href="#/contratos" data-menu="contratos">Contratos</a>
+        </div>
+      </div>
       <a href="/anuncios.html">Anúncios</a>
-      <a href="/acesso.html">Escolher área</a>
+      <span class="espaco"></span>
+      <div class="grupo">
+        <button type="button">Mais</button>
+        <div class="sub">
+          <a href="#/configuracoes" data-menu="configuracoes">Configurações</a>
+          <a href="/acesso.html">Escolher área</a>
+        </div>
+      </div>
       <a href="#/nova-entrada" class="botao" data-menu="nova-entrada">+ Entrada de carro</a>
     </nav>
     <div class="usuario-logado"><span id="nome-usuario"></span><button type="button" id="sair">Sair</button></div>
   </header>
+  <nav class="barra-baixo" aria-label="Menu">
+    <a href="#/" data-menu="painel"><span>🏠</span>Painel</a>
+    <a href="#/estoque" data-menu="estoque" data-menu-extra="vendidos"><span>🚗</span>Carros</a>
+    <a href="#/nova-entrada" class="mais-botao" data-menu="nova-entrada"><span>＋</span>Entrada</a>
+    <a href="#/notas-fiscais" data-menu="notas-fiscais" data-menu-extra="nota-servico contratos"><span>🧾</span>Notas</a>
+    <a href="#/mais" data-menu="mais" data-menu-extra="pessoas configuracoes"><span>☰</span>Mais</a>
+  </nav>
   <main id="app"></main>
   <div id="aviso" class="aviso-flutuante" hidden></div>
   <script src="app.js"></script>

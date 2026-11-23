@@ -602,12 +602,35 @@ function resumo() {
   const estoque = todos.filter(v => v.status === 'estoque');
   const vendidos = todos.filter(v => v.status === 'vendido').sort((a, b) => b.vendido_em.localeCompare(a.vendido_em));
   const vendidosMes = vendidos.filter(v => v.vendido_em.startsWith(mes));
+  const [a, m] = mes.split('-').map(Number);
+  const mesAnterior = m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`;
+  const vendidosAnterior = vendidos.filter(v => v.vendido_em.startsWith(mesAnterior));
+  // Nota de venda emitida: NF-e de venda autorizada (arquivo do Emissor ou envio direto em produção)
+  const temNotaVenda = id => !!(
+    db.prepare("SELECT 1 FROM nfe_notas WHERE veiculo_id = ? AND tipo = 'venda' AND (xml_autorizado IS NOT NULL OR protocolo IS NOT NULL)").get(id) ||
+    db.prepare("SELECT 1 FROM nfe_envios WHERE veiculo_id = ? AND tipo = 'venda' AND ambiente = 'producao' AND situacao IN ('autorizada', 'incerta', 'enviando')").get(id));
+  const comNota = new Map(vendidos.map(v => [v.id, temNotaVenda(v.id)]));
+  const semFicha = estoque.filter(v => !v.ficha_nfe);
+  const semNotaEntrada = estoque.filter(v => !notaFiscalDoCarro(v.id));
+  const notasRecentes = db.prepare('SELECT numero, tipo, criado_em FROM nfe_notas ORDER BY criado_em DESC, id DESC LIMIT 4').all();
   return {
     mes,
-    estoque: { qtd: estoque.length, investido: soma(estoque, 'custo_total') },
+    estoque: {
+      qtd: estoque.length, investido: soma(estoque, 'custo_total'),
+      consignados: estoque.filter(v => ['consignacao', 'compra_sem_transferir'].includes(v.tipo_entrada)).length,
+      diasMedio: estoque.length ? Math.round(estoque.reduce((s, v) => s + (v.dias_estoque || 0), 0) / estoque.length) : 0,
+    },
     vendasMes: { qtd: vendidosMes.length, faturamento: soma(vendidosMes, 'valor_venda'), lucro: soma(vendidosMes, 'lucro') },
+    vendasMesAnterior: { qtd: vendidosAnterior.length, faturamento: soma(vendidosAnterior, 'valor_venda'), lucro: soma(vendidosAnterior, 'lucro') },
     parados: estoque.filter(v => v.dias_estoque >= 60).sort((a, b) => b.dias_estoque - a.dias_estoque),
-    ultimasVendas: vendidos.slice(0, 5),
+    ultimasVendas: vendidos.slice(0, 5).map(v => ({ ...v, nota_emitida: comNota.get(v.id) })),
+    atencao: {
+      // só as vendas dos últimos 60 dias: as antigas foram emitidas fora do sistema e não devem poluir o aviso
+      vendasSemNota: vendidos.filter(v => !comNota.get(v.id) && v.vendido_em >= new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10)).map(v => ({ id: v.id, marca_modelo: v.marca_modelo, placa: v.placa, valor_venda: v.valor_venda })),
+      semFicha: semFicha.length,
+      semNotaEntrada: semNotaEntrada.map(v => ({ id: v.id, marca_modelo: v.marca_modelo, placa: v.placa })),
+    },
+    notasRecentes,
   };
 }
 

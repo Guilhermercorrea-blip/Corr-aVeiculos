@@ -563,38 +563,89 @@ async function telaPainel() {
   const r = await api('GET', '/resumo');
   const [ano, mes] = r.mes.split('-');
   const nomeMes = new Date(ano, mes - 1).toLocaleString('pt-BR', { month: 'long' });
+  const at = r.atencao || { vendasSemNota: [], semFicha: 0, semNotaEntrada: [] };
+  const itens = [];
+  if (at.vendasSemNota.length) itens.push({ n: at.vendasSemNota.length, t: at.vendasSemNota.length === 1 ? 'Venda sem nota' : 'Vendas sem nota', d: at.vendasSemNota.slice(0, 2).map(v => esc(v.marca_modelo)).join(', '), href: '#/carro/' + at.vendasSemNota[0].id });
+  if (r.parados.length) itens.push({ n: r.parados.length, t: r.parados.length === 1 ? 'Carro parado' : 'Carros parados', d: 'mais de 60 dias no pátio', href: '#/estoque' });
+  if (at.semFicha) itens.push({ n: at.semFicha, t: at.semFicha === 1 ? 'Carro sem ficha do CRLV' : 'Carros sem ficha do CRLV', d: 'necessária na próxima nota', href: '#/estoque' });
+  if (at.semNotaEntrada.length) itens.push({ n: at.semNotaEntrada.length, t: at.semNotaEntrada.length === 1 ? 'Carro sem nota de entrada' : 'Carros sem nota de entrada', d: at.semNotaEntrada.slice(0, 2).map(v => esc(formatarPlaca(v.placa) || v.marca_modelo)).join(', '), href: '#/carro/' + at.semNotaEntrada[0].id });
+  const bolinha = document.getElementById('bolinha-docs');
+  if (bolinha) { bolinha.hidden = !at.vendasSemNota.length; bolinha.textContent = at.vendasSemNota.length; }
+  const variacao = (atual, antes, moeda) => {
+    if (!antes) return '';
+    const dif = atual - antes;
+    if (!dif) return '<div class="variacao">igual ao mês anterior</div>';
+    const txt = moeda ? reais(Math.abs(dif)) : Math.abs(dif);
+    return `<div class="variacao ${dif > 0 ? 'positivo' : 'negativo'}">${dif > 0 ? '▲' : '▼'} ${txt} vs. mês anterior</div>`;
+  };
+  const ant = r.vendasMesAnterior || { qtd: 0, faturamento: 0, lucro: 0 };
+  const NOTA = { venda: 'Venda', entrada_compra: 'Entrada de compra', entrada_consignacao: 'Entrada de consignação', devolucao_consignacao: 'Devolução de consignação', devolucao_compra: 'Devolução de compra' };
   app.innerHTML = `
-  <div class="cabecalho"><div><h1>Painel</h1><div class="suave">Resumo de ${nomeMes} de ${ano}</div></div></div>
-  <div class="numeros">
-    <div class="numero"><div class="rotulo">Carros no estoque</div><div class="valor">${r.estoque.qtd}</div></div>
-    <div class="numero"><div class="rotulo">Dinheiro parado no estoque</div><div class="valor">${reais(r.estoque.investido)}</div></div>
-    <div class="numero"><div class="rotulo">Vendas no mês</div><div class="valor">${r.vendasMes.qtd}</div></div>
-    <div class="numero"><div class="rotulo">Faturamento no mês</div><div class="valor">${reais(r.vendasMes.faturamento)}</div></div>
-    <div class="numero"><div class="rotulo">Lucro no mês</div><div class="valor ${r.vendasMes.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(r.vendasMes.lucro)}</div></div>
+  <div class="cabecalho">
+    <div><h1>Painel</h1><div class="suave">Resumo de ${nomeMes} de ${ano}</div></div>
+    <div class="acoes"><a class="botao-link" href="#/nova-entrada">+ Entrada de carro</a></div>
   </div>
-  <div class="cartao" id="cartao-aniversarios" hidden></div>
-  ${r.parados.length ? `
-  <div class="cartao">
-    <h2>Parados há mais de 60 dias</h2>
-    <div class="lista-carros">${r.parados.map(cartaoCarro).join('')}</div>
-  </div>` : ''}
-  <div class="cartao">
-    <h2>Últimas vendas</h2>
-    ${r.ultimasVendas.length ? `
-    <div class="tabela-rolagem"><table>
-      <thead><tr><th>Data</th><th>Carro</th><th>Comprador</th><th class="num">Venda</th><th class="num">Lucro</th></tr></thead>
-      <tbody>${r.ultimasVendas.map(v => `
-        <tr class="clicavel" onclick="ir('#/carro/${v.id}')">
-          <td>${dataBR(v.vendido_em).slice(0, 10)}</td>
-          <td>${esc(v.marca_modelo)} <span class="placa">${esc(formatarPlaca(v.placa))}</span></td>
-          <td>${esc(v.comprador_nome)}</td>
-          <td class="num">${reais(v.valor_venda)}</td>
-          <td class="num ${v.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(v.lucro)}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>` : '<div class="vazio">Nenhuma venda registrada ainda.</div>'}
+  ${itens.length ? `<div class="atencao">
+    <h2>⚠️ Precisa da sua atenção</h2>
+    <div class="itens-atencao">${itens.map(i => `<a class="item-atencao" href="${i.href}"><span class="qtd">${i.n}</span><span><b>${i.t}</b><small>${i.d}</small></span></a>`).join('')}</div>
+  </div>` : '<div class="atencao tudo-certo"><h2>✓ Tudo em dia</h2><div class="suave pequeno">Nenhuma pendência no momento.</div></div>'}
+  <div class="numeros">
+    <div class="numero"><div class="rotulo">Carros no estoque</div><div class="valor">${r.estoque.qtd}</div><div class="variacao">${r.estoque.consignados || 0} em consignação · média de ${r.estoque.diasMedio || 0} dias no pátio</div></div>
+    <div class="numero"><div class="rotulo">Dinheiro parado no estoque</div><div class="valor">${reais(r.estoque.investido)}</div></div>
+    <div class="numero"><div class="rotulo">Vendas no mês</div><div class="valor">${r.vendasMes.qtd}</div>${variacao(r.vendasMes.qtd, ant.qtd, false)}</div>
+    <div class="numero"><div class="rotulo">Faturamento no mês</div><div class="valor">${reais(r.vendasMes.faturamento)}</div>${variacao(r.vendasMes.faturamento, ant.faturamento, true)}</div>
+    <div class="numero"><div class="rotulo">Lucro no mês</div><div class="valor ${r.vendasMes.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(r.vendasMes.lucro)}</div>${variacao(r.vendasMes.lucro, ant.lucro, true)}</div>
+  </div>
+  <div class="duas-colunas">
+    <div>
+      <div class="cartao">
+        <h2>Últimas vendas</h2>
+        ${r.ultimasVendas.length ? `
+        <div class="tabela-rolagem"><table>
+          <thead><tr><th>Data</th><th>Carro</th><th>Comprador</th><th>Nota</th><th class="num">Lucro</th></tr></thead>
+          <tbody>${r.ultimasVendas.map(v => `
+            <tr class="clicavel" onclick="ir('#/carro/${v.id}')">
+              <td>${dataBR(v.vendido_em).slice(0, 10)}</td>
+              <td>${esc(v.marca_modelo)} <span class="placa">${esc(formatarPlaca(v.placa))}</span></td>
+              <td>${esc(v.comprador_nome)}</td>
+              <td>${v.nota_emitida ? '<span class="etiqueta vendido">emitida ✓</span>' : '<span class="etiqueta alerta">falta emitir</span>'}</td>
+              <td class="num ${v.lucro >= 0 ? 'positivo' : 'negativo'}">${reais(v.lucro)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>` : '<div class="vazio">Nenhuma venda registrada ainda.</div>'}
+      </div>
+      ${r.parados.length ? `
+      <div class="cartao">
+        <h2>Parados há mais de 60 dias</h2>
+        <div class="lista-carros">${r.parados.map(cartaoCarro).join('')}</div>
+      </div>` : ''}
+    </div>
+    <div>
+      <div class="cartao" id="cartao-aniversarios" hidden></div>
+      ${(r.notasRecentes || []).length ? `
+      <div class="cartao">
+        <h2>Últimas notas emitidas</h2>
+        <ul class="lista-simples">${r.notasRecentes.map(n => `<li><span>${esc(NOTA[n.tipo] || n.tipo)} · nº ${esc(n.numero)}</span><span class="suave pequeno">${n.criado_em.slice(8, 10)}/${n.criado_em.slice(5, 7)}/${n.criado_em.slice(0, 4)}</span></li>`).join('')}</ul>
+        <a href="#/notas-fiscais" class="pequeno">Ver todas →</a>
+      </div>` : ''}
+    </div>
   </div>`;
   mostrarAniversarios();
+}
+
+// Menu "Mais" (só no celular, onde a barra de baixo não comporta tudo)
+function telaMais() {
+  app.innerHTML = `
+  <div class="cabecalho"><div><h1>Mais</h1></div></div>
+  <div class="lista-mais">
+    <a href="#/pessoas">Pessoas</a>
+    <a href="#/contratos">Contratos</a>
+    <a href="#/nota-servico">Notas de serviço (comissões)</a>
+    <a href="#/vendidos">Vendidos e devolvidos</a>
+    <a href="#/configuracoes">Configurações</a>
+    <a href="/anuncios.html">Anúncios</a>
+    <a href="/acesso.html">Escolher área</a>
+  </div>`;
 }
 
 // Aniversariantes (compradores e vendedores): hoje com botão de parabéns no WhatsApp; próximos 7 dias como aviso
@@ -2219,7 +2270,9 @@ async function navegar() {
   const [pagina, id, acao] = partes;
   // Saiu do caminho "Contratos > novo veículo" (entrada e venda): esquece o pedido para não voltar à toa
   if (!['contratos', 'nova-entrada'].includes(pagina) && !(pagina === 'carro' && acao === 'vender')) gravarContratoPendente(null);
-  document.querySelectorAll('[data-menu]').forEach(a => a.classList.toggle('ativo', a.dataset.menu === (pagina || 'painel')));
+  const atual = pagina || 'painel';
+  document.querySelectorAll('[data-menu]').forEach(a => a.classList.toggle('ativo', a.dataset.menu === atual || (a.dataset.menuExtra || '').split(' ').includes(atual)));
+  document.querySelectorAll('.menu .grupo').forEach(g => { g.classList.toggle('ativo', !!g.querySelector('.sub a.ativo')); g.classList.remove('aberto'); });
   window.scrollTo(0, 0);
   try {
     if (!pagina) await telaPainel();
@@ -2230,6 +2283,7 @@ async function navegar() {
     else if (pagina === 'nota-servico') await telaNotaServico();
     else if (pagina === 'notas-fiscais') await telaNotasEmitidas(id);
     else if (pagina === 'configuracoes') await telaConfiguracoes();
+    else if (pagina === 'mais') telaMais();
     else if (pagina === 'estoque-rapido') telaEstoqueRapido();
     else if (pagina === 'nova-entrada') await telaEntrada();
     else if (pagina === 'carro' && acao === 'vender') await telaVenda(Number(id));
@@ -2270,3 +2324,12 @@ document.getElementById('sair').addEventListener('click', async () => {
 
 window.addEventListener('hashchange', navegar);
 navegar();
+
+// Menu agrupado: abre/fecha os grupos ao tocar; fecha ao tocar fora
+document.querySelectorAll('.menu .grupo > button').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  const g = b.parentElement, estava = g.classList.contains('aberto');
+  document.querySelectorAll('.menu .grupo').forEach(x => x.classList.remove('aberto'));
+  if (!estava) g.classList.add('aberto');
+}));
+document.addEventListener('click', () => document.querySelectorAll('.menu .grupo').forEach(x => x.classList.remove('aberto')));

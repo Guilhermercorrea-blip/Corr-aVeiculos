@@ -241,3 +241,51 @@ button:disabled { opacity: .6; cursor: wait; }
 .situacao { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
 .situacao.ok { background: var(--verde-claro); color: var(--verde); }
 .situacao.falta { background: #fdecc8; color: #8a5a00; }
+
+/* ---- Menu agrupado (Carros / Documentos / Mais) ---- */
+.topo nav.menu .espaco { flex: 1; }
+.topo nav.menu > a:hover, .topo nav.menu .grupo > button:hover { background: rgba(255,255,255,.1); }
+.topo nav.menu .grupo { position: relative; }
+.topo nav.menu .grupo > button { background: none; border: 0; color: #dfe7f2; padding: 6px 10px; border-radius: 6px; font: inherit; font-weight: 400; display: inline-flex; gap: 6px; align-items: center; }
+.topo nav.menu .grupo > button::after { content: "▾"; font-size: .75em; opacity: .8; }
+.topo nav.menu .grupo.ativo > button { background: rgba(255,255,255,.15); color: #fff; }
+.topo nav.menu .sub { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 230px; background: #fff; border: 1px solid var(--borda); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; z-index: 40; }
+.topo nav.menu .grupo:last-of-type .sub { left: auto; right: 0; }
+.topo nav.menu .grupo.aberto .sub { display: block; }
+.topo nav.menu .sub a { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 6px; color: var(--texto); font-size: .95rem; }
+.topo nav.menu .sub a:hover { background: var(--azul-claro); }
+.topo nav.menu .sub a.ativo { background: var(--azul-claro); color: var(--azul); font-weight: 600; }
+.topo nav.menu .sub hr { border: 0; border-top: 1px solid var(--borda); margin: 6px 0; }
+.bolinha { background: #e8a200; color: #fff; font-size: .7rem; font-weight: 700; border-radius: 99px; padding: 0 6px; line-height: 1.5; }
+
+/* Celular: barra fixa embaixo */
+.barra-baixo { display: none; }
+@media (max-width: 700px) {
+  .topo nav.menu { display: none; }
+  .topo { position: static; }
+  .barra-baixo { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--azul); z-index: 50; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); justify-content: space-around; }
+  .barra-baixo a { color: #dfe7f2; text-decoration: none; text-align: center; font-size: .72rem; padding: 4px 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+  .barra-baixo a span { font-size: 1.25rem; line-height: 1; }
+  .barra-baixo a.ativo { background: rgba(255,255,255,.15); color: #fff; }
+  .barra-baixo a.mais-botao { background: #fff; color: var(--azul); font-weight: 700; }
+  main { padding-bottom: 90px; }
+}
+
+/* ---- Painel ---- */
+.atencao { background: #fff; border: 1px solid var(--borda); border-left: 5px solid #e8a200; border-radius: var(--raio); padding: 14px 16px; margin-bottom: 16px; }
+.atencao.tudo-certo { border-left-color: var(--verde); }
+.atencao h2 { margin-bottom: 8px; }
+.itens-atencao { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.item-atencao { display: flex; gap: 12px; align-items: center; text-decoration: none; color: inherit; border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; background: #fffdf6; }
+.item-atencao:hover { border-color: var(--azul); }
+.item-atencao .qtd { font-size: 1.5rem; font-weight: 800; color: #8a5a00; min-width: 34px; text-align: center; }
+.item-atencao small { display: block; color: var(--texto-suave); }
+.item-atencao b { display: block; }
+.numero .variacao { font-size: .78rem; margin-top: 2px; color: var(--texto-suave); }
+.duas-colunas { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .duas-colunas { grid-template-columns: 1fr; } }
+.lista-simples { list-style: none; padding: 0; margin: 0; }
+.lista-simples li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--borda); font-size: .93rem; }
+.lista-simples li:last-child { border-bottom: 0; }
+.lista-mais { display: grid; gap: 8px; }
+.lista-mais a { display: block; background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 14px; text-decoration: none; font-weight: 600; }
