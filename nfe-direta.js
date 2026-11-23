@@ -184,10 +184,16 @@ async function emitirDevolucoes(dados = {}) {
 
 // Notas reais do carro, para a aba "Notas fiscais": autorizadas (com PDF/XML) e as geradas sem autorização ainda
 function notasDoCarro(veiculoId) {
-  return db.conexao.prepare(`SELECT id, tipo, numero, criado_em, (xml_autorizado IS NOT NULL) AS tem_xml, protocolo
-    FROM nfe_notas WHERE veiculo_id = ? ORDER BY id`).all(Number(veiculoId)).map(n => ({
-    id: n.id, tipo: n.tipo, numero: n.numero, data: n.criado_em, autorizada: !!(n.tem_xml || n.protocolo), temXml: !!n.tem_xml, protocolo: n.protocolo || null,
-  }));
+  const eventos = require('./nfe-eventos');
+  return db.conexao.prepare(`SELECT id, tipo, numero, criado_em, (xml_autorizado IS NOT NULL) AS tem_xml, protocolo, cancelada_em
+    FROM nfe_notas WHERE veiculo_id = ? ORDER BY id`).all(Number(veiculoId)).map(n => {
+    let ev = null;
+    if (n.tem_xml) { try { ev = eventos.situacao(n.id); } catch { ev = null; } }
+    return {
+      id: n.id, tipo: n.tipo, numero: n.numero, data: n.criado_em, autorizada: !!(n.tem_xml || n.protocolo), temXml: !!n.tem_xml, protocolo: n.protocolo || null,
+      cancelada: !!n.cancelada_em, canceladaEm: n.cancelada_em || null, podeCancelar: !!ev?.podeCancelar, cancelarAte: ev?.cancelarAte || null, eventos: ev?.eventos || [],
+    };
+  });
 }
 
 module.exports = { TIPOS_DIRETOS, estado, emitir, devolucoesPendentes, emitirDevolucoes, notasDoCarro, xmlDoEnvio, ambienteAtual, anexarXml, xmlDaNotaRegistrada };

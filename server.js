@@ -188,6 +188,10 @@ rota('POST', '/api/nfse/emitir', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ct
 // NF-e direto na SEFAZ (página do carro). Mesma regra da nota de serviço: só onde a emissão está liberada
 rota('GET', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, c, ctx) => { const d = nfeDireta.estado(p.id, p.tipo); return { ...d, habilitado: d.habilitado && emissaoLiberada(ctx) }; });
 rota('GET', '/api/veiculos/:id/notas', p => nfeDireta.notasDoCarro(p.id));
+// Cancelamento (até 24 h) e carta de correção das notas da loja, na SEFAZ-SP
+rota('POST', '/api/nfe-notas/:id/cancelar', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return require('./nfe-eventos').cancelar(p.id, corpo); });
+rota('POST', '/api/nfe-notas/:id/cce', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return require('./nfe-eventos').cartaCorrecao(p.id, corpo); });
+rota('GET', '/api/nfe-eventos/:id/xml', p => { const r = require('./nfe-eventos').xmlDoEvento(p.id); return { arquivo: r.arquivo, conteudo: r.conteudo }; });
 rota('GET', '/api/nfe/devolucoes-pendentes', (p, q, c, ctx) => ({ pendentes: nfeDireta.devolucoesPendentes(), ambiente: nfeDireta.ambienteAtual('devolucao_consignacao'), habilitado: emissaoLiberada(ctx) }));
 rota('POST', '/api/nfe/devolucoes-lote', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitirDevolucoes(corpo); });
 rota('POST', '/api/veiculos/:id/nfe/:tipo/direta', (p, q, corpo, ctx) => { soNoComputadorDaLoja(ctx); return nfeDireta.emitir(p.id, p.tipo, corpo); });
@@ -533,9 +537,23 @@ http.createServer((req, res) => {
   if (danfePdf) {
     try {
       const origem = danfePdf[1] ? nfeDireta.xmlDaNotaRegistrada(Number(danfePdf[2])) : nfeDireta.xmlDoEnvio(Number(danfePdf[2]));
-      const r = require('./danfe-pdf').gerarDanfePdf(origem.conteudo);
+      const chavePdf = (String(origem.conteudo).match(/Id="NFe(\d{44})"/) || [])[1];
+      const cancelada = !!(chavePdf && db.conexao.prepare('SELECT cancelada_em FROM nfe_notas WHERE chave = ?').get(chavePdf)?.cancelada_em);
+      const r = require('./danfe-pdf').gerarDanfePdf(origem.conteudo, { cancelada });
       res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="DANFE-' + r.numero + '-' + r.chave + '.pdf"', 'Cache-Control': 'no-store' });
       return res.end(r.pdf);
+    } catch (e) {
+      if (!e.status) console.error(e);
+      return paginaAviso(res, e.status || 500, e.message);
+    }
+  }
+  // Carta de correção para imprimir (só logado)
+  const cce = url.pathname.match(/^\/cce\/(\d+)$/);
+  if (cce) {
+    try {
+      const html = require('./nfe-eventos').paginaCce(Number(cce[1]));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(html);
     } catch (e) {
       if (!e.status) console.error(e);
       return paginaAviso(res, e.status || 500, e.message);

@@ -20,6 +20,8 @@ const SERVICOS = {
   autorizacao: { caminho: '/ws/nfeautorizacao4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4', operacao: 'nfeAutorizacaoLote' },
   consulta: { caminho: '/ws/nfeconsultaprotocolo4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4', operacao: 'nfeConsultaNF' },
   cadastro: { caminho: '/ws/cadconsultacadastro4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4', operacao: 'consultaCadastro' },
+  // Eventos da própria loja (cancelamento, carta de correção) vão para a SEFAZ-SP
+  eventoSP: { caminho: '/ws/nferecepcaoevento4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', operacao: 'nfeRecepcaoEvento' },
   evento: { host: 'www.nfe.fazenda.gov.br', caminho: '/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', operacao: 'nfeRecepcaoEvento' },
   distribuicao: { host: 'www1.nfe.fazenda.gov.br', caminho: '/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe', operacao: 'nfeDistDFeInteresse' },
   retorno: { caminho: '/ws/nferetautorizacao4.asmx', wsdl: 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4', operacao: 'nfeRetAutorizacaoLote' },

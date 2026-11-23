@@ -106,12 +106,13 @@ const LOGO = lerLogo();
 function desenhar(n) {
   const p = new Pagina();
   const e = n.emit, d = n.dest, t = n.tot;
-  if (n.homologacao) {
-    // marca d'água inclinada, bem clara, atrás do conteúdo
+  // marca d'água inclinada, bem clara, atrás do conteúdo: teste (homologação) ou nota cancelada
+  const marca = n.cancelada ? 'CANCELADA' : n.homologacao ? 'SEM VALOR FISCAL' : null;
+  if (marca) {
     const cx = 105 * MM, cy = p.y(150);
     const ang = 30 * Math.PI / 180, c = Math.cos(ang).toFixed(4), s = Math.sin(ang).toFixed(4);
-    const larg = larguraTexto('SEM VALOR FISCAL', 54, true);
-    p.ops.push(`0.97 0.82 0.82 rg BT /F2 54 Tf ${c} ${s} ${(-s)} ${c} ${(cx - (larg / 2) * c).toFixed(2)} ${(cy - (larg / 2) * s).toFixed(2)} Tm (SEM VALOR FISCAL) Tj ET 0 0 0 rg`);
+    const larg = larguraTexto(marca, 54, true);
+    p.ops.push(`0.97 0.82 0.82 rg BT /F2 54 Tf ${c} ${s} ${(-s)} ${c} ${(cx - (larg / 2) * c).toFixed(2)} ${(cy - (larg / 2) * s).toFixed(2)} Tm (${marca}) Tj ET 0 0 0 rg`);
   }
   p.cor(0, 0, 0);
   const X = 7, L = 196;
@@ -219,8 +220,8 @@ function desenhar(n) {
 }
 
 // ---------- Montagem do arquivo PDF ----------
-function gerarDanfePdf(xml) {
-  const n = lerNota(xml);
+function gerarDanfePdf(xml, opcoes = {}) {
+  const n = { ...lerNota(xml), cancelada: opcoes.cancelada === true };
   if (n.cStat && n.cStat !== '100') throw new Error('Esta nota não está autorizada: não dá para gerar o PDF do DANFE.');
   const conteudo = Buffer.from(desenhar(n), 'latin1');
   const objetos = [

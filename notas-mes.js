@@ -21,13 +21,14 @@ function limpoNome(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]
 
 // Lista as notas do mês (pela data de emissão que consta no XML)
 function listar(mes) {
+  require('./nfe-eventos'); // cria a tabela de eventos e a coluna cancelada_em se ainda não existirem
   mesValido(mes);
   const { lerNota } = require('./danfe');
   const carros = new Map(db.conexao.prepare('SELECT id, placa, marca_modelo FROM veiculos').all().map(v => [v.id, v]));
   const porChave = new Map();
 
   // 1) Notas registradas (Emissor ou site); o XML autorizado pode estar anexado
-  for (const n of db.conexao.prepare('SELECT id, veiculo_id, tipo, numero, chave, valor, criado_em, xml_autorizado FROM nfe_notas ORDER BY id').all()) {
+  for (const n of db.conexao.prepare('SELECT id, veiculo_id, tipo, numero, chave, valor, criado_em, xml_autorizado, cancelada_em FROM nfe_notas ORDER BY id').all()) {
     porChave.set(n.chave, { nota: n, xml: n.xml_autorizado || null, envio: null });
   }
   // 2) Envios autorizados direto pelo site em produção (a nota registrada pode ainda não ter o XML copiado)
@@ -54,7 +55,7 @@ function listar(mes) {
     const vNF = Math.round(Number(n.tot?.vNF || 0) * 100);
     const viaEnvio = !nota.id || !nota.xml_autorizado;
     itens.push({
-      ...base, data: String(n.dhEmi).slice(0, 10), valor: vNF || nota.valor, protocolo: n.protocolo,
+      ...base, data: String(n.dhEmi).slice(0, 10), valor: vNF || nota.valor, protocolo: n.protocolo, cancelada: !!nota.cancelada_em, notaId: nota.id || null,
       pdf: viaEnvio && envio ? `/danfe/${envio.id}.pdf` : `/danfe-nota/${nota.id}.pdf`,
       xml: viaEnvio && envio ? `/api/nfe-envios/${envio.id}/xml` : `/api/nfe-notas/${nota.id}/xml`,
     });
@@ -109,17 +110,23 @@ function zipDoMes(mes) {
   const nfseServico = require('./nfse-servico');
   const { gerarDanfePdf } = require('./danfe-pdf');
   const arquivos = [];
-  const resumo = ['Tipo;Número;Data;Descrição;Placa;Valor;Arquivo'];
+  const resumo = ['Tipo;Número;Data;Descrição;Placa;Valor;Situação;Arquivo'];
   for (const i of lista.itens) {
     const nomeBase = limpoNome(`${i.tipo === 'nfe' ? 'NFe' : 'NFSe'}-${i.numero}-${i.rotulo}-${i.placa || i.tomador || ''}`);
     if (i.tipo === 'nfe') {
       const origem = i.xml.includes('/nfe-envios/') ? nfeDireta.xmlDoEnvio(Number(i.xml.split('/')[3])) : nfeDireta.xmlDaNotaRegistrada(Number(i.xml.split('/')[3]));
       arquivos.push({ nome: `NF-e/${nomeBase}.xml`, dados: Buffer.from(origem.conteudo, 'utf8') });
-      try { arquivos.push({ nome: `NF-e/${nomeBase}.pdf`, dados: gerarDanfePdf(origem.conteudo).pdf }); } catch { /* sem PDF: o XML segue no pacote */ }
+      try { arquivos.push({ nome: `NF-e/${nomeBase}.pdf`, dados: gerarDanfePdf(origem.conteudo, { cancelada: i.cancelada }).pdf }); } catch { /* sem PDF: o XML segue no pacote */ }
+      // cancelamento e cartas de correção da nota (o contador precisa dos XML dos eventos)
+      if (i.notaId) {
+        for (const ev of db.conexao.prepare("SELECT tipo, seq, xml FROM nfe_eventos WHERE nota_id = ? AND situacao = 'registrado' ORDER BY id").all(i.notaId)) {
+          arquivos.push({ nome: `NF-e/${nomeBase}-${ev.tipo === 'cancelamento' ? 'cancelamento' : 'carta-correcao-' + ev.seq}.xml`, dados: Buffer.from(ev.xml, 'utf8') });
+        }
+      }
     } else {
       arquivos.push({ nome: `NFS-e/${nomeBase}.xml`, dados: Buffer.from(nfseServico.xmlDaNota(i.nfseId).conteudo, 'utf8') });
     }
-    resumo.push([i.rotulo, i.numero, i.data, i.modelo, i.placa, ((i.valor || 0) / 100).toFixed(2).replace('.', ','), nomeBase].join(';'));
+    resumo.push([i.rotulo, i.numero, i.data, i.modelo, i.placa, ((i.valor || 0) / 100).toFixed(2).replace('.', ','), i.cancelada ? 'CANCELADA' : 'autorizada', nomeBase].join(';'));
   }
   arquivos.push({ nome: 'resumo.csv', dados: Buffer.from('﻿' + resumo.join('\r\n') + '\r\n', 'utf8') });
   return { arquivo: `Notas-Correa-${mes}.zip`, zip: montarZip(arquivos), quantidade: lista.itens.length };
