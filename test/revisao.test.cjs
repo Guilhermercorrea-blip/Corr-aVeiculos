@@ -190,3 +190,14 @@ test('contrato de repasse com o carro em estoque: comprador, preço, desconto e 
   assert.ok(html.includes('PIX R$ 10.000 + dinheiro R$ 5.000 + financiamento R$ 34.000'));
   assert.throws(() => db.salvarRascunhoRepasse(id, { preco: 100, desconto: 200 }), /desconto/);
 });
+
+test('repasse: depois de registrar a venda o contrato mantém preço, desconto e transferência do rascunho', () => {
+  const contratos = require('../contratos');
+  const id = carro();
+  db.salvarRascunhoRepasse(id, { comprador: { nome: 'COMPRADOR TESTE', cpf: '41820364844' }, preco: 5490000, desconto: 590000, km: 148225, despesas: 'comprador', pagamento: 'PIX + dinheiro + financiamento (valores a confirmar)' });
+  db.registrarVenda(id, { pessoa: { nome: 'COMPRADOR TESTE', cpf: '41820364844' }, venda: { valor_venda: 4900000, km_saida: 148225, meios_pagamento: ['pix'], valor_pix: 4900000 } });
+  const html = contratos.gerarContrato(id, 'repasse').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.ok(html.includes('R$ 54.900,00') && html.includes('R$ 5.900,00') && html.includes('R$ 49.000,00'));
+  assert.ok(html.includes('a cargo do COMPRADOR'));
+  assert.ok(html.includes('PIX'));
+});
