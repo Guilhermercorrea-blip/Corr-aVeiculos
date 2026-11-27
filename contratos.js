@@ -344,7 +344,9 @@ function contratoRepasse(d, c, opcoes = {}) {
   if (rasc) opcoes = { preco: rasc.preco ?? undefined, desconto: rasc.desconto ?? undefined, despesas: rasc.despesas ?? undefined, ...opcoes };
   const semValores = vd0 => vd0 && !['valor_pix', 'valor_deposito', 'valor_dinheiro', 'valor_financiado', 'valor_troca', 'valor_saldo', 'valor_entrada'].some(k => vd0[k] > 0);
   const vd = d.venda
-    ? (semValores(d.venda) ? { ...d.venda, forma_pagamento: rasc?.pagamento ? 'rascunho' : null, descricao_pagamento: rasc?.pagamento || null } : d.venda)
+    // o texto de pagamento escrito no repasse (ex.: PIX + promissória com vencimento) vale mais que o resumo da venda
+    ? (rasc?.pagamento ? { ...d.venda, forma_pagamento: 'rascunho', descricao_pagamento: rasc.pagamento }
+      : semValores(d.venda) ? { ...d.venda, forma_pagamento: null, descricao_pagamento: null } : d.venda)
     : (rasc ? { km_saida: rasc.km ?? null, vendido_em: rasc.data || null, forma_pagamento: rasc.pagamento ? 'rascunho' : null, descricao_pagamento: rasc.pagamento } : null);
   const comprador = d.comprador || (rasc?.comprador?.nome ? rasc.comprador : null);
   const centavos = k => (/^\d{1,9}$/.test(String(opcoes[k] ?? '')) ? Number(opcoes[k]) : null);
