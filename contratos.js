@@ -339,9 +339,12 @@ function contratoVenda(d, c) {
 // opcoes.preco e opcoes.desconto (centavos): mostra o preço de venda, o desconto de repasse e o total.
 function contratoRepasse(d, c, opcoes = {}) {
   const v = d.veiculo;
-  const vd = d.venda;
-  const comprador = d.comprador;
+  const rasc = !d.venda && v.id ? db.obterRascunhoRepasse(v.id) : null;
+  if (rasc) opcoes = { preco: rasc.preco ?? undefined, desconto: rasc.desconto ?? undefined, despesas: rasc.despesas ?? undefined, ...opcoes };
+  const vd = d.venda || (rasc ? { km_saida: rasc.km ?? null, vendido_em: rasc.data || null, forma_pagamento: rasc.pagamento ? 'rascunho' : null, descricao_pagamento: rasc.pagamento } : null);
+  const comprador = d.comprador || (rasc?.comprador?.nome ? rasc.comprador : null);
   const centavos = k => (/^\d{1,9}$/.test(String(opcoes[k] ?? '')) ? Number(opcoes[k]) : null);
+  // pagamento ainda a combinar no rascunho: sai em branco
   const preco = centavos('preco'), desconto = centavos('desconto');
   const dinheiro = vd?.valor_venda != null ? valor(vd.valor_venda) : preco && desconto ? valor(preco - desconto) : `R$ ${celula(null, 180)}`;
   const pagamento = vd?.forma_pagamento ? `<b>${esc(vd.descricao_pagamento || db.descreverPagamento(vd))}</b>` : celula(null, 320);

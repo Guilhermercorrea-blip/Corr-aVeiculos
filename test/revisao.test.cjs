@@ -175,3 +175,18 @@ test('devoluções em lote: só carros devolvidos sem devolução, números em s
     assert.ok(!pendDepois.includes(a) && pendDepois.includes(b) && pendDepois.includes(c));
   } finally { delete process.env.NFE_AMBIENTE; }
 });
+
+test('contrato de repasse com o carro em estoque: comprador, preço, desconto e pagamento salvos no carro', () => {
+  const contratos = require('../contratos');
+  const id = carro();
+  db.salvarRascunhoRepasse(id, { comprador: { nome: 'GUSTAVO HENRIQUE DE OLIVEIRA', cpf: '418.203.648-44', rg: '48984807', endereco: 'Rua Guerino Ferrucci', numero: '26', bairro: 'Jardim Carolina', cidade: 'Jaú', uf: 'sp', cep: '17207-740' }, preco: 5490000, desconto: 590000, km: 148225, despesas: 'comprador', data: '2026-11-27T15:03' });
+  let html = contratos.gerarContrato(id, 'repasse').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.ok(html.includes('GUSTAVO HENRIQUE DE OLIVEIRA') && html.includes('418.203.648-44'));
+  assert.ok(html.includes('R$ 54.900,00') && html.includes('R$ 5.900,00') && html.includes('R$ 49.000,00'));
+  assert.ok(html.includes('148.225') && html.includes('a cargo do COMPRADOR'));
+  assert.ok(!html.includes('VENDEDORA'));
+  db.salvarRascunhoRepasse(id, { ...db.obterRascunhoRepasse(id), pagamento: 'PIX R$ 10.000 + dinheiro R$ 5.000 + financiamento R$ 34.000' });
+  html = contratos.gerarContrato(id, 'repasse').replace(/<[^>]+>/g, ' ');
+  assert.ok(html.includes('PIX R$ 10.000 + dinheiro R$ 5.000 + financiamento R$ 34.000'));
+  assert.throws(() => db.salvarRascunhoRepasse(id, { preco: 100, desconto: 200 }), /desconto/);
+});

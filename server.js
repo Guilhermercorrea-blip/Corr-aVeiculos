@@ -203,6 +203,8 @@ rota('GET', '/api/nfse/:id/xml', (p, q, c, ctx) => { soNoComputadorDaLoja(ctx); 
 rota('POST', '/api/compras', (p, q, corpo) => db.criarCompra(corpo));
 rota('POST', '/api/estoque-rapido', (p, q, corpo) => db.criarEstoqueRapido(corpo.carros));
 rota('DELETE', '/api/veiculos/:id', p => db.excluirVeiculo(p.id));
+rota('GET', '/api/veiculos/:id/repasse', p => db.obterRascunhoRepasse(p.id));
+rota('PUT', '/api/veiculos/:id/repasse', (p, q, corpo) => db.salvarRascunhoRepasse(p.id, corpo));
 rota('PUT', '/api/veiculos/:id/devolvido', (p, q, corpo) => db.marcarDevolvido(p.id, corpo.devolvido !== false));
 rota('GET', '/api/veiculos/:id/placa', p => placa.obter(p.id));
 rota('PUT', '/api/veiculos/:id/placa', (p, q, corpo) => placa.salvar(p.id, corpo));

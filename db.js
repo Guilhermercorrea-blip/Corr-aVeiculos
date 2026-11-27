@@ -185,6 +185,7 @@ if (!colunasVeiculo.includes('proprietario_crv_id')) db.exec('ALTER TABLE veicul
 if (!colunasVeiculo.includes('valor_consignacao')) db.exec('ALTER TABLE veiculos ADD COLUMN valor_consignacao INTEGER');
 // Dados técnicos do CRLV para a nota de venda (RENAVE): motor, potência, cilindradas, peso... (JSON)
 if (!colunasVeiculo.includes('ficha_nfe')) db.exec('ALTER TABLE veiculos ADD COLUMN ficha_nfe TEXT');
+if (!colunasVeiculo.includes('rascunho_repasse')) db.exec('ALTER TABLE veiculos ADD COLUMN rascunho_repasse TEXT');
 // Chave da nota de entrada que a devolução de consignação aponta
 if (!db.prepare('PRAGMA table_info(nfe_notas)').all().some(c => c.name === 'referencia')) db.exec('ALTER TABLE nfe_notas ADD COLUMN referencia TEXT');
 // XML autorizado (nfeProc, com o protocolo) anexado depois que o Emissor transmite: dá os botões "Baixar nota" (DANFE) e "Baixar XML"
@@ -563,6 +564,32 @@ function marcarDevolvido(id, devolvido = true) {
 }
 const TIPOS_CONSIGNACAO_DEVOLVE = ['consignacao', 'compra_sem_transferir', 'troca'];
 
+// Rascunho do contrato de repasse (carro ainda em estoque): comprador, preço, desconto, km, quem paga a transferência e pagamento
+const CAMPOS_COMPRADOR_REPASSE = ['nome', 'cpf', 'rg', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf'];
+function obterRascunhoRepasse(id) {
+  const l = db.prepare('SELECT rascunho_repasse FROM veiculos WHERE id = ?').get(Number(id));
+  if (!l) throw erro('Carro não encontrado', 404);
+  try { return JSON.parse(l.rascunho_repasse || 'null'); } catch { return null; }
+}
+function salvarRascunhoRepasse(id, dados = {}) {
+  obterVeiculo(id);
+  const texto = (v, max) => String(v ?? '').trim().slice(0, max);
+  const centavos = v => (v == null || v === '' ? null : Number.isSafeInteger(Number(v)) && Number(v) >= 0 ? Number(v) : (() => { throw erro('Valor inválido no repasse'); })());
+  const c = dados.comprador || {};
+  const comprador = Object.fromEntries(CAMPOS_COMPRADOR_REPASSE.map(k => [k, texto(c[k], k === 'email' ? 120 : 160) || null]));
+  if (comprador.cpf) comprador.cpf = comprador.cpf.replace(/\D/g, '');
+  if (comprador.cep) comprador.cep = comprador.cep.replace(/\D/g, '');
+  if (comprador.uf) comprador.uf = comprador.uf.toUpperCase().slice(0, 2);
+  const r = {
+    comprador, preco: centavos(dados.preco), desconto: centavos(dados.desconto), km: centavos(dados.km),
+    despesas: ['comprador', 'vendedor'].includes(dados.despesas) ? dados.despesas : null,
+    pagamento: texto(dados.pagamento, 300) || null, data: texto(dados.data, 16) || null,
+  };
+  if (r.preco != null && r.desconto != null && r.desconto > r.preco) throw erro('O desconto não pode ser maior que o preço');
+  db.prepare('UPDATE veiculos SET rascunho_repasse = ? WHERE id = ?').run(JSON.stringify(r), Number(id));
+  return r;
+}
+
 // Apaga o carro com gastos e anexos (para cadastros de teste ou feitos por engano)
 function excluirVeiculo(id) {
   const { veiculo, origemTroca } = obterVeiculo(id);
@@ -750,6 +777,6 @@ module.exports = {
   conexao: db, CATEGORIAS_GASTO, erro,
   criarAnexo, definirTipoAnexo, obterAnexo,
   criarCompra, listarVeiculos, obterVeiculo, atualizarVeiculo,
-  adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, marcarDevolvido, criarEstoqueRapido,
+  adicionarGasto, removerGasto, registrarVenda, atualizarKmVenda, desfazerVenda, excluirVeiculo, marcarDevolvido, obterRascunhoRepasse, salvarRascunhoRepasse, criarEstoqueRapido,
   resumo, listarPessoas, obterPessoa, atualizarPessoa, excluirPessoa, restaurarPessoa, obterConfig, salvarConfig, descreverPagamento,
 };

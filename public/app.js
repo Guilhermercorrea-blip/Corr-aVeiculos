@@ -1921,7 +1921,7 @@ const MODELOS_CONTRATO = [
   { tipo: 'compra', nome: 'Compra', texto: 'A loja compra o carro e ele vai para o nome dela.', vendido: false },
   { tipo: 'consignacao', nome: 'Consignação', texto: 'O dono deixa o carro na loja e recebe quando vender. Entra o adendo de quitação nos carros de troca ou compra sem transferir.', vendido: false },
   { tipo: 'venda', nome: 'Venda com garantia', texto: 'Venda ao cliente com garantia de motor e câmbio (dias ou km). Só sai depois de registrar a venda e o km na entrega.', vendido: true },
-  { tipo: 'repasse', nome: 'Repasse', texto: 'Venda de carro recebido na troca, pelo mesmo valor, sem garantia contratual extra. Com o carro em estoque, comprador e preço saem em branco.', vendido: false, branco: true },
+  { tipo: 'repasse', nome: 'Repasse', texto: 'Venda no estado em que se encontra, sem garantia contratual extra, com preço de venda, desconto de repasse e total. Com o carro em estoque, preencha o comprador e o preço abaixo (ficam salvos no carro para editar o pagamento depois).', vendido: false, branco: true },
   { tipo: 'avaliacao', nome: 'Carta de avaliação', texto: 'Informa quanto a loja avalia o veículo, sem obrigar a comprar. Já abre em "Adicionar novo veículo" (carro de fora): anexe o documento e digite o valor. Também dá para escolher um carro do estoque. Em "Em branco" tudo sai em linhas para preencher à mão.', vendido: false, avaliacao: true, branco: true },
 ];
 
@@ -1968,6 +1968,28 @@ async function telaContratos() {
       <div class="campo c8"><label for="contrato-extras">Observação no fim dos dados (opcional)</label>
         <input id="contrato-extras" placeholder="Ex.: ótimo estado de conservação"></div>
     </div>
+    <form id="form-repasse" class="grade" novalidate hidden style="margin-top:8px">
+      <div class="campo c12"><h3 style="margin:6px 0 0">Comprador</h3><small class="suave">Digite o CPF e clique em Buscar: se já estiver em Pessoas, o resto se preenche.</small></div>
+      <div class="campo c3"><label>CPF *</label><input name="comprador.cpf" inputmode="numeric"></div>
+      <div class="campo c2" style="justify-content:flex-end"><button type="button" class="secundario" id="repasse-buscar">Buscar</button></div>
+      <div class="campo c7"><label>Nome completo *</label><input name="comprador.nome"></div>
+      <div class="campo c3"><label>RG</label><input name="comprador.rg"></div>
+      <div class="campo c3"><label>Telefone</label><input name="comprador.telefone"></div>
+      <div class="campo c6"><label>E-mail</label><input name="comprador.email" type="email"></div>
+      <div class="campo c3"><label>CEP</label><input name="comprador.cep" inputmode="numeric"></div>
+      <div class="campo c5"><label>Rua</label><input name="comprador.endereco"></div>
+      <div class="campo c2"><label>Número</label><input name="comprador.numero"></div>
+      <div class="campo c2"><label>Bairro</label><input name="comprador.bairro"></div>
+      <div class="campo c5"><label>Cidade</label><input name="comprador.cidade"></div>
+      <div class="campo c2"><label>UF</label><input name="comprador.uf" maxlength="2"></div>
+      <div class="campo c12"><h3 style="margin:10px 0 0">Preço e entrega</h3></div>
+      <div class="campo c3"><label>Preço de venda</label><input name="preco" inputmode="decimal" placeholder="R$ 0,00"></div>
+      <div class="campo c3"><label>Desconto de repasse</label><input name="desconto" inputmode="decimal" placeholder="R$ 0,00"></div>
+      <div class="campo c3"><label>Total</label><input id="repasse-total" readonly></div>
+      <div class="campo c3"><label>Km na entrega</label><input name="km" inputmode="numeric"></div>
+      <div class="campo c4"><label>Despesas de transferência</label><select name="despesas"><option value="">Em branco (preencher à mão)</option><option value="comprador">Por conta do comprador</option><option value="vendedor">Por conta do vendedor</option></select></div>
+      <div class="campo c8"><label>Forma de pagamento (pode deixar em branco e completar depois)</label><input name="pagamento" placeholder="Ex.: PIX R$ 10.000 + dinheiro R$ 5.000 + financiamento R$ 34.000 (BV, pago na terça)"></div>
+    </form>
     <form id="form" novalidate hidden>
       <p class="suave pequeno" style="margin:12px 0 0">Carro de fora: anexe a foto ou o PDF do documento (CRLV) e o sistema preenche os dados abaixo. Ele <strong>não</strong> entra no estoque.</p>
       ${blocoAnexos('o documento do carro')}
@@ -1993,8 +2015,40 @@ async function telaContratos() {
   // Abre sempre em Consignação (o mais usado), a não ser que esteja voltando do cadastro de um carro novo
   modelo.value = pronto && MODELOS_CONTRATO.some(m => m.tipo === pronto.modelo) ? pronto.modelo : 'consignacao';
   const novo = () => carro.value === 'novo';
+  const formRepasse = document.getElementById('form-repasse');
+  const dinheiroTexto = c => (c == null ? '' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  const totalRepasse = () => {
+    let p = null, d = null;
+    try { p = paraCentavos(formRepasse.elements.preco.value); d = paraCentavos(formRepasse.elements.desconto.value) || 0; } catch { /* digitando */ }
+    document.getElementById('repasse-total').value = p ? dinheiroTexto(p - d) : '';
+  };
+  formRepasse.elements.preco.addEventListener('input', totalRepasse);
+  formRepasse.elements.desconto.addEventListener('input', totalRepasse);
+  const preencherRepasse = r => {
+    const c = r?.comprador || {};
+    for (const k of ['cpf', 'nome', 'rg', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf']) formRepasse.elements[`comprador.${k}`].value = c[k] || '';
+    formRepasse.elements.preco.value = r?.preco != null ? dinheiroTexto(r.preco) : '';
+    formRepasse.elements.desconto.value = r?.desconto != null ? dinheiroTexto(r.desconto) : '';
+    formRepasse.elements.km.value = r?.km != null ? Number(r.km).toLocaleString('pt-BR') : '';
+    formRepasse.elements.despesas.value = r?.despesas || '';
+    formRepasse.elements.pagamento.value = r?.pagamento || '';
+    totalRepasse();
+  };
+  document.getElementById('repasse-buscar').addEventListener('click', async () => {
+    const cpf = formRepasse.elements['comprador.cpf'].value.replace(/\D/g, '');
+    if (cpf.length < 11) return aviso('Digite o CPF completo.', true);
+    try {
+      const r = await api('GET', `/pessoas?cpf=${cpf}`);
+      const p = Array.isArray(r) ? r[0] : r?.pessoas?.[0] || r;
+      if (!p || !p.nome) return aviso('Não está em Pessoas: preencha os dados.', true);
+      for (const k of ['nome', 'rg', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf']) if (p[k]) formRepasse.elements[`comprador.${k}`].value = p[k];
+    } catch (e) { aviso(e.message, true); }
+  });
   const ajustarCarro = () => {
     const avaliacaoDeFora = novo() && modelo.value === 'avaliacao';
+    const repasseEstoque = modelo.value === 'repasse' && /^\d+$/.test(carro.value) && carro.value !== '0' && estoque.some(v => String(v.id) === carro.value);
+    formRepasse.hidden = !repasseEstoque;
+    if (repasseEstoque) api('GET', `/veiculos/${carro.value}/repasse`).then(preencherRepasse).catch(() => preencherRepasse(null));
     form.hidden = !avaliacaoDeFora;
     botaoGerar.textContent = novo() && !avaliacaoDeFora ? 'Cadastrar o carro e anexar documentos' : 'Abrir para imprimir';
   };
@@ -2020,8 +2074,23 @@ async function telaContratos() {
     ajustarCarro();
     aviso('Carro cadastrado. Confira e clique em "Abrir para imprimir".');
   }
-  botaoGerar.addEventListener('click', () => {
+  botaoGerar.addEventListener('click', async () => {
     if (!carro.value) return aviso('Escolha um carro para montar o contrato.', true);
+    // Repasse com carro do estoque: salva o rascunho no carro antes de abrir (os dados pessoais não vão no endereço)
+    if (!formRepasse.hidden) {
+      const el = formRepasse.elements;
+      let corpo;
+      try {
+        corpo = {
+          comprador: Object.fromEntries(['cpf', 'nome', 'rg', 'telefone', 'email', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'uf'].map(k => [k, el[`comprador.${k}`].value])),
+          preco: paraCentavos(el.preco.value), desconto: paraCentavos(el.desconto.value), km: el.km.value ? Number(el.km.value.replace(/\D/g, '')) : null,
+          despesas: el.despesas.value, pagamento: el.pagamento.value, data: agoraLocal().slice(0, 16),
+        };
+      } catch (e) { return aviso(e.message, true); }
+      if (!corpo.comprador.nome || !corpo.comprador.cpf) return aviso('Preencha o nome e o CPF do comprador.', true);
+      try { await api('PUT', `/veiculos/${carro.value}/repasse`, corpo); } catch (e) { return aviso(e.message, true); }
+      aviso('Dados do repasse salvos no carro.');
+    }
     // Carro novo (menos na avaliação): cadastra pela entrada de carro, que lê CRLV e CNH, e volta para cá
     if (novo() && modelo.value !== 'avaliacao') {
       gravarContratoPendente({ modelo: modelo.value });
