@@ -334,35 +334,41 @@ function contratoVenda(d, c) {
   ${testemunhas()}`);
 }
 
-// Contrato de repasse: o carro foi recebido na troca e a loja o repassa pelo mesmo valor, sem margem.
+// Contrato de repasse: venda no estado em que se encontra, sem margem ou com desconto de repasse.
 // Serve com o carro ainda no estoque (comprador e preço saem em branco para preencher à mão) ou já vendido.
-function contratoRepasse(d, c) {
+// opcoes.preco e opcoes.desconto (centavos): mostra o preço de venda, o desconto de repasse e o total.
+function contratoRepasse(d, c, opcoes = {}) {
   const v = d.veiculo;
   const vd = d.venda;
   const comprador = d.comprador;
-  const dinheiro = vd?.valor_venda != null ? valor(vd.valor_venda) : `R$ ${celula(null, 180)}`;
+  const centavos = k => (/^\d{1,9}$/.test(String(opcoes[k] ?? '')) ? Number(opcoes[k]) : null);
+  const preco = centavos('preco'), desconto = centavos('desconto');
+  const dinheiro = vd?.valor_venda != null ? valor(vd.valor_venda) : preco && desconto ? valor(preco - desconto) : `R$ ${celula(null, 180)}`;
   const pagamento = vd?.forma_pagamento ? `<b>${esc(vd.descricao_pagamento || db.descreverPagamento(vd))}</b>` : celula(null, 320);
 
   return pagina(`Contrato de repasse - ${placa(v.placa) || v.marca_modelo || 'em branco'}`, `
   ${cabecalho(c)}
   ${faixa('Contrato de compra e venda de veículo usado — repasse')}
   ${secao(1, 'Qualificação das partes')}
-  ${quadro([{ titulo: 'Vendedora' }, ...linhasLoja(c), { titulo: 'Comprador' }, ...linhasPessoa(comprador, 'Nome'), ['E-mail', celula(comprador?.email)]])}
-  <p>A VENDEDORA vende ao COMPRADOR o veículo abaixo, nos termos deste contrato.</p>
+  ${quadro([{ titulo: 'Vendedor' }, ...linhasLoja(c), { titulo: 'Comprador' }, ...linhasPessoa(comprador, 'Nome'), ['E-mail', celula(comprador?.email)]])}
+  <p>O VENDEDOR vende ao COMPRADOR o veículo abaixo, nos termos deste contrato.</p>
   ${secao(2, 'Dados do veículo')}
   ${quadroPares(paresVeiculo(v, [['Km na Entrega', celula(km(vd?.km_saida), 120)], ['Data/Hora Entrega', celula(dataHora(vd?.vendido_em), 120)]]))}
   ${secao(3, 'Preço e pagamento')}
-  ${quadro([['Valor total', dinheiro], ['Forma de pagamento', pagamento], ['Data da negociação', celula(vd?.vendido_em ? dataCurta(vd.vendido_em) : null, 130)]])}
-  ${clausula('3.1', 'Valor de repasse', 'O preço da venda é igual ao valor atribuído ao veículo quando a VENDEDORA o recebeu na troca, sem acréscimo de margem sobre esse valor.')}
+  ${quadro([...(preco && desconto ? [['Preço de venda', valor(preco)], ['Desconto de repasse', valor(desconto)]] : []), ['Valor total', dinheiro], ['Forma de pagamento', pagamento], ['Data da negociação', celula(vd?.vendido_em ? dataCurta(vd.vendido_em) : null, 130)]])}
+  ${clausula('3.1', 'Valor de repasse', preco && desconto
+    ? `O preço de venda do veículo é ${valor(preco)}. Por se tratar de repasse, o VENDEDOR concede desconto de ${valor(desconto)}, totalizando ${dinheiro}, valor aceito pelo COMPRADOR considerando o estado do veículo.`
+    : v.tipo_entrada === 'troca' ? 'O preço da venda é igual ao valor atribuído ao veículo quando o VENDEDOR o recebeu na troca, sem acréscimo de margem sobre esse valor.'
+      : 'O preço de repasse foi negociado entre as partes considerando o estado do veículo, sem as condições de uma venda de varejo.')}
   ${secao(4, 'Vistoria e estado do veículo')}
   ${clausula('4.1', '', 'O COMPRADOR declara que foi informado sobre o estado de conservação do veículo antes de fechar a compra e concordou com o preço de repasse considerando as condições apresentadas.')}
   ${secao(5, 'Entrega e responsabilidades')}
   ${clausula('5.1', 'Entrega', 'A data e o horário da entrega são os indicados no item 2.')}
-  ${clausula('5.2', 'Transferência', 'O COMPRADOR providencia a transferência para seu nome no prazo legal. As despesas de transferência ficam a cargo de <span class="linha" style="min-width:150px"></span>.')}
-  ${clausula('5.3', 'Comunicação de venda', 'A VENDEDORA providencia a comunicação de venda ao órgão de trânsito.')}
+  ${clausula('5.2', 'Transferência', `O COMPRADOR providencia a transferência para seu nome no prazo legal. As despesas de transferência ficam a cargo ${opcoes.despesas === 'vendedor' ? 'do VENDEDOR' : opcoes.despesas === 'comprador' ? 'do COMPRADOR' : 'de <span class="linha" style="min-width:150px"></span>'}.`)}
+  ${clausula('5.3', 'Comunicação de venda', 'O VENDEDOR providencia a comunicação de venda ao órgão de trânsito.')}
   ${secao(6, 'Garantia e documentação')}
-  ${clausula('6.1', 'Garantia', 'A VENDEDORA não concede garantia contratual adicional para motor e câmbio. Permanecem preservados os direitos e as garantias previstos na legislação aplicável.')}
-  ${clausula('6.2', 'Documentação', 'A VENDEDORA se compromete a disponibilizar os documentos necessários à transferência até <span class="linha" style="min-width:110px"></span> e a regularizar as pendências documentais assumidas neste negócio, se houver, conforme indicado a seguir.')}
+  ${clausula('6.1', 'Garantia', 'O VENDEDOR não concede garantia contratual adicional para motor e câmbio. Permanecem preservados os direitos e as garantias previstos na legislação aplicável.')}
+  ${clausula('6.2', 'Documentação', 'O VENDEDOR se compromete a disponibilizar os documentos necessários à transferência até <span class="linha" style="min-width:110px"></span> e a regularizar as pendências documentais assumidas neste negócio, se houver, conforme indicado a seguir.')}
   <p><span class="linha" style="min-width:300px"></span></p>
   ${secao(7, 'Foro')}
   ${clausula('7.1', '', 'Nas relações de consumo, fica assegurado ao COMPRADOR o foro de seu domicílio.')}
@@ -504,7 +510,7 @@ function gerarContrato(veiculoId, tipo, opcoes = {}) {
       };
       return cartaAvaliacao(vazio, c, opcoes);
     }
-    if (tipo === 'repasse') return contratoRepasse(vazio, c);
+    if (tipo === 'repasse') return contratoRepasse(vazio, c, opcoes);
     throw db.erro('Este modelo precisa de um carro cadastrado', 400);
   }
   const d = db.obterVeiculo(veiculoId);
@@ -517,7 +523,7 @@ function gerarContrato(veiculoId, tipo, opcoes = {}) {
     d.trocaVeiculo = d.venda.troca_veiculo_id ? db.obterVeiculo(d.venda.troca_veiculo_id).veiculo : null;
     return contratoVenda(d, c);
   }
-  if (tipo === 'repasse') return contratoRepasse(d, c);
+  if (tipo === 'repasse') return contratoRepasse(d, c, opcoes);
   if (tipo === 'compra') return contratoCompra(d, c);
   if (tipo === 'consignacao') return contratoConsignacao(d, c);
   if (tipo === 'entrada') return d.veiculo.tipo_entrada === 'compra' ? contratoCompra(d, c) : contratoConsignacao(d, c);
