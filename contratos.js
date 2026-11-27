@@ -371,10 +371,8 @@ function contratoRepasse(d, c, opcoes = {}) {
   ${clausula('5.3', 'Comunicação de venda', 'O VENDEDOR providencia a comunicação de venda ao órgão de trânsito.')}
   ${secao(6, 'Garantia e documentação')}
   ${clausula('6.1', 'Garantia', 'O VENDEDOR não concede garantia contratual adicional para motor e câmbio.')}
-  ${clausula('6.2', 'Documentação', 'O VENDEDOR se compromete a disponibilizar os documentos necessários à transferência até <span class="linha" style="min-width:110px"></span> e a regularizar as pendências documentais assumidas neste negócio, se houver, conforme indicado a seguir.')}
+  ${clausula('6.2', 'Documentação', 'O VENDEDOR se compromete a disponibilizar os documentos necessários à transferência em até 20 (vinte) dias úteis e a regularizar as pendências documentais assumidas neste negócio, se houver, conforme indicado a seguir.')}
   <p><span class="linha" style="min-width:300px"></span></p>
-  ${secao(7, 'Foro')}
-  ${clausula('7.1', '', 'Nas relações de consumo, fica assegurado ao COMPRADOR o foro de seu domicílio.')}
   ${localData(c, vd?.vendido_em)}
   ${assinaturas(assinaturaLoja(c), assinaturaPessoa('COMPRADOR', comprador))}
   ${testemunhas()}`);
